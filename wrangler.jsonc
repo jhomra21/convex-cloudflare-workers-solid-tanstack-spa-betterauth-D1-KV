@@ -1,0 +1,32 @@
+{
+  "name": "test-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "compatibility_date": "2025-06-01",
+  "main": "api/index.ts",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "NODE_ENV": "production",
+    "BETTER_AUTH_URL": "https://test-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev/", //URL of deployed worker
+    "BUN_VERSION": "1.2.16"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "better-auth-1-worker",
+      "database_id": "57e0238c-2f8a-4ef2-865b-af9ca7feee8d"
+    }
+  ],
+  "kv_namespaces": [
+  {
+    "binding": "SESSIONS",
+    "id": "8b750fa1c569422386611ef88f0c082c"
+  }
+]
+}

@@ -1,0 +1,35 @@
+{
+  "short_name": "cloudflare-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "name": "cloudflare-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "description": "do-realtime-voice-walkie-talkie",
+  "dir": "ltr",
+  "lang": "en",
+  "display_override": ["window-controls-overlay"],
+  "categories": ["productivity"]
+}

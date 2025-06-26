@@ -1,0 +1,52 @@
+{
+  "name": "cloudflare-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "start": "vite --port 3000",
+    "build": "vite build",
+    "serve": "vite preview",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push:sqlite",
+    "notes:db:generate": "drizzle-kit generate --config api/drizzle.config.ts",
+    "api:dev": "wrangler dev api/index.ts",
+    "auth:migrate": "bunx @better-auth/cli generate",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@kobalte/core": "^0.13.10",
+    "@libsql/client": "^0.15.7",
+    "@tailwindcss/vite": "^4.1.7",
+    "@tanstack/router-plugin": "^1.120.5",
+    "@tanstack/solid-query": "^5.76.0",
+    "@tanstack/solid-router": "^1.120.5",
+    "@tanstack/solid-router-devtools": "^1.120.6",
+    "better-auth": "^1.2.9",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "convex": "^1.25.0",
+    "hono": "^4.7.10",
+    "kysely": "^0.28.2",
+    "kysely-d1": "^0.4.0",
+    "solid-js": "^1.9.7",
+    "solid-sonner": "^0.2.8",
+    "solid-transition-group": "^0.3.0",
+    "tailwind-merge": "^3.3.0",
+    "tailwindcss": "^4.1.7",
+    "tailwindcss-animate": "^1.0.7",
+    "wrangler": "^4.20.0"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.2.8",
+    "@cloudflare/vite-plugin": "^1.6.0",
+    "@cloudflare/workers-types": "^4.20250612.0",
+    "@types/node": "^22.15.21",
+    "depcheck": "^1.4.7",
+    "ts-prune": "^0.10.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

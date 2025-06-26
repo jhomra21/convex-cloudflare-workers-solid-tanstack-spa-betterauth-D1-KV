@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "allowSyntheticDefaultImports": true,
+    "composite": true
+    },
+  "include": ["./index.ts", "../auth.ts", "./notes.ts", "./types.ts"]
+  }
