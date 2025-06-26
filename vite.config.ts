@@ -13,12 +13,12 @@ const __dirname = path.dirname(__filename)
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    cloudflare({
+      // experimental: { remoteBindings: true }
+    }),
     TanStackRouterVite({ target: 'solid', autoCodeSplitting: true }),
     solidPlugin(),
     tailwindcss(),
-    cloudflare({
-      experimental: { remoteBindings: true }
-    }),
   ],
   resolve: {
     alias: {

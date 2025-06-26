@@ -4,7 +4,7 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
-| "edit" | "check" | "trash-2" | "loader";
+| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -263,6 +263,37 @@ const CheckIcon = (props: ComponentProps<"svg">) => (
   </svg>
 );
 
+const LayoutGridIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <rect width="7" height="7" x="3" y="3" rx="1"/>
+    <rect width="7" height="7" x="14" y="3" rx="1"/>
+    <rect width="7" height="7" x="14" y="14" rx="1"/>
+    <rect width="7" height="7" x="3" y="14" rx="1"/>
+  </svg>
+);
+
+const PlayIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <polygon points="6 3 20 12 6 21 6 3"/>
+  </svg>
+);
+
+const RefreshCwIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+    <path d="M8 16H3v5"/>
+  </svg>
+);
+
+const MousePointerIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+    <path d="M13 13l6 6"/>
+  </svg>
+);
+
 export const Icon = (props: IconProps) => {
   const [local, others] = splitProps(props, ["name", "class", "width", "height"]);
   
@@ -385,6 +416,18 @@ export const Icon = (props: IconProps) => {
       </Match>
       <Match when={local.name === "check"}>
         <CheckIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "layout-grid"}>
+        <LayoutGridIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "play"}>
+        <PlayIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "refresh-cw"}>
+        <RefreshCwIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "mouse-pointer"}>
+        <MousePointerIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
     </Switch>
   );

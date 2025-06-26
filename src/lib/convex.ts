@@ -20,18 +20,25 @@ export function useQuery<
 >(
   query: Query,
   // Wrap args in a function to make them reactive for SolidJS
-  args: () => FunctionArgs<Query>,
+  args: () => FunctionArgs<Query> | undefined,
 ) {
   const [data, setData] = createStore<Store<FunctionReturnType<Query>>>({
     value: undefined,
   });
 
   createEffect(() => {
+    const queryArgs = args();
+    if (queryArgs === undefined) {
+      // Don't run the query if args are undefined
+      setData("value", undefined);
+      return;
+    }
+
     // We need to cast here because the `onUpdate` function in the Convex client
     // is not yet fully generic to preserve query function argument types.
     const unsubscribe = convex.onUpdate(
       query as any,
-      args() as any,
+      queryArgs as any,
       (newData: any) => {
         setData("value", reconcile(newData));
       },

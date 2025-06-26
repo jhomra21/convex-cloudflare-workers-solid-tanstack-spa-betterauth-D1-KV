@@ -6,7 +6,7 @@ dist-ssr
 
 .vscode
 
-.cursor
+# .cursor
 .windsurfrules
 
 .env*
