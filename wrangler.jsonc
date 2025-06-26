@@ -1,5 +1,5 @@
 {
-  "name": "test-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "name": "convex-workers-solid-tanstack-spa-betterauth-d1-kv",
   "compatibility_date": "2025-06-01",
   "main": "api/index.ts",
   "compatibility_flags": [
