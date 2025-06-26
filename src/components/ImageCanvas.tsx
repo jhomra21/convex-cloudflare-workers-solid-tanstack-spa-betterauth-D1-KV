@@ -37,9 +37,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     () => canvas()?._id ? { canvasId: canvas()!._id } : undefined
   );
   
-  // Local state
-  const [agents, setAgents] = createSignal<Agent[]>([]);
-  const [isLoaded, setIsLoaded] = createSignal(false);
+  // Local state for UI interactions only
   const [draggedAgent, setDraggedAgent] = createSignal<string | null>(null);
   const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = createSignal(false);
@@ -48,9 +46,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const [resizeStartSize, setResizeStartSize] = createSignal({ width: 0, height: 0 });
   const [resizeStartPos, setResizeStartPos] = createSignal({ x: 0, y: 0 });
   
+  // Optimistic position updates during drag (visual only)
+  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, { x: number; y: number }>>(new Map());
+  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, { width: number; height: number }>>(new Map());
+  
   // Create canvas if it doesn't exist
   createEffect(async () => {
-    if (userId() && canvas() === null && !isLoaded()) {
+    if (userId() && canvas() === null) {
       try {
         await convexClient.mutation(convexApi.canvas.createCanvas, {
           userId: userId()!,
@@ -61,23 +63,27 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   });
 
-  // Load agents from Convex when data is available
-  createEffect(() => {
-    if (dbAgents() && !isLoaded()) {
-      const loadedAgents = dbAgents()!.map(agent => 
-        new Agent(
-          agent._id,
-          agent.prompt,
-          { x: agent.positionX, y: agent.positionY },
-          { width: agent.width, height: agent.height },
-          agent.imageUrl || '',
-          0
-        )
+  // Convert Convex agents to Agent objects for rendering with optimistic updates
+  const agents = () => {
+    if (!dbAgents()) return [];
+    const positions = optimisticPositions();
+    const sizes = optimisticSizes();
+    
+    return dbAgents()!.map(agent => {
+      // Use optimistic position/size if available, otherwise use database values
+      const optimisticPos = positions.get(agent._id);
+      const optimisticSize = sizes.get(agent._id);
+      
+      return new Agent(
+        agent._id,
+        agent.prompt,
+        optimisticPos || { x: agent.positionX, y: agent.positionY },
+        optimisticSize || { width: agent.width, height: agent.height },
+        agent.imageUrl || '',
+        0
       );
-      setAgents(loadedAgents);
-      setIsLoaded(true);
-    }
-  });
+    });
+  };
 
   // Debounced save for transforms
   const debouncedSaves = new Map<string, NodeJS.Timeout>();
@@ -92,16 +98,33 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
     
     // Set new timeout
-    const timeout = setTimeout(() => {
-      convexClient.mutation(convexApi.agents.updateAgentTransform, {
-        agentId: agentId as any,
-        positionX: position.x,
-        positionY: position.y,
-        width: size.width,
-        height: size.height,
-      });
+    const timeout = setTimeout(async () => {
+      try {
+        await convexClient.mutation(convexApi.agents.updateAgentTransform, {
+          agentId: agentId as any,
+          positionX: position.x,
+          positionY: position.y,
+          width: size.width,
+          height: size.height,
+        });
+        
+        // Clear optimistic updates once saved to Convex
+        setOptimisticPositions(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(agentId);
+          return newMap;
+        });
+        setOptimisticSizes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(agentId);
+          return newMap;
+        });
+      } catch (error) {
+        console.error('Failed to save agent transform:', error);
+      }
+      
       debouncedSaves.delete(agentId);
-    }, 500);
+    }, 25);
     
     debouncedSaves.set(agentId, timeout);
   };
@@ -156,7 +179,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Create in Convex first
-      const agentId = await convexClient.mutation(convexApi.agents.createAgent, {
+      await convexClient.mutation(convexApi.agents.createAgent, {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
@@ -166,16 +189,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         height: 384,
       });
       
-      // Then update local state
-      const newAgent = new Agent(
-        agentId,
-        prompt || '',
-        { x: newX, y: newY },
-        { width: 320, height: 384 },
-        '',
-        0
-      );
-      setAgents(prev => [...prev, newAgent]);
+      // Convex will automatically update via real-time subscription
     } catch (error) {
       console.error('Failed to create agent:', error);
     }
@@ -188,20 +202,17 @@ export function ImageCanvas(props: ImageCanvasProps) {
         agentId: id as any,
       });
       
-      // Update local state
-      setAgents(prev => prev.filter(agent => agent.id !== id));
+      // Convex will automatically update via real-time subscription
     } catch (error) {
       console.error('Failed to delete agent:', error);
     }
   };
 
   const updateAgentPosition = (id: string, position: { x: number; y: number }) => {
-    // Update local state immediately
-    setAgents(prev => prev.map(agent => 
-      agent.id === id ? { ...agent, position } : agent
-    ));
+    // Immediate optimistic update for smooth visuals
+    setOptimisticPositions(prev => new Map(prev).set(id, position));
     
-    // Find agent for size
+    // Find agent for size (from current state)
     const agent = agents().find(a => a.id === id);
     if (agent) {
       saveAgentTransform(id, position, agent.size);
@@ -209,12 +220,10 @@ export function ImageCanvas(props: ImageCanvasProps) {
   };
 
   const updateAgentSize = (id: string, size: { width: number; height: number }) => {
-    // Update local state immediately
-    setAgents(prev => prev.map(agent => 
-      agent.id === id ? { ...agent, size } : agent
-    ));
+    // Immediate optimistic update for smooth visuals
+    setOptimisticSizes(prev => new Map(prev).set(id, size));
     
-    // Find agent for position
+    // Find agent for position (from current state)
     const agent = agents().find(a => a.id === id);
     if (agent) {
       saveAgentTransform(id, agent.position, size);
@@ -227,10 +236,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       imageLength: generatedImage?.length || 0
     });
     
-    // Update local state immediately
-    setAgents(prev => prev.map(agent => 
-      agent.id === id ? { ...agent, generatedImage } : agent
-    ));
+    // No local state update needed - Convex handles the update
     
     try {
       // Save to Convex
@@ -248,10 +254,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const updateAgentPrompt = async (id: string, prompt: string) => {
     console.log(`📝 ImageCanvas: Updating prompt for agent ${id}:`, prompt);
     
-    // Update local state immediately
-    setAgents(prev => prev.map(agent => 
-      agent.id === id ? { ...agent, prompt } : agent
-    ));
+    // No local state update needed - Convex handles the update
     
     try {
       // Save to Convex (debounced)
@@ -314,6 +317,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
   };
 
   const handleMouseUp = () => {
+    const draggedId = draggedAgent();
+    const resizingId = resizingAgent();
+    
     setDraggedAgent(null);
     setIsDragging(false);
     setResizingAgent(null);
@@ -323,6 +329,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
     document.removeEventListener('mousemove', handleResizeMove);
+    
+    // Force save for any remaining drag/resize operations
+    if (draggedId) {
+      const agent = agents().find(a => a.id === draggedId);
+      if (agent) {
+        saveAgentTransform(draggedId, agent.position, agent.size);
+      }
+    }
+    if (resizingId && resizingId !== draggedId) {
+      const agent = agents().find(a => a.id === resizingId);
+      if (agent) {
+        saveAgentTransform(resizingId, agent.position, agent.size);
+      }
+    }
   };
 
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
@@ -431,7 +451,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                 await convexClient.mutation(convexApi.agents.clearCanvasAgents, {
                   canvasId: canvas()!._id,
                 });
-                setAgents([]);
+                // Convex will automatically update via real-time subscription
               } catch (error) {
                 console.error('Failed to clear canvas:', error);
               }
@@ -454,7 +474,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           "background-size": "20px 20px"
         }}
       >
-        <Show when={!isLoaded() && !dbAgents()}>
+        <Show when={!canvas() || !dbAgents()}>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="text-center">
               <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
@@ -463,7 +483,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           </div>
         </Show>
 
-        <Show when={isLoaded() && agents().length === 0}>
+        <Show when={canvas() && dbAgents() && agents().length === 0}>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="text-center">
               <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
