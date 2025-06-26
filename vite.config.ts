@@ -17,7 +17,7 @@ export default defineConfig({
     solidPlugin(),
     tailwindcss(),
     cloudflare({
-      // experimental: { remoteBindings: true }
+      experimental: { remoteBindings: true }
     }),
   ],
   resolve: {
