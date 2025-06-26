@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
-import { convexApi, convexClient, useQuery } from './convex';
+import { convexApi, useQuery } from './convex';
 import { useRouteContext } from '@tanstack/solid-router';
 import { createMemo } from 'solid-js';
 
@@ -56,11 +56,21 @@ export function useDeleteImage() {
   
   return useMutation(() => ({
     mutationFn: async (imageId: string) => {
-      return await convexClient.mutation(convexApi.images.deleteImage, { 
-        imageId: imageId as any
+      // Call Hono API to delete from both R2 and Convex
+      const response = await fetch(`/api/images/${imageId}`, {
+        method: 'DELETE',
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete image');
+      }
+
+      return await response.json();
     },
     onSuccess: () => {
+      // Since we're using Convex real-time queries, the UI will auto-update
+      // But we can still invalidate to be safe
       queryClient.invalidateQueries({ queryKey: ['images'] });
     },
   }));

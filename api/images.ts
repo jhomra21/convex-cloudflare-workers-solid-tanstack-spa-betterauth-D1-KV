@@ -20,7 +20,6 @@ imagesApi.post('/', async (c) => {
       return c.json({ error: 'Prompt is required' }, 400);
     }
 
-    console.log('🎨 Starting image generation:', { prompt, model, steps });
 
     // Check environment bindings
     if (!c.env.AI) {
@@ -39,7 +38,6 @@ imagesApi.post('/', async (c) => {
     }
 
     // Generate image using Workers AI
-    console.log('🤖 Calling Workers AI...');
     const result = await c.env.AI.run(model, {
       prompt,
       num_steps: steps,
@@ -50,18 +48,12 @@ imagesApi.post('/', async (c) => {
     // Handle different response formats from Workers AI
     let imageBuffer;
     if (result instanceof ReadableStream) {
-      console.log('🔄 Processing ReadableStream...');
       const response = new Response(result);
       imageBuffer = await response.arrayBuffer();
-      console.log('✅ Got image buffer from stream, size:', imageBuffer.byteLength);
     } else if (result && result.image) {
-      console.log('🔄 Processing base64 response (single image)...');
       imageBuffer = Buffer.from(result.image, 'base64');
-      console.log('✅ Got image buffer from base64, size:', imageBuffer.length);
     } else if (result && result.images && result.images.length > 0) {
-      console.log('🔄 Processing base64 response (image array)...');
       imageBuffer = Buffer.from(result.images[0], 'base64');
-      console.log('✅ Got image buffer from base64 array, size:', imageBuffer.length);
     } else {
       console.error('❌ Unexpected result format:', result);
       return c.json({ error: 'Failed to generate image - unexpected response format' }, 500);
@@ -69,31 +61,25 @@ imagesApi.post('/', async (c) => {
     
     // Create unique filename
     const filename = `${user.id}-${Date.now()}.png`;
-    console.log('📁 Generated filename:', filename);
     
     // Store in R2
-    console.log('☁️ Storing in R2...');
     await c.env.convex_cf_workers_images_test.put(filename, imageBuffer, {
       httpMetadata: {
         contentType: 'image/png',
       },
     });
-    console.log('✅ Stored in R2 successfully');
     
     // Verify the file was actually stored
     try {
       const verification = await c.env.convex_cf_workers_images_test.head(filename);
-      console.log('🔍 R2 verification - file exists:', !!verification, 'size:', verification?.size);
     } catch (verifyError) {
       console.log('❌ R2 verification failed:', verifyError.message);
     }
 
     // Create a public URL using R2 public domain
     const imageUrl = `https://pub-1d414b448981415486cf93fcfcaf636d.r2.dev/${filename}`;
-    console.log('🔗 Generated image URL:', imageUrl);
 
     // Save directly to Convex from Hono API (more efficient)
-    console.log('💾 Saving to Convex...');
     const convex = new ConvexHttpClient(c.env.CONVEX_URL);
     const finalSeed = seed || Math.floor(Math.random() * 4294967295);
     await convex.mutation(api.images.addImage, {
@@ -104,7 +90,6 @@ imagesApi.post('/', async (c) => {
       steps,
       userId: user.id,
     });
-    console.log('✅ Saved to Convex successfully');
 
     return c.json({
       success: true,
@@ -119,11 +104,58 @@ imagesApi.post('/', async (c) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error generating image:', error);
     return c.json({ 
       error: 'Failed to generate image', 
       details: error.message,
       type: error.constructor.name
+    }, 500);
+  }
+});
+
+// Delete an image by ID
+imagesApi.delete('/:imageId', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const imageId = c.req.param('imageId');
+
+    if (!c.env.CONVEX_URL) {
+      console.error('❌ CONVEX_URL not found');
+      return c.json({ error: 'Database service not configured' }, 500);
+    }
+
+    // First, get the image data from Convex to find the filename
+    const convex = new ConvexHttpClient(c.env.CONVEX_URL);
+    
+    // Get the image record to extract filename from URL
+    const images = await convex.query(api.images.getImages, { userId: user.id });
+    const imageToDelete = images.find((img: any) => img._id === imageId);
+    
+    if (!imageToDelete) {
+      console.error('❌ Image not found for user');
+      return c.json({ error: 'Image not found' }, 404);
+    }
+
+    // Extract filename from URL (last part after the last slash)
+    const filename = imageToDelete.imageUrl.split('/').pop();
+
+    // Delete from R2 first
+    if (filename && c.env.convex_cf_workers_images_test) {
+      await c.env.convex_cf_workers_images_test.delete(filename);
+    }
+
+    // Delete from Convex
+    await convex.mutation(api.images.deleteImage, { imageId: imageId as any });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error deleting image:', error);
+    return c.json({ 
+      error: 'Failed to delete image', 
+      details: error.message 
     }, 500);
   }
 });

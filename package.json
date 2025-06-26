@@ -40,8 +40,8 @@
   },
   "devDependencies": {
     "@better-auth/cli": "^1.2.8",
-    "@cloudflare/vite-plugin": "^1.6.0",
-    "@cloudflare/workers-types": "^4.20250612.0",
+    "@cloudflare/vite-plugin": "^1.7.5",
+    "@cloudflare/workers-types": "^4.20250620.0",
     "@types/node": "^22.15.21",
     "depcheck": "^1.4.7",
     "ts-prune": "^0.10.3",

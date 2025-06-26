@@ -1,6 +1,6 @@
 {
   "name": "convex-workers-solid-tanstack-spa-betterauth-d1-kv",
-  "compatibility_date": "2025-06-20",
+  "compatibility_date": "2025-06-04",
   "main": "api/index.ts",
   "compatibility_flags": [
     "nodejs_compat"
@@ -38,6 +38,7 @@
   }
 ],
 "ai": {
-  "binding": "AI"
+  "binding": "AI",
+  "experimental_remote": true
 }
 }

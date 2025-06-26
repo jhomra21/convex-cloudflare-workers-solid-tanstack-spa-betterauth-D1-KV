@@ -16,7 +16,9 @@ export default defineConfig({
     TanStackRouterVite({ target: 'solid', autoCodeSplitting: true }),
     solidPlugin(),
     tailwindcss(),
-    cloudflare(),
+    cloudflare({
+      // experimental: { remoteBindings: true }
+    }),
   ],
   resolve: {
     alias: {
