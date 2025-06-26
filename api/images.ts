@@ -77,7 +77,7 @@ imagesApi.post('/', async (c) => {
     }
 
     // Create a public URL using R2 public domain
-    const imageUrl = `https://pub-65700f1756644cd7991bfd7acb654514.r2.dev/${filename}`;
+    const imageUrl = `https://pub-1d414b448981415486cf93fcfcaf636d.r2.dev/${filename}`;
 
     // Save directly to Convex from Hono API (more efficient)
     const convex = new ConvexHttpClient(c.env.CONVEX_URL);

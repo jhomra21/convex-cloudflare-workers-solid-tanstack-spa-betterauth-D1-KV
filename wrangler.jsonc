@@ -34,7 +34,7 @@
   {
     "bucket_name": "convex-cf-workers-images-test",       
     "binding": "convex_cf_workers_images_test", //https://pub-1d414b448981415486cf93fcfcaf636d.r2.dev
-    "preview_bucket_name": "preview-convex-cf-workers-images-test", //https://pub-65700f1756644cd7991bfd7acb654514.r2.dev
+    // "preview_bucket_name": "preview-convex-cf-workers-images-test", //https://pub-65700f1756644cd7991bfd7acb654514.r2.dev
     "experimental_remote": true
   }
 ],
