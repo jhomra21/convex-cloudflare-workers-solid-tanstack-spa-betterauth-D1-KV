@@ -4,18 +4,18 @@
 
 ### Components:
 - **Hono API Endpoint**: Handles image generation requests with Workers AI and R2 storage
-- **Workers AI**: Generates AI images from text prompts
+- **Workers AI**: Generates AI images from text prompts  
 - **R2 Storage**: Stores the generated images
-- **Convex Database**: Stores image references and metadata linked to users
-- **Better Auth**: Authentication middleware for secure access
+- **Convex Database**: Stores image references and metadata linked to users (schema already exists)
+- **Better Auth**: Authentication middleware for secure access (already configured)
 
 ### Data Flow:
 1. User submits an image generation request with a text prompt
-2. Hono API authenticates the user using Better Auth
+2. Hono API authenticates the user using existing Better Auth middleware
 3. Workers AI generates the image from the prompt
 4. The image is stored in R2 bucket with a unique ID
-5. Image reference and metadata are saved in Convex with user association
-6. Client interacts directly with Convex for image queries and listings
+5. **Hono API directly saves image reference and metadata to Convex** (more efficient)
+6. Client uses existing custom Convex integration for real-time image queries and listings
 7. R2 serves the actual image files through public URLs
 
 ## Implementation Details
@@ -45,10 +45,10 @@ Update `wrangler.jsonc` to include R2 bucket and AI bindings:
 
 ### 2. Convex Schema
 
-The schema already has an `images` table, but we'll ensure it's properly set up:
+✅ **Already configured** - The `images` table exists in `convex/schema.ts`:
 
 ```typescript
-// convex/schema.ts
+// convex/schema.ts (existing)
 export default defineSchema({
   images: defineTable({
     imageUrl: v.string(),
@@ -58,7 +58,9 @@ export default defineSchema({
     steps: v.optional(v.number()),
     userId: v.string(),
   }).index("by_userId", ["userId"]),
-  // other tables...
+  tasks: defineTable({
+    // existing tasks table
+  })
 });
 ```
 
@@ -118,10 +120,12 @@ export const deleteImage = mutation({
 
 ### 4. Hono API for Image Generation and Retrieval
 
-Create `api/images.ts`:
+Create `api/images.ts` with direct Convex integration:
 
 ```typescript
 import { Hono } from 'hono';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '../convex/_generated/api';
 import type { Env, HonoVariables } from './types';
 
 const imagesApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
@@ -168,6 +172,17 @@ imagesApi.post('/', async (c) => {
     // Create a public URL
     const imageUrl = `https://${c.req.headers.get('host')}/api/images/${filename}`;
 
+    // Save directly to Convex from Hono API (more efficient)
+    const convex = new ConvexHttpClient(c.env.CONVEX_URL);
+    await convex.mutation(api.images.addImage, {
+      imageUrl,
+      prompt,
+      model,
+      seed: result.seed,
+      steps,
+      userId: user.id,
+    });
+
     return c.json({
       success: true,
       image: {
@@ -210,19 +225,19 @@ imagesApi.get('/:filename', async (c) => {
 export default imagesApi;
 ```
 
-Update `api/index.ts` to include the images API:
+Update `api/index.ts` to include the images API (following existing pattern):
 
 ```typescript
-// In api/index.ts
+// In api/index.ts (update existing file)
 import imagesApi from './images';
 
-// After other routes
-app.route('/api/images/', imagesApi);
+// After line 58 (after notes API mount)
+app.route('/api/images', imagesApi);
 ```
 
 ### 5. Client-Side Integration
 
-Create `src/lib/images-actions.ts` for client-side image operations:
+Create `src/lib/images-actions.ts` for client-side image operations (using existing patterns):
 
 ```typescript
 import { createMutation } from '@tanstack/solid-query';
@@ -238,12 +253,9 @@ interface GenerateImageOptions {
 }
 
 export function useGenerateImage() {
-  const context = useRouteContext({ from: '/dashboard' });
-  const userId = createMemo(() => context()?.session?.user?.id);
-
   return createMutation({
     mutationFn: async (options: GenerateImageOptions) => {
-      // Step 1: Generate image via Hono API
+      // Single API call - Hono handles both R2 storage AND Convex saving
       const response = await fetch('/api/images', {
         method: 'POST',
         headers: {
@@ -257,21 +269,7 @@ export function useGenerateImage() {
         throw new Error(error.error || 'Failed to generate image');
       }
 
-      const result = await response.json();
-
-      // Step 2: Save reference to Convex directly
-      if (userId()) {
-        await convexClient.mutation(convexApi.images.addImage, {
-          imageUrl: result.image.url,
-          prompt: options.prompt,
-          model: result.image.model,
-          seed: result.image.seed,
-          steps: result.image.steps,
-          userId: userId()!,
-        });
-      }
-
-      return result;
+      return await response.json();
     },
   });
 }
@@ -279,9 +277,9 @@ export function useGenerateImage() {
 // This function gets images directly from Convex, not through the Hono API
 export function useUserImages() {
   const context = useRouteContext({ from: '/dashboard' });
-  const userId = createMemo(() => context()?.session?.user?.id);
+  const userId = createMemo(() => context()?.session?.user?.id as string);
   
-  // Use Convex query directly for listing images
+  // Use existing custom Convex integration for real-time queries
   return useQuery(
     convexApi.images.getImages,
     () => userId() ? { userId: userId()! } : { userId: "" }
@@ -604,15 +602,17 @@ function ImagesPage() {
 
 ### 8. Update Navigation
 
-In `src/components/AppSidebar.tsx`, add the Images page to the navigation:
+In `src/components/AppSidebar.tsx`, add the Images page to the `routeMetadata` object:
 
 ```typescript
-// Inside the navigation array
-{
-  name: 'Images',
-  href: '/dashboard/images',
-  icon: <Icon name="image" class="h-4 w-4 mr-2" />,
-}
+// In src/components/AppSidebar.tsx (line ~22)
+const routeMetadata: Partial<Record<keyof FileRoutesByFullPath, { name: string; iconName: IconName; isSidebarItem?: boolean }>> = {
+  '/dashboard': { name: 'Home', iconName: 'house', isSidebarItem: true },
+  '/dashboard/account': { name: 'Account', iconName: 'user', isSidebarItem: true },
+  '/dashboard/notes': { name: 'Notes', iconName: 'file', isSidebarItem: true },
+  '/dashboard/tasks': { name: 'Tasks', iconName: 'square-check', isSidebarItem: true },
+  '/dashboard/images': { name: 'Images', iconName: 'image', isSidebarItem: true }, // Add this line
+};
 ```
 
 ## Development Workflow
@@ -623,38 +623,45 @@ In `src/components/AppSidebar.tsx`, add the Images page to the navigation:
    ```
 
 2. **Update wrangler.jsonc** with R2 and AI bindings
+   - Add to existing config following project conventions
 
 3. **Create Convex functions** for image management
-   - These functions handle storing and retrieving image references
+   - Schema already exists, just need functions in `convex/images.ts`
 
 4. **Create Hono API endpoints** for image generation and serving
-   - These endpoints handle Workers AI interaction and R2 storage
+   - Follow existing API pattern in `api/notes.ts`
+   - Use existing auth middleware
 
 5. **Implement client-side integration**
-   - Use Hono API only for image generation
-   - Use Convex directly for querying images
-   - Create UI components for generating and displaying images
+   - Client only calls Hono API for generation (simplified)
+   - Use existing Convex integration for real-time image listing
+   - Follow existing dashboard route structure
+   - Use solid-ui components for consistency
 
-6. **Testing**
-   - Generate images with different prompts
-   - Verify storage in R2 and references in Convex
-   - Test listing images directly from Convex
-   - Test image deletion
+6. **Update navigation**
+   - Add to existing `routeMetadata` object in AppSidebar
+
+7. **Testing**
+   - Use `bun run test` (project uses Vitest)
+   - Test with `bun dev` for local development
+   - Verify deployment with `wrangler deploy`
 
 ## Summary
 
 This implementation provides a complete image generation system that:
 
 1. Uses Workers AI for generating images from text prompts
-2. Stores images in R2 for efficient binary storage
-3. Stores image metadata and references in Convex
-4. Uses the Hono API only when needed (for image generation and serving)
-5. Directly queries Convex for image listings and operations
+2. Stores images in R2 for efficient binary storage  
+3. **Hono API handles both R2 storage AND Convex saving in one request**
+4. Client uses single API call for generation, direct Convex queries for listings
+5. Provides real-time image updates via existing Convex integration
 6. Provides a clean, user-friendly UI for generating and managing images
 
-The system follows best practices by:
-- Using the right tools for each job (Workers AI for generation, R2 for storage, Convex for metadata)
-- Minimizing API calls by querying Convex directly when possible
-- Securing all endpoints with Better Auth
-- Providing proper error handling and loading states
+The system follows project best practices by:
+- Using existing auth middleware and patterns
+- Following established file naming conventions (kebab-case)
+- Using the custom Convex integration for real-time queries
+- Using solid-ui components for consistency
+- Following TypeScript strict mode with explicit types
+- Using existing package manager (Bun) and build tools
 ``` 

@@ -21,6 +21,7 @@ const routeMetadata: Partial<Record<keyof FileRoutesByFullPath, { name: string; 
   '/dashboard/account': { name: 'Account', iconName: 'user', isSidebarItem: true },
   '/dashboard/notes': { name: 'Notes', iconName: 'file', isSidebarItem: true },
   '/dashboard/tasks': { name: 'Tasks', iconName: 'square-check', isSidebarItem: true },
+  '/dashboard/images': { name: 'Images', iconName: 'image', isSidebarItem: true },
   // Add more route metadata here as your application grows
   // Only items with isSidebarItem: true will be shown
 };

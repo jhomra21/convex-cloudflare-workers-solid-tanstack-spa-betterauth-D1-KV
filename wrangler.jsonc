@@ -1,14 +1,15 @@
 {
-  "name": "test-workers-solid-tanstack-spa-betterauth-d1-kv",
-  "compatibility_date": "2025-06-01",
+  "name": "convex-workers-solid-tanstack-spa-betterauth-d1-kv",
+  "compatibility_date": "2025-06-20",
   "main": "api/index.ts",
   "compatibility_flags": [
     "nodejs_compat"
   ],
   "vars": {
     "NODE_ENV": "production",
-    "BETTER_AUTH_URL": "https://test-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev/", //URL of deployed worker
-    "BUN_VERSION": "1.2.16"
+    "BETTER_AUTH_URL": "https://convex-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev/", //URL of deployed worker
+    "BUN_VERSION": "1.2.16",
+    "CONVEX_URL": "https://hip-shark-723.convex.cloud"
   },
   "observability": {
     "enabled": true
@@ -28,5 +29,15 @@
     "binding": "SESSIONS",
     "id": "8b750fa1c569422386611ef88f0c082c"
   }
-]
+],
+"r2_buckets": [
+  {
+    "bucket_name": "convex-cf-workers-images-test",       
+    "binding": "convex_cf_workers_images_test",
+    "experimental_remote": true
+  }
+],
+"ai": {
+  "binding": "AI"
+}
 }

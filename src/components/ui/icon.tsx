@@ -4,7 +4,7 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
-| "edit" | "check";
+| "edit" | "check" | "trash-2" | "loader";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -13,6 +13,13 @@ type IconProps = {
 } & ComponentProps<"svg">; // Allows passing standard SVG props like class, width, height, etc.
 
 // Individual SVG components (or direct JSX)
+const LoaderIcon = (props: ComponentProps<"svg">) => (
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader" {...props}><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>)
+
+const Trash2Icon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2" {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+)
+
 const ImageIcon = (props: ComponentProps<"svg">) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image-icon lucide-image" {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
 )
@@ -265,6 +272,12 @@ export const Icon = (props: IconProps) => {
 
   return (
     <Switch fallback={<Show when={import.meta.env.DEV}><p>Icon not found: {local.name}</p></Show>}>
+      <Match when={local.name === "loader"}>
+        <LoaderIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "trash-2"}>
+        <Trash2Icon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
       <Match when={local.name === "square-check"}>
         <SquareCheckIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>

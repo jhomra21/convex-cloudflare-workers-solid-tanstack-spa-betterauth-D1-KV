@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { getAuth } from '../auth'
 import type { Env, HonoVariables } from './types'
 import notesApi from './notes'
+import imagesApi from './images'
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -56,5 +57,8 @@ app.all('/api/auth/*', (c) => {
 
 // Mount the notes API routes
 app.route('/api/notes/', notesApi);
+
+// Mount the images API routes
+app.route('/api/images', imagesApi);
 
 export default app;
