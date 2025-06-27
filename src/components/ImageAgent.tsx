@@ -34,14 +34,13 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Track image loading to prevent flash
-  const [imageLoadingUrl, setImageLoadingUrl] = createSignal<string>('');
-  const [isImageLoaded, setIsImageLoaded] = createSignal(true);
+  // Track our own generation state to prevent flash
+  const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
+  const [expectedImageUrl, setExpectedImageUrl] = createSignal<string>('');
   
-  // Status-based loading state - stay in loading until new image actually loads
+  // Combined loading state - show loading if server processing OR we're waiting for our image to load
   const isGenerating = () => {
-    return props.status === 'processing' || 
-           (props.status === 'success' && !isImageLoaded() && imageLoadingUrl() !== '');
+    return props.status === 'processing' || isLocallyGenerating();
   };
   const hasFailed = () => props.status === 'failed';
   
@@ -51,13 +50,13 @@ export function ImageAgent(props: ImageAgentProps) {
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
-  // Reset image loading state when we get a new image URL from props
+  // Stop local loading state when we receive the expected image
   createEffect(() => {
     const currentImage = props.generatedImage;
-    if (currentImage && currentImage !== imageLoadingUrl()) {
-      // If we get a new image that we weren't expecting (e.g., from regeneration)
-      // mark it as loaded immediately to avoid unnecessary loading state
-      setIsImageLoaded(true);
+    if (currentImage && currentImage === expectedImageUrl()) {
+      // We got the image we were waiting for - stop local loading
+      setIsLocallyGenerating(false);
+      setExpectedImageUrl('');
     }
   });
   
@@ -94,9 +93,9 @@ export function ImageAgent(props: ImageAgentProps) {
       props.onImageGenerated?.(agentId, '');
     }
     
-    // Reset image loading state for new generation
-    setImageLoadingUrl('');
-    setIsImageLoaded(true);
+    // Start local generation tracking
+    setIsLocallyGenerating(true);
+    setExpectedImageUrl('');
     
     // Sync to canvas before generating
     props.onPromptChange?.(agentId, currentPrompt);
@@ -114,9 +113,8 @@ export function ImageAgent(props: ImageAgentProps) {
       });
       
       if (result.image?.url) {
-        // Set up image loading tracking
-        setImageLoadingUrl(result.image.url);
-        setIsImageLoaded(false);
+        // Track the expected image URL - local loading will stop when this arrives via props
+        setExpectedImageUrl(result.image.url);
         
         // Use the R2 URL for storage in Convex, not the base64 data
         props.onImageGenerated?.(agentId, result.image.url);
@@ -124,12 +122,14 @@ export function ImageAgent(props: ImageAgentProps) {
         setIsInEditMode(false); // Exit edit mode
       } else {
         console.error(`Failed to generate image: No URL in result`);
+        setIsLocallyGenerating(false); // Stop loading on error
       }
       
       toast.success('Image generated successfully!');
     } catch (error) {
       toast.error('Failed to generate image');
       console.error(error);
+      setIsLocallyGenerating(false); // Stop loading on error
     }
   };
 
@@ -290,19 +290,6 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={props.generatedImage!}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
-                onLoad={(e) => {
-                  // Mark as loaded when new image finishes loading
-                  const imgSrc = (e.target as HTMLImageElement).src;
-                  if (imgSrc === imageLoadingUrl()) {
-                    setIsImageLoaded(true);
-                  }
-                }}
-                onError={() => {
-                  // If image fails to load, still stop the loading state
-                  if (props.generatedImage === imageLoadingUrl()) {
-                    setIsImageLoaded(true);
-                  }
-                }}
               />
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
