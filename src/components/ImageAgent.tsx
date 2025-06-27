@@ -49,13 +49,15 @@ export function ImageAgent(props: ImageAgentProps) {
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
-  // Stop local loading when we get any new non-empty image after starting generation
+  // Stop local loading when we get a new image (simple approach)
   createEffect(() => {
     const currentImage = props.generatedImage;
     if (isLocallyGenerating() && currentImage && currentImage.length > 0) {
-      // We got a new image - stop loading and show it
-      setIsLocallyGenerating(false);
-      setHasLocallyCleared(false);
+      // We got a new image - stop loading after a brief delay to ensure it loads
+      setTimeout(() => {
+        setIsLocallyGenerating(false);
+        setHasLocallyCleared(false);
+      }, 300); // Small delay for image loading
     }
   });
   
@@ -280,13 +282,24 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          <Show when={props.generatedImage && !isGenerating() && !hasLocallyCleared()}>
+          <Show when={props.generatedImage}>
             <div class="relative w-full h-full">
               <img
                 src={props.generatedImage!}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
               />
+              
+              {/* Overlay that covers the image during loading */}
+              <Show when={isGenerating() || hasLocallyCleared()}>
+                <div class="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-md flex items-center justify-center">
+                  <div class="flex flex-col items-center gap-3">
+                    <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
+                    <div class="text-xs text-muted-foreground">Generating...</div>
+                  </div>
+                </div>
+              </Show>
+              
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
                   variant="secondary"
