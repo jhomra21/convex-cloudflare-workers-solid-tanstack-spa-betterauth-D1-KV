@@ -48,7 +48,10 @@ export function ImageAgent(props: ImageAgentProps) {
   createEffect(() => {
     // If the prop changes and we are NOT in the middle of generating, update the display.
     // This syncs the component with the parent's state.
-    if (props.generatedImage !== displayUrl() && !isGenerating()) {
+    // IMPORTANT: Don't clear displayUrl when props.generatedImage becomes empty during generation
+    if (props.generatedImage !== displayUrl() && 
+        !isGenerating() && 
+        props.generatedImage !== '') {
       setDisplayUrl(props.generatedImage);
     }
   });
