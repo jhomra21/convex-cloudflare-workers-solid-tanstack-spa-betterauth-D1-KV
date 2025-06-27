@@ -103,12 +103,18 @@ export function ImageAgent(props: ImageAgentProps) {
         
       // The mutation will eventually update the agent's status and imageUrl,
       // which will flow back down as props and trigger the UI changes.
-      await generateImage.mutateAsync({
+      const result = await generateImage.mutateAsync({
         prompt: currentPrompt,
         model,
         steps: 4,
         agentId,
       });
+      
+      // Ensure we update the image URL in Convex
+      if (result?.image?.url) {
+        // Call the callback to update the image in Convex
+        props.onImageGenerated?.(agentId, result.image.url);
+      }
       
       // We don't need to handle the result here, the UI is driven by prop changes.
       // Success/error toasts can be handled in the useGenerateImage hook if desired.
