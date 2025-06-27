@@ -37,6 +37,7 @@ export function ImageAgent(props: ImageAgentProps) {
   // Track our own generation state to prevent flash
   const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
   const [hasLocallyCleared, setHasLocallyCleared] = createSignal(false);
+  const [loadedImageUrl, setLoadedImageUrl] = createSignal<string | null>(null);
   
   // Combined loading state - show loading if server processing OR we're waiting for our image to load
   const isGenerating = () => {
@@ -44,20 +45,32 @@ export function ImageAgent(props: ImageAgentProps) {
   };
   const hasFailed = () => props.status === 'failed';
   
-
-  
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
-  // Stop local loading when we get a new image (simple approach)
+  // Preload new images and only show them when fully loaded
   createEffect(() => {
-    const currentImage = props.generatedImage;
-    if (isLocallyGenerating() && currentImage && currentImage.length > 0) {
-      // We got a new image - stop loading after a brief delay to ensure it loads
-      setTimeout(() => {
+    const newImageUrl = props.generatedImage;
+    
+    if (newImageUrl && newImageUrl.length > 0 && newImageUrl !== loadedImageUrl()) {
+      // Always keep loading state while we load the new image
+      if (!isLocallyGenerating()) setIsLocallyGenerating(true);
+      
+      // Preload the image
+      const img = new Image();
+      img.onload = () => {
+        // Image successfully loaded, update our loaded URL and remove loading state
+        setLoadedImageUrl(newImageUrl);
         setIsLocallyGenerating(false);
         setHasLocallyCleared(false);
-      }, 300); // Small delay for image loading
+      };
+      img.onerror = () => {
+        // Image failed to load
+        console.error('Failed to load image:', newImageUrl);
+        setIsLocallyGenerating(false);
+        setHasLocallyCleared(false);
+      };
+      img.src = newImageUrl;
     }
   });
   
@@ -91,10 +104,6 @@ export function ImageAgent(props: ImageAgentProps) {
     
     // IMMEDIATELY hide current image locally (instant feedback)
     setHasLocallyCleared(true);
-    
-    // ALWAYS clear the current image immediately when starting generation
-    // This prevents any old image from showing
-    props.onImageGenerated?.(agentId, '');
     
     // Start local generation tracking
     setIsLocallyGenerating(true);
@@ -282,23 +291,13 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          <Show when={props.generatedImage}>
+          <Show when={props.generatedImage && !isGenerating() && !hasLocallyCleared()}>
             <div class="relative w-full h-full">
               <img
-                src={props.generatedImage!}
+                src={loadedImageUrl() || props.generatedImage}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
               />
-              
-              {/* Overlay that covers the image during loading */}
-              <Show when={isGenerating() || hasLocallyCleared()}>
-                <div class="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-md flex items-center justify-center">
-                  <div class="flex flex-col items-center gap-3">
-                    <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
-                    <div class="text-xs text-muted-foreground">Generating...</div>
-                  </div>
-                </div>
-              </Show>
               
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
