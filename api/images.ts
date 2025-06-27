@@ -59,9 +59,11 @@ imagesApi.post('/', async (c) => {
           },
           body: JSON.stringify({
             prompt,
-            seed: seed || Math.floor(Math.random() * 4294967295),
+            // seed: seed || Math.floor(Math.random() * 4294967295),
             enable_safety_checker: false,
             sync_mode: true,
+            num_inference_steps: 20,
+            guidance_scale: 2.5,
           }),
         });
 
