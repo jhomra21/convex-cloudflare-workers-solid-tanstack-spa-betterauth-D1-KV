@@ -37,6 +37,7 @@ export function ImageAgent(props: ImageAgentProps) {
   // --- State driven by props + preloading ---
   const [isPreloading, setIsPreloading] = createSignal(false);
   const [displayUrl, setDisplayUrl] = createSignal(props.generatedImage);
+  const [imageOpacity, setImageOpacity] = createSignal(1); // For fade transitions
 
   // Computed loading state: true if backend is processing OR we are preloading a new image
   const isLoading = () => props.status === 'processing' || isPreloading();
@@ -47,17 +48,44 @@ export function ImageAgent(props: ImageAgentProps) {
     // Only preload if the URL is new and valid
     if (newUrl && newUrl !== displayUrl()) {
       setIsPreloading(true);
-      const img = new Image();
-      img.onload = () => {
-        setDisplayUrl(newUrl);
-        setIsPreloading(false);
-      };
-      img.onerror = () => {
-        console.error(`Failed to load image: ${newUrl}`);
-        setIsPreloading(false);
-        // The UI will rely on props.status === 'failed' to show an error state
-      };
-      img.src = newUrl;
+      // Fade out current image (if any)
+      if (displayUrl()) {
+        setImageOpacity(0);
+        // Short delay to ensure fade out is visible
+        setTimeout(() => {
+          // Start loading the new image
+          const img = new Image();
+          img.onload = () => {
+            // When loaded, set the new URL
+            setDisplayUrl(newUrl);
+            // Then fade it in
+            setTimeout(() => {
+              setImageOpacity(1);
+              setIsPreloading(false);
+            }, 50); // Small delay to ensure DOM update occurs before transition starts
+          };
+          img.onerror = () => {
+            console.error(`Failed to load image: ${newUrl}`);
+            setIsPreloading(false);
+          };
+          img.src = newUrl;
+        }, 300); // Match this with the CSS transition duration
+      } else {
+        // No previous image, just load without fade out
+        const img = new Image();
+        img.onload = () => {
+          setDisplayUrl(newUrl);
+          setTimeout(() => {
+            setImageOpacity(1);
+            setIsPreloading(false);
+          }, 50);
+        };
+        img.onerror = () => {
+          console.error(`Failed to load image: ${newUrl}`);
+          setIsPreloading(false);
+        };
+        img.src = newUrl;
+      }
     } else if (!newUrl) {
       // If the parent component clears the image, reflect that immediately
       setDisplayUrl(undefined);
@@ -276,6 +304,7 @@ export function ImageAgent(props: ImageAgentProps) {
                   src={displayUrl()!}
                   alt="Generated image"
                   class="w-full h-full object-cover rounded-md"
+                  style={{ opacity: imageOpacity() }}
                 />
                 
                 <div class="absolute top-2 right-2 flex gap-1">
