@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show } from 'solid-js';
+import { createSignal, createUniqueId, Show, createEffect } from 'solid-js';
 import { useGenerateImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -34,8 +34,15 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Status-based loading state
-  const isGenerating = () => props.status === 'processing';
+  // Track image loading to prevent flash
+  const [imageLoadingUrl, setImageLoadingUrl] = createSignal<string>('');
+  const [isImageLoaded, setIsImageLoaded] = createSignal(true);
+  
+  // Status-based loading state - stay in loading until new image actually loads
+  const isGenerating = () => {
+    return props.status === 'processing' || 
+           (props.status === 'success' && !isImageLoaded() && imageLoadingUrl() !== '');
+  };
   const hasFailed = () => props.status === 'failed';
   
   // Track edit mode - critical for handling state correctly
@@ -43,6 +50,16 @@ export function ImageAgent(props: ImageAgentProps) {
   
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
+  
+  // Reset image loading state when we get a new image URL from props
+  createEffect(() => {
+    const currentImage = props.generatedImage;
+    if (currentImage && currentImage !== imageLoadingUrl()) {
+      // If we get a new image that we weren't expecting (e.g., from regeneration)
+      // mark it as loaded immediately to avoid unnecessary loading state
+      setIsImageLoaded(true);
+    }
+  });
   
   // Handle prompt changes locally and persist to global state
   const handlePromptChange = (value: string) => {
@@ -77,6 +94,10 @@ export function ImageAgent(props: ImageAgentProps) {
       props.onImageGenerated?.(agentId, '');
     }
     
+    // Reset image loading state for new generation
+    setImageLoadingUrl('');
+    setIsImageLoaded(true);
+    
     // Sync to canvas before generating
     props.onPromptChange?.(agentId, currentPrompt);
     
@@ -93,6 +114,10 @@ export function ImageAgent(props: ImageAgentProps) {
       });
       
       if (result.image?.url) {
+        // Set up image loading tracking
+        setImageLoadingUrl(result.image.url);
+        setIsImageLoaded(false);
+        
         // Use the R2 URL for storage in Convex, not the base64 data
         props.onImageGenerated?.(agentId, result.image.url);
         setShowPromptInput(false); // Only hide input after successful generation
@@ -265,6 +290,19 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={props.generatedImage!}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
+                onLoad={(e) => {
+                  // Mark as loaded when new image finishes loading
+                  const imgSrc = (e.target as HTMLImageElement).src;
+                  if (imgSrc === imageLoadingUrl()) {
+                    setIsImageLoaded(true);
+                  }
+                }}
+                onError={() => {
+                  // If image fails to load, still stop the loading state
+                  if (props.generatedImage === imageLoadingUrl()) {
+                    setIsImageLoaded(true);
+                  }
+                }}
               />
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
