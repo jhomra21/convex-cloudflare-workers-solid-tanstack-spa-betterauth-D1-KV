@@ -34,61 +34,64 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // --- State driven by props + preloading ---
+  // --- Image crossfade state ---
   const [isPreloading, setIsPreloading] = createSignal(false);
-  const [displayUrl, setDisplayUrl] = createSignal(props.generatedImage);
-  const [imageOpacity, setImageOpacity] = createSignal(1); // For fade transitions
-
+  const [activeImageUrl, setActiveImageUrl] = createSignal<string | undefined>(props.generatedImage);
+  const [newImageUrl, setNewImageUrl] = createSignal<string | undefined>(undefined);
+  const [isTransitioning, setIsTransitioning] = createSignal(false);
+  
   // Computed loading state: true if backend is processing OR we are preloading a new image
   const isLoading = () => props.status === 'processing' || isPreloading();
   const hasFailed = () => props.status === 'failed';
+  const hasImage = () => !!activeImageUrl() || !!newImageUrl();
 
-  // Effect to preload a new image URL when it arrives via props
-  createEffect(on(() => props.generatedImage, (newUrl) => {
-    // Only preload if the URL is new and valid
-    if (newUrl && newUrl !== displayUrl()) {
+  // Initialize from props on mount
+  createEffect(() => {
+    if (props.generatedImage && !activeImageUrl()) {
+      setActiveImageUrl(props.generatedImage);
+    }
+  });
+
+  // Handle image changes from props
+  createEffect(on(() => props.generatedImage, (newUrl, prevUrl) => {
+    if (!newUrl) {
+      // Image was cleared
+      setActiveImageUrl(undefined);
+      setNewImageUrl(undefined);
+      return;
+    }
+    
+    if (newUrl !== prevUrl && newUrl !== activeImageUrl()) {
+      console.log("New image URL received:", newUrl);
+      
+      // Start preloading the new image
       setIsPreloading(true);
-      // Fade out current image (if any)
-      if (displayUrl()) {
-        setImageOpacity(0);
-        // Short delay to ensure fade out is visible
+      setNewImageUrl(newUrl);
+      
+      // Preload the new image off-screen
+      const img = new Image();
+      img.onload = () => {
+        console.log("New image loaded, beginning transition");
+        // Start the crossfade transition
+        setIsTransitioning(true);
+        
+        // After transition completes, update the active image and reset
         setTimeout(() => {
-          // Start loading the new image
-          const img = new Image();
-          img.onload = () => {
-            // When loaded, set the new URL
-            setDisplayUrl(newUrl);
-            // Then fade it in
-            setTimeout(() => {
-              setImageOpacity(1);
-              setIsPreloading(false);
-            }, 50); // Small delay to ensure DOM update occurs before transition starts
-          };
-          img.onerror = () => {
-            console.error(`Failed to load image: ${newUrl}`);
-            setIsPreloading(false);
-          };
-          img.src = newUrl;
-        }, 300); // Match this with the CSS transition duration
-      } else {
-        // No previous image, just load without fade out
-        const img = new Image();
-        img.onload = () => {
-          setDisplayUrl(newUrl);
-          setTimeout(() => {
-            setImageOpacity(1);
-            setIsPreloading(false);
-          }, 50);
-        };
-        img.onerror = () => {
-          console.error(`Failed to load image: ${newUrl}`);
+          setActiveImageUrl(newUrl);
+          setNewImageUrl(undefined);
+          setIsTransitioning(false);
           setIsPreloading(false);
-        };
-        img.src = newUrl;
-      }
-    } else if (!newUrl) {
-      // If the parent component clears the image, reflect that immediately
-      setDisplayUrl(undefined);
+          console.log("Transition complete");
+        }, 500); // Match this with the CSS transition duration
+      };
+      
+      img.onerror = () => {
+        console.error("Failed to load image:", newUrl);
+        setNewImageUrl(undefined);
+        setIsPreloading(false);
+      };
+      
+      img.src = newUrl;
     }
   }, { defer: true }));
   
@@ -201,7 +204,7 @@ export function ImageAgent(props: ImageAgentProps) {
       <CardContent class="p-4 flex flex-col h-full">
         {/* Prompt Section */}
         <div class="flex-shrink-0 mb-4">
-          <Show when={showPromptInput() || !displayUrl()}>
+          <Show when={showPromptInput() || !hasImage()}>
             <div class="space-y-2">
               {/* Model Selection */}
               <div class="flex gap-1 p-1 bg-muted/30 rounded-md">
@@ -250,7 +253,7 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
           
-          <Show when={!showPromptInput() && displayUrl()}>
+          <Show when={!showPromptInput() && hasImage()}>
             <div class="flex items-center justify-between">
               <p class="text-sm text-muted-foreground truncate flex-1 mr-2">
                 {localPrompt()}
@@ -268,9 +271,9 @@ export function ImageAgent(props: ImageAgentProps) {
         </div>
 
         {/* Image Section */}
-        <div class="flex-1 flex items-center justify-center relative">
+        <div class="flex-1 flex items-center justify-center relative overflow-hidden">
           {/* Empty state - only show when idle AND no image */}
-          <Show when={!displayUrl() && !isLoading() && !hasFailed()}>
+          <Show when={!hasImage() && !isLoading() && !hasFailed()}>
             <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
               <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
                 <Icon name="image" class="h-8 w-8 opacity-50" />
@@ -293,42 +296,54 @@ export function ImageAgent(props: ImageAgentProps) {
           </Show>
 
           {/* Image container - always present but conditionally shown */}
-          <Show when={displayUrl()}>
-            <div class="absolute inset-0 w-full h-full">
-              {/* The image is always rendered but opacity controlled by CSS */}
-              <div 
-                class="relative w-full h-full transition-opacity duration-300" 
-                classList={{ 'opacity-0': isLoading() }}
-              >
-                <img
-                  src={displayUrl()!}
-                  alt="Generated image"
-                  class="w-full h-full object-cover rounded-md"
-                  style={{ opacity: imageOpacity() }}
-                />
-                
-                <div class="absolute top-2 right-2 flex gap-1">
+          <div class="relative w-full h-full">
+            {/* Current Image (fading out during transition) */}
+            <Show when={activeImageUrl()}>
+              <img
+                src={activeImageUrl()}
+                alt="Generated image"
+                class={cn(
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-500",
+                  isTransitioning() ? "opacity-0" : "opacity-100" 
+                )}
+              />
+            </Show>
+            
+            {/* New Image (fading in during transition) */}
+            <Show when={newImageUrl()}>
+              <img
+                src={newImageUrl()}
+                alt="New generated image"
+                class={cn(
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-500",
+                  isTransitioning() ? "opacity-100" : "opacity-0"
+                )}
+              />
+            </Show>
+
+            {/* Action Buttons Overlay - inside the image container to be properly positioned */}
+            <Show when={!isLoading()}>
+              <div class="absolute top-2 right-2 flex gap-1 z-10">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRegenerate}
+                  disabled={isLoading()}
+                >
+                  <Icon name="refresh-cw" class="h-3 w-3" />
+                </Button>
+                <Show when={props.onRemove}>
                   <Button
-                    variant="secondary"
+                    variant="destructive"
                     size="sm"
-                    onClick={handleRegenerate}
-                    disabled={isLoading()}
+                    onClick={() => props.onRemove?.(agentId)}
                   >
-                    <Icon name="refresh-cw" class="h-3 w-3" />
+                    <Icon name="x" class="h-3 w-3" />
                   </Button>
-                  <Show when={props.onRemove}>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => props.onRemove?.(agentId)}
-                    >
-                      <Icon name="x" class="h-3 w-3" />
-                    </Button>
-                  </Show>
-                </div>
+                </Show>
               </div>
-            </div>
-          </Show>
+            </Show>
+          </div>
           
           {/* Loading state - completely independent overlay component */}
           <Show when={isLoading()}>
