@@ -36,8 +36,6 @@ export function ImageAgent(props: ImageAgentProps) {
   
   // Track our own generation state to prevent flash
   const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
-  const [hasLocallyCleared, setHasLocallyCleared] = createSignal(false);
-  const [loadedImageUrl, setLoadedImageUrl] = createSignal<string | null>(null);
   
   // Combined loading state - show loading if server processing OR we're waiting for our image to load
   const isGenerating = () => {
@@ -48,28 +46,37 @@ export function ImageAgent(props: ImageAgentProps) {
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
+  // Keep track of the current loading image for preloading
+  const [preloadingImage, setPreloadingImage] = createSignal<string | null>(null);
+  // Track if the new image is fully loaded and ready to display
+  const [isImageLoaded, setIsImageLoaded] = createSignal(false);
+  
   // Preload new images and only show them when fully loaded
   createEffect(() => {
     const newImageUrl = props.generatedImage;
     
-    if (newImageUrl && newImageUrl.length > 0 && newImageUrl !== loadedImageUrl()) {
+    if (newImageUrl && newImageUrl.length > 0 && newImageUrl !== preloadingImage()) {
       // Always keep loading state while we load the new image
-      if (!isLocallyGenerating()) setIsLocallyGenerating(true);
+      setIsLocallyGenerating(true);
+      setIsImageLoaded(false);
+      setPreloadingImage(newImageUrl);
       
       // Preload the image
       const img = new Image();
+      
       img.onload = () => {
-        // Image successfully loaded, update our loaded URL and remove loading state
-        setLoadedImageUrl(newImageUrl);
+        // Image successfully loaded
+        setIsImageLoaded(true);
         setIsLocallyGenerating(false);
-        setHasLocallyCleared(false);
       };
+      
       img.onerror = () => {
         // Image failed to load
         console.error('Failed to load image:', newImageUrl);
         setIsLocallyGenerating(false);
-        setHasLocallyCleared(false);
+        setIsImageLoaded(false);
       };
+      
       img.src = newImageUrl;
     }
   });
@@ -102,11 +109,9 @@ export function ImageAgent(props: ImageAgentProps) {
       console.error('Failed to update agent status optimistically:', error);
     });
     
-    // IMMEDIATELY hide current image locally (instant feedback)
-    setHasLocallyCleared(true);
-    
-    // Start local generation tracking
+    // Start local generation tracking - this will show the loading state
     setIsLocallyGenerating(true);
+    setIsImageLoaded(false);
     
     // Sync to canvas before generating
     props.onPromptChange?.(agentId, currentPrompt);
@@ -130,7 +135,6 @@ export function ImageAgent(props: ImageAgentProps) {
       } else {
         console.error(`Failed to generate image: No URL in result`);
         setIsLocallyGenerating(false); // Stop loading on error
-        setHasLocallyCleared(false); // Reset cleared state
       }
       
       toast.success('Image generated successfully!');
@@ -138,7 +142,6 @@ export function ImageAgent(props: ImageAgentProps) {
       toast.error('Failed to generate image');
       console.error(error);
       setIsLocallyGenerating(false); // Stop loading on error
-      setHasLocallyCleared(false); // Reset cleared state
     }
   };
 
@@ -258,13 +261,13 @@ export function ImageAgent(props: ImageAgentProps) {
 
         {/* Image Section */}
         <div class="flex-1 flex items-center justify-center relative">
-          {/* Loading state - completely independent component */}
-          <Show when={isGenerating()}>
-            <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
-              <div class="flex flex-col items-center gap-3">
-                <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
-                <div class="text-xs text-muted-foreground">Generating...</div>
+          {/* Empty state - only show when idle AND no image */}
+          <Show when={props.status === 'idle' && !props.generatedImage}>
+            <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
+                <Icon name="image" class="h-8 w-8 opacity-50" />
               </div>
+              <p class="text-sm">Enter a prompt to generate</p>
             </div>
           </Show>
 
@@ -281,42 +284,49 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          {/* Empty state - only show when idle AND no image */}
-          <Show when={props.status === 'idle' && !props.generatedImage}>
-            <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
-                <Icon name="image" class="h-8 w-8 opacity-50" />
+          {/* Image container - always present but conditionally shown */}
+          <Show when={props.generatedImage}>
+            <div class="absolute inset-0 w-full h-full">
+              {/* The image is always rendered but opacity controlled by CSS */}
+              <div 
+                class="relative w-full h-full transition-opacity duration-300" 
+                classList={{ 'opacity-0': isGenerating() || !isImageLoaded() }}
+              >
+                <img
+                  src={props.generatedImage}
+                  alt="Generated image"
+                  class="w-full h-full object-cover rounded-md"
+                />
+                
+                <div class="absolute top-2 right-2 flex gap-1">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    disabled={isGenerating()}
+                  >
+                    <Icon name="refresh-cw" class="h-3 w-3" />
+                  </Button>
+                  <Show when={props.onRemove}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => props.onRemove?.(agentId)}
+                    >
+                      <Icon name="x" class="h-3 w-3" />
+                    </Button>
+                  </Show>
+                </div>
               </div>
-              <p class="text-sm">Enter a prompt to generate</p>
             </div>
           </Show>
-
-          <Show when={props.generatedImage && !isGenerating() && !hasLocallyCleared()}>
-            <div class="relative w-full h-full">
-              <img
-                src={loadedImageUrl() || props.generatedImage}
-                alt="Generated image"
-                class="w-full h-full object-cover rounded-md"
-              />
-              
-              <div class="absolute top-2 right-2 flex gap-1">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRegenerate}
-                  disabled={isGenerating()}
-                >
-                  <Icon name="refresh-cw" class="h-3 w-3" />
-                </Button>
-                <Show when={props.onRemove}>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => props.onRemove?.(agentId)}
-                  >
-                    <Icon name="x" class="h-3 w-3" />
-                  </Button>
-                </Show>
+          
+          {/* Loading state - completely independent overlay component */}
+          <Show when={isGenerating()}>
+            <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
+              <div class="flex flex-col items-center gap-3">
+                <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
+                <div class="text-xs text-muted-foreground">Generating...</div>
               </div>
             </div>
           </Show>
