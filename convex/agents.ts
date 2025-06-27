@@ -18,6 +18,9 @@ export const getCanvasAgents = query({
       imageUrl: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+      connectedAgentId: v.optional(v.id("agents")),
+      uploadedImageUrl: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -41,6 +44,9 @@ export const createAgent = mutation({
     width: v.number(),
     height: v.number(),
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
+    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"))),
+    connectedAgentId: v.optional(v.id("agents")),
+    uploadedImageUrl: v.optional(v.string()),
   },
   returns: v.id("agents"),
   handler: async (ctx, args) => {
@@ -54,6 +60,9 @@ export const createAgent = mutation({
       height: args.height,
       model: args.model || "normal",
       status: "idle",
+      type: args.type || "image-generate",
+      connectedAgentId: args.connectedAgentId,
+      uploadedImageUrl: args.uploadedImageUrl,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -156,6 +165,131 @@ export const deleteAgent = mutation({
   handler: async (ctx, { agentId }) => {
     await ctx.db.delete(agentId);
     return null;
+  },
+});
+
+// Connect two agents
+export const connectAgents = mutation({
+  args: {
+    sourceAgentId: v.id("agents"),
+    targetAgentId: v.id("agents"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { sourceAgentId, targetAgentId }) => {
+    // Verify both agents exist
+    const sourceAgent = await ctx.db.get(sourceAgentId);
+    const targetAgent = await ctx.db.get(targetAgentId);
+    
+    if (!sourceAgent || !targetAgent) {
+      throw new Error("One or both agents not found");
+    }
+    
+    // Update both agents to reference each other
+    await ctx.db.patch(sourceAgentId, {
+      connectedAgentId: targetAgentId,
+      updatedAt: Date.now(),
+    });
+    
+    await ctx.db.patch(targetAgentId, {
+      connectedAgentId: sourceAgentId,
+      updatedAt: Date.now(),
+    });
+    
+    return null;
+  },
+});
+
+// Disconnect agents
+export const disconnectAgents = mutation({
+  args: {
+    agentId: v.id("agents"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId }) => {
+    const agent = await ctx.db.get(agentId);
+    if (!agent || !agent.connectedAgentId) {
+      return null;
+    }
+    
+    // Remove connection from both agents
+    await ctx.db.patch(agentId, {
+      connectedAgentId: undefined,
+      updatedAt: Date.now(),
+    });
+    
+    await ctx.db.patch(agent.connectedAgentId, {
+      connectedAgentId: undefined,
+      updatedAt: Date.now(),
+    });
+    
+    return null;
+  },
+});
+
+// Update agent type
+export const updateAgentType = mutation({
+  args: {
+    agentId: v.id("agents"),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, type }) => {
+    await ctx.db.patch(agentId, {
+      type,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Update agent uploaded image
+export const updateAgentUploadedImage = mutation({
+  args: {
+    agentId: v.id("agents"),
+    uploadedImageUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, uploadedImageUrl }) => {
+    await ctx.db.patch(agentId, {
+      uploadedImageUrl,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Get connected agent for an agent
+export const getConnectedAgent = query({
+  args: { agentId: v.id("agents") },
+  returns: v.union(
+    v.object({
+      _id: v.id("agents"),
+      _creationTime: v.number(),
+      canvasId: v.id("canvases"),
+      userId: v.string(),
+      prompt: v.string(),
+      positionX: v.number(),
+      positionY: v.number(),
+      width: v.number(),
+      height: v.number(),
+      imageUrl: v.optional(v.string()),
+      model: v.union(v.literal("normal"), v.literal("pro")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+      connectedAgentId: v.optional(v.id("agents")),
+      uploadedImageUrl: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { agentId }) => {
+    const agent = await ctx.db.get(agentId);
+    if (!agent || !agent.connectedAgentId) {
+      return null;
+    }
+    
+    return await ctx.db.get(agent.connectedAgentId);
   },
 });
 

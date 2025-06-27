@@ -34,9 +34,13 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     model: v.union(v.literal("normal"), v.literal("pro")),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+    connectedAgentId: v.optional(v.id("agents")),
+    uploadedImageUrl: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_canvas", ["canvasId"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_connected_agent", ["connectedAgentId"]),
 }); 

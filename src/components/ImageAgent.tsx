@@ -1,5 +1,5 @@
-import { createSignal, createUniqueId, Show, createMemo } from 'solid-js';
-import { useGenerateImage } from '~/lib/images-actions';
+import { createSignal, createUniqueId, Show, createMemo, For } from 'solid-js';
+import { useGenerateImage, useEditImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -24,6 +24,12 @@ export interface ImageAgentProps {
   onPromptChange?: (id: string, prompt: string) => void;
   status?: 'idle' | 'processing' | 'success' | 'failed';
   model?: 'normal' | 'pro';
+  type?: 'image-generate' | 'image-edit';
+  connectedAgentId?: string;
+  uploadedImageUrl?: string;
+  availableAgents?: Array<{id: string; prompt: string; imageUrl?: string}>;
+  onConnectAgent?: (sourceAgentId: string, targetAgentId: string) => void;
+  onDisconnectAgent?: (agentId: string) => void;
   class?: string;
 }
 
@@ -33,6 +39,73 @@ export function ImageAgent(props: ImageAgentProps) {
   // Use persistent state hook for prompt
   const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
+  
+  // Get connected agent info
+  const connectedAgent = () => {
+    if (props.type === 'image-edit' && props.connectedAgentId && props.availableAgents) {
+      return props.availableAgents.find(agent => agent.id === props.connectedAgentId);
+    }
+    return null;
+  };
+  
+  // Get input image from either uploaded image or connected agent
+  const getInputImage = () => {
+    if (props.uploadedImageUrl) {
+      return props.uploadedImageUrl;
+    }
+    const connected = connectedAgent();
+    return connected?.imageUrl || null;
+  };
+  
+
+  
+  // Image upload for edit agents
+  const [isDragOver, setIsDragOver] = createSignal(false);
+  
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+    
+    try {
+      // Convert to base64 for now - in production you'd upload to R2
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        // Update agent with uploaded image
+        await convexClient.mutation(convexApi.agents.updateAgentUploadedImage, {
+          agentId: agentId as any,
+          uploadedImageUrl: base64,
+        });
+        
+        toast.success('Image uploaded successfully');
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error('Failed to upload image');
+    }
+  };
+  
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleImageUpload(files[0]);
+    }
+  };
+  
+  const handleFileInput = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const files = input.files;
+    if (files && files.length > 0) {
+      handleImageUpload(files[0]);
+    }
+  };
   
   // Local loading state for immediate feedback
   const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
@@ -58,6 +131,7 @@ export function ImageAgent(props: ImageAgentProps) {
   };
   
   const generateImage = useGenerateImage();
+  const editImage = useEditImage();
 
   const handleGenerate = async () => {
     const currentPrompt = localPrompt().trim();
@@ -79,23 +153,42 @@ export function ImageAgent(props: ImageAgentProps) {
     props.onPromptChange?.(agentId, currentPrompt);
     
     try {
-      const model = selectedModel() === 'pro' 
-        ? 'fal-ai/flux-kontext-lora/text-to-image'
-        : '@cf/black-forest-labs/flux-1-schnell';
+      if (props.type === 'image-edit') {
+        // For editing, we need an input image
+        const inputImageUrl = getInputImage();
         
-      // Let the backend handle ALL updates - no frontend callbacks
-      await generateImage.mutateAsync({
-        prompt: currentPrompt,
-        model,
-        steps: 4,
-        agentId,
-      });
+        if (!inputImageUrl) {
+          toast.error('Edit agents need an input image. Upload one or connect to a generator agent.');
+          setIsLocallyGenerating(false);
+          return;
+        }
+        
+        await editImage.mutateAsync({
+          prompt: currentPrompt,
+          inputImageUrl,
+          model: 'fal-ai/flux-kontext-lora',
+          steps: 30,
+          agentId,
+        });
+      } else {
+        // Regular generation
+        const model = selectedModel() === 'pro' 
+          ? 'fal-ai/flux-kontext-lora/text-to-image'
+          : '@cf/black-forest-labs/flux-1-schnell';
+          
+        await generateImage.mutateAsync({
+          prompt: currentPrompt,
+          model,
+          steps: 4,
+          agentId,
+        });
+      }
       
       // Backend handles all updates - UI reacts to Convex changes
       setShowPromptInput(false);
     } catch (error) {
       console.error(error);
-      toast.error('Failed to generate image');
+      toast.error(`Failed to ${props.type === 'image-edit' ? 'edit' : 'generate'} image`);
     } finally {
       // Clear local loading state once generation completes (success or failure)
       setIsLocallyGenerating(false);
@@ -135,13 +228,20 @@ export function ImageAgent(props: ImageAgentProps) {
       >
       {/* Drag Handle - Larger clickable area */}
       <div 
-        class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-center border-b border-muted/40"
+        class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-between px-3 border-b border-muted/40"
         onMouseDown={props.onMouseDown}
         title="Drag to move agent"
       >
+        <div class="flex items-center gap-2">
+          <Icon 
+            name={props.type === 'image-edit' ? 'edit' : 'image'} 
+            class="h-3 w-3 text-muted-foreground/60" 
+          />
+          <span class="text-xs text-muted-foreground/60 capitalize">
+            {props.type === 'image-edit' ? 'Edit' : 'Generate'}
+          </span>
+        </div>
         <div class="flex gap-1">
-          <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
-          <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
           <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
           <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
           <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
@@ -221,12 +321,137 @@ export function ImageAgent(props: ImageAgentProps) {
         <div class="flex-1 flex items-center justify-center relative overflow-hidden">
           {/* Empty state - only show when idle AND no image */}
           <Show when={!hasImage() && !isLoading() && !hasFailed()}>
-            <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
-                <Icon name="image" class="h-8 w-8 opacity-50" />
+            <Show when={props.type === 'image-edit'} fallback={
+              <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
+                  <Icon name="image" class="h-8 w-8 opacity-50" />
+                </div>
+                <p class="text-sm">Enter a prompt to generate</p>
               </div>
-              <p class="text-sm">Enter a prompt to generate</p>
-            </div>
+            }>
+              {/* Edit agent empty state with input image upload */}
+              <div class="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+                <Show when={!getInputImage()}>
+                  <div 
+                    class={cn(
+                      "w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center mb-3 transition-colors cursor-pointer",
+                      isDragOver() 
+                        ? "border-primary bg-primary/5" 
+                        : "border-muted-foreground/30 hover:border-muted-foreground/50"
+                    )}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = handleFileInput;
+                      input.click();
+                    }}
+                  >
+                    <Icon name="upload" class="h-8 w-8 opacity-50 mb-2" />
+                    <p class="text-sm text-center">
+                      Drop an image here or click to upload
+                    </p>
+                    <p class="text-xs text-muted-foreground/60 mt-1">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </div>
+                  
+                  {/* Agent connection section */}
+                  <Show when={props.availableAgents && props.availableAgents.length > 0}>
+                    <div class="w-full">
+                      <div class="flex items-center gap-2 mb-2">
+                        <div class="flex-1 h-px bg-muted-foreground/30"></div>
+                        <span class="text-xs text-muted-foreground/60">OR</span>
+                        <div class="flex-1 h-px bg-muted-foreground/30"></div>
+                      </div>
+                      
+                      <div class="w-full">
+                        <p class="text-xs text-center mb-2">Connect to a generator agent:</p>
+                        <div class="space-y-1 max-h-24 overflow-y-auto">
+                          <For each={props.availableAgents?.filter(agent => agent.id !== agentId && agent.imageUrl)}>
+                            {(agent) => (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                class="w-full text-xs justify-start h-8"
+                                onClick={() => {
+                                  props.onConnectAgent?.(agentId, agent.id);
+                                  toast.success('Agent connected successfully');
+                                }}
+                              >
+                                <Icon name="image" class="h-3 w-3 mr-2" />
+                                <span class="truncate">{agent.prompt || 'Untitled'}</span>
+                              </Button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+                </Show>
+                
+                <Show when={getInputImage()}>
+                  <div class="w-full h-32 border-2 border-muted-foreground/30 rounded-lg overflow-hidden mb-3">
+                    <img 
+                      src={getInputImage()!} 
+                      alt="Input image" 
+                      class="w-full h-full object-cover"
+                    />
+                  </div>
+                  
+                  <div class="flex gap-2 mb-2">
+                    <Show when={props.uploadedImageUrl} fallback={
+                      <Show when={connectedAgent()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            props.onDisconnectAgent?.(agentId);
+                            toast.success('Agent disconnected');
+                          }}
+                          class="flex-1"
+                        >
+                          <Icon name="x" class="h-4 w-4 mr-2" />
+                          Disconnect
+                        </Button>
+                      </Show>
+                    }>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = handleFileInput;
+                          input.click();
+                        }}
+                        class="flex-1"
+                      >
+                        <Icon name="upload" class="h-4 w-4 mr-2" />
+                        Change Image
+                      </Button>
+                    </Show>
+                  </div>
+                  
+                  <Show when={connectedAgent()}>
+                    <p class="text-xs text-center text-muted-foreground/60">
+                      Connected to: {connectedAgent()?.prompt || 'Untitled'}
+                    </p>
+                  </Show>
+                </Show>
+                
+                <p class="text-sm text-center">
+                  Upload an image and enter a prompt to edit
+                </p>
+              </div>
+            </Show>
           </Show>
 
           {/* Failed state */}

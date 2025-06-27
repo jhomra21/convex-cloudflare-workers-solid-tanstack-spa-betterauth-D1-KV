@@ -19,6 +19,9 @@ class Agent {
     public generatedImage: string = '',
     public status: 'idle' | 'processing' | 'success' | 'failed' = 'idle',
     public model: 'normal' | 'pro' = 'normal',
+    public type: 'image-generate' | 'image-edit' = 'image-generate',
+    public connectedAgentId?: string,
+    public uploadedImageUrl?: string,
     public _version: number = 0 // Track changes to force reactivity
   ) {}
 }
@@ -82,6 +85,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
         agent.imageUrl || '',
         agent.status,
         agent.model,
+        agent.type || 'image-generate',
+        agent.connectedAgentId,
+        agent.uploadedImageUrl,
         0 // _version
       );
     });
@@ -131,7 +137,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     debouncedSaves.set(agentId, timeout);
   };
 
-  const addAgent = async (prompt?: string) => {
+  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' = 'image-generate') => {
     if (!canvas()?._id || !userId()) return;
     
     // Smart positioning based on available canvas space
@@ -189,6 +195,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         positionY: newY,
         width: 320,
         height: 384,
+        type,
       });
       
       // Convex will automatically update via real-time subscription
@@ -207,6 +214,27 @@ export function ImageCanvas(props: ImageCanvasProps) {
       // Convex will automatically update via real-time subscription
     } catch (error) {
       console.error('Failed to delete agent:', error);
+    }
+  };
+
+  const connectAgents = async (sourceAgentId: string, targetAgentId: string) => {
+    try {
+      await convexClient.mutation(convexApi.agents.connectAgents, {
+        sourceAgentId: sourceAgentId as any,
+        targetAgentId: targetAgentId as any,
+      });
+    } catch (error) {
+      console.error('Failed to connect agents:', error);
+    }
+  };
+
+  const disconnectAgent = async (agentId: string) => {
+    try {
+      await convexClient.mutation(convexApi.agents.disconnectAgents, {
+        agentId: agentId as any,
+      });
+    } catch (error) {
+      console.error('Failed to disconnect agent:', error);
     }
   };
 
@@ -324,12 +352,21 @@ export function ImageCanvas(props: ImageCanvasProps) {
         </div>
         <div class="flex items-center gap-2">
           <Button
-            onClick={() => addAgent()}
+            onClick={() => addAgent('', 'image-generate')}
             size="sm"
             class="flex items-center gap-2"
           >
-            <Icon name="plus" class="h-4 w-4" />
-            Add Agent
+            <Icon name="image" class="h-4 w-4" />
+            Generate Agent
+          </Button>
+          <Button
+            onClick={() => addAgent('', 'image-edit')}
+            size="sm"
+            variant="outline"
+            class="flex items-center gap-2"
+          >
+            <Icon name="edit" class="h-4 w-4" />
+            Edit Agent
           </Button>
           <Button
             onClick={async () => {
@@ -420,6 +457,16 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   onPromptChange={updateAgentPrompt}
                   status={agent.status}
                   model={agent.model}
+                  type={agent.type}
+                  connectedAgentId={agent.connectedAgentId}
+                  uploadedImageUrl={agent.uploadedImageUrl}
+                  availableAgents={agents().map(a => ({
+                    id: a.id,
+                    prompt: a.prompt,
+                    imageUrl: a.generatedImage
+                  }))}
+                  onConnectAgent={connectAgents}
+                  onDisconnectAgent={disconnectAgent}
                   class={cn(
                     "shadow-lg border-2 transition-all duration-200",
                     isDragged() 
