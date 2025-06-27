@@ -311,7 +311,7 @@ export function ImageAgent(props: ImageAgentProps) {
                 alt="Generated image"
                 class={cn(
                   "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
-                  isTransitioning() ? "opacity-0" : "opacity-100" 
+                  isTransitioning() ? "opacity-0 hidden" : "opacity-100" 
                 )}
               />
             </Show>
