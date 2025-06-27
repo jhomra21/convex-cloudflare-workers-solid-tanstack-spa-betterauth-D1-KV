@@ -66,23 +66,30 @@ export function ImageAgent(props: ImageAgentProps) {
       
       // Start preloading the new image
       setIsPreloading(true);
-      setNewImageUrl(newUrl);
       
       // Preload the new image off-screen
       const img = new Image();
       img.onload = () => {
         console.log("New image loaded, beginning transition");
-        // Start the crossfade transition
-        setIsTransitioning(true);
         
-        // After transition completes, update the active image and reset
-        setTimeout(() => {
-          setActiveImageUrl(newUrl);
-          setNewImageUrl(undefined);
-          setIsTransitioning(false);
-          setIsPreloading(false);
-          console.log("Transition complete");
-        }, 500); // Match this with the CSS transition duration
+        // Set the new image URL first, before starting transition
+        setNewImageUrl(newUrl);
+        
+        // Short delay to ensure the new image is in DOM before transition starts
+        requestAnimationFrame(() => {
+          // Start the crossfade transition
+          setIsTransitioning(true);
+          
+          // After transition completes, update the active image and reset
+          // This timeout should match the CSS transition duration
+          setTimeout(() => {
+            setActiveImageUrl(newUrl);
+            setNewImageUrl(undefined);
+            setIsTransitioning(false);
+            setIsPreloading(false);
+            console.log("Transition complete");
+          }, 200); // Match this with the CSS transition duration (200ms)
+        });
       };
       
       img.onerror = () => {
@@ -303,7 +310,7 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={activeImageUrl()}
                 alt="Generated image"
                 class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-500",
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
                   isTransitioning() ? "opacity-0" : "opacity-100" 
                 )}
               />
@@ -315,7 +322,7 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={newImageUrl()}
                 alt="New generated image"
                 class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-500",
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
                   isTransitioning() ? "opacity-100" : "opacity-0"
                 )}
               />
