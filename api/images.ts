@@ -23,6 +23,25 @@ async function updateAgentStatus(
   }
 }
 
+// Helper function to update both agent image and status in one call
+async function updateAgentImageAndStatus(
+  convexUrl: string, 
+  agentId: string, 
+  imageUrl: string,
+  status: 'success' | 'failed'
+) {
+  try {
+    const convex = new ConvexHttpClient(convexUrl);
+    await convex.mutation(api.agents.updateAgentImage, {
+      agentId: agentId as any, // Cast to handle Convex ID type
+      imageUrl,
+    });
+    console.log(`✅ Set agent image and status to ${status}:`, agentId);
+  } catch (error) {
+    console.error(`❌ Failed to update agent image and status:`, agentId, error);
+  }
+}
+
 // Generate and store an image
 imagesApi.post('/', async (c) => {
   const user = c.get('user');
@@ -196,9 +215,9 @@ imagesApi.post('/', async (c) => {
       userId: user.id,
     });
 
-    // Set agent status to success if agentId is provided
+    // Update agent with both image and success status if agentId is provided  
     if (agentId) {
-      await updateAgentStatus(c.env.CONVEX_URL, agentId, 'success');
+      await updateAgentImageAndStatus(c.env.CONVEX_URL, agentId, imageUrl, 'success');
     }
 
     return c.json({

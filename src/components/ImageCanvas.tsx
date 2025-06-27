@@ -8,7 +8,7 @@ import { convexApi, convexClient } from '~/lib/convex';
 import { useRouteContext } from '@tanstack/solid-router';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
-import { ErrorBoundary, MutationErrorBoundary } from '~/components/ErrorBoundary';
+import { ErrorBoundary } from '~/components/ErrorBoundary';
 
 class Agent {
   constructor(
@@ -232,30 +232,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   };
 
-  const updateAgentImage = async (id: string, generatedImage: string) => {
-    console.log(`📸 ImageCanvas: Updating image for agent ${id}`, {
-      hasImage: !!generatedImage,
-      imageLength: generatedImage?.length || 0
-    });
-    
-    // No local state update needed - Convex handles the update
-    
-    try {
-      // Save to Convex
-      if (generatedImage) {
-        await convexClient.mutation(convexApi.agents.updateAgentImage, {
-          agentId: id as any,
-          imageUrl: generatedImage,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to update agent image:', error);
-    }
-  };
-
   const updateAgentPrompt = async (id: string, prompt: string) => {
-    console.log(`📝 ImageCanvas: Updating prompt for agent ${id}:`, prompt);
-    
     // No local state update needed - Convex handles the update
     
     try {
@@ -439,7 +416,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   size={agent.size}
                   onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                   generatedImage={agent.generatedImage}
-                  onImageGenerated={updateAgentImage}
+
                   onPromptChange={updateAgentPrompt}
                   status={agent.status}
                   model={agent.model}

@@ -7,7 +7,7 @@ import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
 import { convexClient, convexApi } from '~/lib/convex';
-import { useImageCrossfade } from '~/lib/hooks/use-image-crossfade';
+
 import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
@@ -20,7 +20,7 @@ export interface ImageAgentProps {
   size?: { width: number; height: number };
   onResizeStart?: (e: MouseEvent, handle: string) => void;
   generatedImage?: string;
-  onImageGenerated?: (id: string, image: string) => void;
+
   onPromptChange?: (id: string, prompt: string) => void;
   status?: 'idle' | 'processing' | 'success' | 'failed';
   model?: 'normal' | 'pro';
@@ -34,18 +34,16 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Use simplified crossfade hook
-  const crossfade = useImageCrossfade(() => props.generatedImage, {
-    transitionDuration: 300, // Match CSS transition
-  });
+  // Local loading state for immediate feedback
+  const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
   
   // Use stable status to minimize re-renders
   const stableStatus = useStableStatus(() => props.status);
   
-  // Computed loading state: true if backend is processing OR we are preloading a new image
-  const isLoading = () => stableStatus().isProcessing || crossfade.isLoading();
+  // Combined loading state: local generating OR backend processing
+  const isLoading = () => isLocallyGenerating() || stableStatus().isProcessing;
   const hasFailed = () => stableStatus().isFailed;
-  const hasImage = () => crossfade.hasImage();
+  const hasImage = () => !!props.generatedImage;
   
   // Model selection state
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
@@ -68,8 +66,10 @@ export function ImageAgent(props: ImageAgentProps) {
       return;
     }
     
-    // Set status to 'processing' optimistically
-    // This provides immediate feedback to the user
+    // Immediate local loading feedback
+    setIsLocallyGenerating(true);
+    
+    // Set status to 'processing' optimistically  
     convexClient.mutation(convexApi.agents.updateAgentStatus, {
       agentId: agentId as any,
       status: 'processing',
@@ -83,28 +83,22 @@ export function ImageAgent(props: ImageAgentProps) {
         ? 'fal-ai/flux-kontext-lora/text-to-image'
         : '@cf/black-forest-labs/flux-1-schnell';
         
-      // The mutation will eventually update the agent's status and imageUrl,
-      // which will flow back down as props and trigger the UI changes.
-      const result = await generateImage.mutateAsync({
+      // Let the backend handle ALL updates - no frontend callbacks
+      await generateImage.mutateAsync({
         prompt: currentPrompt,
         model,
         steps: 4,
         agentId,
       });
       
-      // Ensure we update the image URL in Convex
-      if (result?.image?.url) {
-        // Call the callback to update the image in Convex
-        props.onImageGenerated?.(agentId, result.image.url);
-      }
-      
-      // We don't need to handle the result here, the UI is driven by prop changes.
-      // Success/error toasts can be handled in the useGenerateImage hook if desired.
+      // Backend handles all updates - UI reacts to Convex changes
       setShowPromptInput(false);
     } catch (error) {
-      // The hook's onError will likely set the agent status to 'failed'
       console.error(error);
       toast.error('Failed to generate image');
+    } finally {
+      // Clear local loading state once generation completes (success or failure)
+      setIsLocallyGenerating(false);
     }
   };
 
@@ -248,26 +242,17 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          {/* Image container - always present but conditionally shown */}
+          {/* Image container - simple and reactive */}
           <div class="relative w-full h-full">
-            {/* Current Image */}
-            <Show when={crossfade.currentImage()}>
+            <Show when={props.generatedImage}>
               <img
-                src={crossfade.currentImage()}
+                src={props.generatedImage}
                 alt="Generated image"
                 class="absolute inset-0 w-full h-full object-cover rounded-md"
-              />
-            </Show>
-            
-            {/* Next Image (crossfades in over current) */}
-            <Show when={crossfade.nextImage()}>
-              <img
-                src={crossfade.nextImage()}
-                alt="New generated image"
-                class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-300",
-                  crossfade.showNext() ? "opacity-100" : "opacity-0"
-                )}
+                style={{
+                  opacity: isLoading() ? 0.3 : 1,
+                  transition: "opacity 300ms ease"
+                }}
               />
             </Show>
 
@@ -301,7 +286,8 @@ export function ImageAgent(props: ImageAgentProps) {
               <div class="flex flex-col items-center gap-3">
                 <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
                 <div class="text-xs text-muted-foreground">
-                  {stableStatus().isProcessing ? "Generating..." : "Loading..."}
+                  {isLocallyGenerating() ? "Starting..." : 
+                   stableStatus().isProcessing ? "Generating..." : "Loading..."}
                 </div>
               </div>
             </div>
