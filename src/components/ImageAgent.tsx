@@ -50,13 +50,17 @@ export function ImageAgent(props: ImageAgentProps) {
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
-  // Stop local loading state when we receive the expected image
+  // Stop local loading state when we receive the expected image AND status is success
   createEffect(() => {
     const currentImage = props.generatedImage;
-    if (currentImage && currentImage === expectedImageUrl()) {
-      // We got the image we were waiting for - stop local loading
-      setIsLocallyGenerating(false);
-      setExpectedImageUrl('');
+    if (currentImage && 
+        currentImage === expectedImageUrl() && 
+        props.status === 'success') {
+      // We got the image we were waiting for AND server confirms success
+      setTimeout(() => {
+        setIsLocallyGenerating(false);
+        setExpectedImageUrl('');
+      }, 200); // Slightly longer delay to ensure everything is ready
     }
   });
   
@@ -284,12 +288,19 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          <Show when={props.generatedImage}>
+          <Show when={props.generatedImage && props.status !== 'processing' && !isLocallyGenerating()}>
             <div class="relative w-full h-full">
               <img
                 src={props.generatedImage!}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
+                onLoad={() => {
+                  // When any image loads, make sure we're not in loading state
+                  if (props.generatedImage === expectedImageUrl()) {
+                    setIsLocallyGenerating(false);
+                    setExpectedImageUrl('');
+                  }
+                }}
               />
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
