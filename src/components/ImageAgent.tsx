@@ -34,10 +34,9 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Use crossfade hook for image transitions with longer duration
+  // Use simplified crossfade hook
   const crossfade = useImageCrossfade(() => props.generatedImage, {
     transitionDuration: 300, // Match CSS transition
-    extendedLoadingDuration: 150, // Keep loading a bit longer
   });
   
   // Use stable status to minimize re-renders
@@ -251,26 +250,23 @@ export function ImageAgent(props: ImageAgentProps) {
 
           {/* Image container - always present but conditionally shown */}
           <div class="relative w-full h-full">
-            {/* Current Image (fading out during transition) */}
-            <Show when={crossfade.activeImageUrl()}>
+            {/* Current Image */}
+            <Show when={crossfade.currentImage()}>
               <img
-                src={crossfade.activeImageUrl()}
+                src={crossfade.currentImage()}
                 alt="Generated image"
-                class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-300",
-                  crossfade.isTransitioning() ? "opacity-0" : "opacity-100" 
-                )}
+                class="absolute inset-0 w-full h-full object-cover rounded-md"
               />
             </Show>
             
-            {/* New Image (fading in during transition) */}
-            <Show when={crossfade.newImageUrl()}>
+            {/* Next Image (crossfades in over current) */}
+            <Show when={crossfade.nextImage()}>
               <img
-                src={crossfade.newImageUrl()}
+                src={crossfade.nextImage()}
                 alt="New generated image"
                 class={cn(
                   "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-300",
-                  crossfade.isTransitioning() ? "opacity-100" : "opacity-0"
+                  crossfade.showNext() ? "opacity-100" : "opacity-0"
                 )}
               />
             </Show>
@@ -305,8 +301,7 @@ export function ImageAgent(props: ImageAgentProps) {
               <div class="flex flex-col items-center gap-3">
                 <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
                 <div class="text-xs text-muted-foreground">
-                  {crossfade.isPreloading() ? "Generating..." : 
-                   crossfade.isExtendedLoading() ? "Loading..." : "Processing..."}
+                  {stableStatus().isProcessing ? "Generating..." : "Loading..."}
                 </div>
               </div>
             </div>

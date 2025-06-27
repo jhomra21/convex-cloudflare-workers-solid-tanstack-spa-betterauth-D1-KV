@@ -2,7 +2,6 @@ import { createSignal, createEffect, on } from 'solid-js';
 
 export interface UseImageCrossfadeOptions {
   transitionDuration?: number;
-  extendedLoadingDuration?: number; // Extra time to keep loading state during crossfade
   onTransitionStart?: () => void;
   onTransitionComplete?: () => void;
 }
@@ -12,84 +11,73 @@ export function useImageCrossfade(
   options: UseImageCrossfadeOptions = {}
 ) {
   const { 
-    transitionDuration = 300, 
-    extendedLoadingDuration = 100, // Keep loading a bit longer to cover crossfade
+    transitionDuration = 300,
     onTransitionStart, 
     onTransitionComplete 
   } = options;
   
   const [isPreloading, setIsPreloading] = createSignal(false);
-  const [activeImageUrl, setActiveImageUrl] = createSignal<string | undefined>(imageUrl());
-  const [newImageUrl, setNewImageUrl] = createSignal<string | undefined>(undefined);
-  const [isTransitioning, setIsTransitioning] = createSignal(false);
-  const [extendedLoading, setExtendedLoading] = createSignal(false);
+  const [currentImage, setCurrentImage] = createSignal<string | undefined>(imageUrl());
+  const [nextImage, setNextImage] = createSignal<string | undefined>(undefined);
+  const [showNext, setShowNext] = createSignal(false);
   
-  // Computed loading state - includes preloading AND extended loading during crossfade
-  const isLoading = () => isPreloading() || extendedLoading();
-  const hasImage = () => !!activeImageUrl() || !!newImageUrl();
+  // Simple loading state
+  const isLoading = () => isPreloading();
+  const hasImage = () => !!currentImage();
 
   // Initialize from props on mount
   createEffect(() => {
     const url = imageUrl();
-    if (url && !activeImageUrl()) {
-      setActiveImageUrl(url);
+    if (url && !currentImage()) {
+      setCurrentImage(url);
     }
   });
 
-  // Handle image changes
+  // Handle image changes with simple crossfade
   createEffect(on(imageUrl, (newUrl, prevUrl) => {
     if (!newUrl) {
       // Image was cleared
-      setActiveImageUrl(undefined);
-      setNewImageUrl(undefined);
+      setCurrentImage(undefined);
+      setNextImage(undefined);
+      setShowNext(false);
       setIsPreloading(false);
-      setExtendedLoading(false);
       return;
     }
     
-    if (newUrl !== prevUrl && newUrl !== activeImageUrl()) {
-      console.log("🖼️ New image URL received, starting crossfade:", newUrl);
+    if (newUrl !== prevUrl && newUrl !== currentImage()) {
+      console.log("🖼️ New image URL received:", newUrl);
       
-      // Start preloading the new image
+      // Start preloading
       setIsPreloading(true);
       onTransitionStart?.();
       
-      // Preload the new image off-screen
+      // Preload the new image
       const img = new Image();
       img.onload = () => {
-        console.log("📥 New image preloaded, beginning crossfade transition");
+        console.log("📥 Image preloaded, starting crossfade");
         
-        // Image is ready, now set up the crossfade
-        setNewImageUrl(newUrl);
-        setIsPreloading(false); // Stop showing "Generating..." 
-        setExtendedLoading(true); // But keep loading overlay to hide transition
+        // Set up the crossfade
+        setNextImage(newUrl);
+        setIsPreloading(false);
         
-        // Start the crossfade transition after a brief delay
+        // Start crossfade after a brief delay
         requestAnimationFrame(() => {
-          setIsTransitioning(true);
+          setShowNext(true);
           
-          // After transition completes, clean up
+          // After transition, swap images
           setTimeout(() => {
-            console.log("✨ Crossfade transition complete");
-            setActiveImageUrl(newUrl);
-            setNewImageUrl(undefined);
-            setIsTransitioning(false);
-            
-            // End extended loading a bit after transition to ensure smoothness
-            setTimeout(() => {
-              setExtendedLoading(false);
-              onTransitionComplete?.();
-            }, extendedLoadingDuration);
-            
+            console.log("✨ Crossfade complete, swapping images");
+            setCurrentImage(newUrl);
+            setNextImage(undefined);
+            setShowNext(false);
+            onTransitionComplete?.();
           }, transitionDuration);
         });
       };
       
       img.onerror = () => {
         console.error("❌ Failed to load image:", newUrl);
-        setNewImageUrl(undefined);
         setIsPreloading(false);
-        setExtendedLoading(false);
       };
       
       img.src = newUrl;
@@ -97,13 +85,10 @@ export function useImageCrossfade(
   }, { defer: true }));
 
   return {
-    activeImageUrl,
-    newImageUrl,
-    isTransitioning,
+    currentImage,
+    nextImage,
+    showNext,
     isLoading,
     hasImage,
-    // Additional state for debugging
-    isPreloading: () => isPreloading(),
-    isExtendedLoading: () => extendedLoading(),
   };
 }
