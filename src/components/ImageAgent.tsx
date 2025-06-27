@@ -38,6 +38,9 @@ export function ImageAgent(props: ImageAgentProps) {
   // Track edit mode - critical for handling loading state correctly
   const [isInEditMode, setIsInEditMode] = createSignal(false);
   
+  // Model selection state
+  const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>('normal');
+  
   // Fix stale loading state on mount
   if (agentLoadingState.get(agentId) && props.generatedImage) {
     agentLoadingState.set(agentId, false);
@@ -82,9 +85,13 @@ export function ImageAgent(props: ImageAgentProps) {
     props.onPromptChange?.(agentId, currentPrompt);
     
     try {
+      const model = selectedModel() === 'pro' 
+        ? 'fal-ai/flux-kontext-lora/text-to-image'
+        : '@cf/black-forest-labs/flux-1-schnell';
+        
       const result = await generateImage.mutateAsync({
         prompt: currentPrompt,
-        model: '@cf/black-forest-labs/flux-1-schnell',
+        model,
         steps: 4,
       });
       
@@ -157,26 +164,51 @@ export function ImageAgent(props: ImageAgentProps) {
         {/* Prompt Section */}
         <div class="flex-shrink-0 mb-4">
           <Show when={showPromptInput() || !props.generatedImage}>
-            <div class="flex gap-2">
-              <Input
-                placeholder="Enter your prompt..."
-                value={localPrompt()}
-                onChange={handlePromptChange}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                class="flex-1"
-                disabled={isGenerating()}
-              />
-              <Button
-                onClick={handleGenerate}
-                disabled={isGenerating() || !localPrompt().trim()}
-                size="sm"
+            <div class="space-y-2">
+              {/* Model Selection */}
+              <div class="flex gap-1 p-1 bg-muted/30 rounded-md">
+                <Button
+                  variant={selectedModel() === 'normal' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setSelectedModel('normal')}
+                  class="flex-1 h-7 text-xs"
+                  disabled={isGenerating()}
+                >
+                  Normal
+                </Button>
+                <Button
+                  variant={selectedModel() === 'pro' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setSelectedModel('pro')}
+                  class="flex-1 h-7 text-xs"
+                  disabled={isGenerating()}
+                >
+                  Pro
+                </Button>
+              </div>
+              
+              {/* Prompt Input */}
+              <div class="flex gap-2">
+                <Input
+                  placeholder="Enter your prompt..."
+                  value={localPrompt()}
+                  onChange={handlePromptChange}
+                  onKeyDown={handleKeyDown}
+                  onBlur={handleBlur}
+                  class="flex-1"
+                  disabled={isGenerating()}
+                />
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating() || !localPrompt().trim()}
+                  size="sm"
                 class={isGenerating() ? "bg-secondary hover:bg-secondary/90 text-muted-foreground" : ""}
               >
                 <Show when={isGenerating()} fallback={<Icon name="play" class="h-4 w-4" />}>
                   <Icon name="loader" class="h-4 w-4 animate-spin" />
                 </Show>
               </Button>
+              </div>
             </div>
           </Show>
           
