@@ -34,8 +34,11 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Use crossfade hook for image transitions
-  const crossfade = useImageCrossfade(() => props.generatedImage);
+  // Use crossfade hook for image transitions with longer duration
+  const crossfade = useImageCrossfade(() => props.generatedImage, {
+    transitionDuration: 300, // Match CSS transition
+    extendedLoadingDuration: 150, // Keep loading a bit longer
+  });
   
   // Use stable status to minimize re-renders
   const stableStatus = useStableStatus(() => props.status);
@@ -254,8 +257,8 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={crossfade.activeImageUrl()}
                 alt="Generated image"
                 class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
-                  crossfade.isTransitioning() ? "opacity-0 hidden" : "opacity-100" 
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-300",
+                  crossfade.isTransitioning() ? "opacity-0" : "opacity-100" 
                 )}
               />
             </Show>
@@ -266,7 +269,7 @@ export function ImageAgent(props: ImageAgentProps) {
                 src={crossfade.newImageUrl()}
                 alt="New generated image"
                 class={cn(
-                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
+                  "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-300",
                   crossfade.isTransitioning() ? "opacity-100" : "opacity-0"
                 )}
               />
@@ -301,7 +304,10 @@ export function ImageAgent(props: ImageAgentProps) {
             <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
               <div class="flex flex-col items-center gap-3">
                 <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
-                <div class="text-xs text-muted-foreground">Generating...</div>
+                <div class="text-xs text-muted-foreground">
+                  {crossfade.isPreloading() ? "Generating..." : 
+                   crossfade.isExtendedLoading() ? "Loading..." : "Processing..."}
+                </div>
               </div>
             </div>
           </Show>

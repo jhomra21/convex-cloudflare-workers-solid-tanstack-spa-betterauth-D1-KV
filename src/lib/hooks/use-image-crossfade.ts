@@ -2,6 +2,7 @@ import { createSignal, createEffect, on } from 'solid-js';
 
 export interface UseImageCrossfadeOptions {
   transitionDuration?: number;
+  extendedLoadingDuration?: number; // Extra time to keep loading state during crossfade
   onTransitionStart?: () => void;
   onTransitionComplete?: () => void;
 }
@@ -10,15 +11,21 @@ export function useImageCrossfade(
   imageUrl: () => string | undefined,
   options: UseImageCrossfadeOptions = {}
 ) {
-  const { transitionDuration = 200, onTransitionStart, onTransitionComplete } = options;
+  const { 
+    transitionDuration = 300, 
+    extendedLoadingDuration = 100, // Keep loading a bit longer to cover crossfade
+    onTransitionStart, 
+    onTransitionComplete 
+  } = options;
   
   const [isPreloading, setIsPreloading] = createSignal(false);
   const [activeImageUrl, setActiveImageUrl] = createSignal<string | undefined>(imageUrl());
   const [newImageUrl, setNewImageUrl] = createSignal<string | undefined>(undefined);
   const [isTransitioning, setIsTransitioning] = createSignal(false);
+  const [extendedLoading, setExtendedLoading] = createSignal(false);
   
-  // Computed loading state
-  const isLoading = () => isPreloading();
+  // Computed loading state - includes preloading AND extended loading during crossfade
+  const isLoading = () => isPreloading() || extendedLoading();
   const hasImage = () => !!activeImageUrl() || !!newImageUrl();
 
   // Initialize from props on mount
@@ -35,11 +42,13 @@ export function useImageCrossfade(
       // Image was cleared
       setActiveImageUrl(undefined);
       setNewImageUrl(undefined);
+      setIsPreloading(false);
+      setExtendedLoading(false);
       return;
     }
     
     if (newUrl !== prevUrl && newUrl !== activeImageUrl()) {
-      console.log("New image URL received:", newUrl);
+      console.log("🖼️ New image URL received, starting crossfade:", newUrl);
       
       // Start preloading the new image
       setIsPreloading(true);
@@ -48,31 +57,39 @@ export function useImageCrossfade(
       // Preload the new image off-screen
       const img = new Image();
       img.onload = () => {
-        console.log("New image loaded, beginning transition");
+        console.log("📥 New image preloaded, beginning crossfade transition");
         
-        // Set the new image URL first, before starting transition
+        // Image is ready, now set up the crossfade
         setNewImageUrl(newUrl);
+        setIsPreloading(false); // Stop showing "Generating..." 
+        setExtendedLoading(true); // But keep loading overlay to hide transition
         
-        // Start the crossfade transition
+        // Start the crossfade transition after a brief delay
         requestAnimationFrame(() => {
           setIsTransitioning(true);
           
-          // After transition completes, update the active image and reset
+          // After transition completes, clean up
           setTimeout(() => {
+            console.log("✨ Crossfade transition complete");
             setActiveImageUrl(newUrl);
             setNewImageUrl(undefined);
             setIsTransitioning(false);
-            setIsPreloading(false);
-            onTransitionComplete?.();
-            console.log("Transition complete");
+            
+            // End extended loading a bit after transition to ensure smoothness
+            setTimeout(() => {
+              setExtendedLoading(false);
+              onTransitionComplete?.();
+            }, extendedLoadingDuration);
+            
           }, transitionDuration);
         });
       };
       
       img.onerror = () => {
-        console.error("Failed to load image:", newUrl);
+        console.error("❌ Failed to load image:", newUrl);
         setNewImageUrl(undefined);
         setIsPreloading(false);
+        setExtendedLoading(false);
       };
       
       img.src = newUrl;
@@ -85,5 +102,8 @@ export function useImageCrossfade(
     isTransitioning,
     isLoading,
     hasImage,
+    // Additional state for debugging
+    isPreloading: () => isPreloading(),
+    isExtendedLoading: () => extendedLoading(),
   };
 }
