@@ -36,6 +36,7 @@ export function ImageAgent(props: ImageAgentProps) {
   
   // Track our own generation state to prevent flash
   const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
+  const [hasLocallyCleared, setHasLocallyCleared] = createSignal(false);
   
   // Combined loading state - show loading if server processing OR we're waiting for our image to load
   const isGenerating = () => {
@@ -52,8 +53,9 @@ export function ImageAgent(props: ImageAgentProps) {
   createEffect(() => {
     const currentImage = props.generatedImage;
     if (isLocallyGenerating() && currentImage && currentImage.length > 0) {
-      // We got a new image - stop loading
+      // We got a new image - stop loading and show it
       setIsLocallyGenerating(false);
+      setHasLocallyCleared(false);
     }
   });
   
@@ -85,6 +87,9 @@ export function ImageAgent(props: ImageAgentProps) {
       console.error('Failed to update agent status optimistically:', error);
     });
     
+    // IMMEDIATELY hide current image locally (instant feedback)
+    setHasLocallyCleared(true);
+    
     // ALWAYS clear the current image immediately when starting generation
     // This prevents any old image from showing
     props.onImageGenerated?.(agentId, '');
@@ -114,6 +119,7 @@ export function ImageAgent(props: ImageAgentProps) {
       } else {
         console.error(`Failed to generate image: No URL in result`);
         setIsLocallyGenerating(false); // Stop loading on error
+        setHasLocallyCleared(false); // Reset cleared state
       }
       
       toast.success('Image generated successfully!');
@@ -121,12 +127,12 @@ export function ImageAgent(props: ImageAgentProps) {
       toast.error('Failed to generate image');
       console.error(error);
       setIsLocallyGenerating(false); // Stop loading on error
+      setHasLocallyCleared(false); // Reset cleared state
     }
   };
 
   const handleRegenerate = () => {
-    // Clear the current image and regenerate
-    props.onImageGenerated?.(agentId, '');
+    // Just call handleGenerate - it will handle clearing everything
     handleGenerate();
   };
 
@@ -274,7 +280,7 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          <Show when={props.generatedImage && !isGenerating()}>
+          <Show when={props.generatedImage && !isGenerating() && !hasLocallyCleared()}>
             <div class="relative w-full h-full">
               <img
                 src={props.generatedImage!}
