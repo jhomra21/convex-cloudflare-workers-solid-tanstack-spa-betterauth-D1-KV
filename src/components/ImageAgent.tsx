@@ -36,7 +36,6 @@ export function ImageAgent(props: ImageAgentProps) {
   
   // Track our own generation state to prevent flash
   const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
-  const [expectedImageUrl, setExpectedImageUrl] = createSignal<string>('');
   
   // Combined loading state - show loading if server processing OR we're waiting for our image to load
   const isGenerating = () => {
@@ -44,23 +43,17 @@ export function ImageAgent(props: ImageAgentProps) {
   };
   const hasFailed = () => props.status === 'failed';
   
-  // Track edit mode - critical for handling state correctly
-  const [isInEditMode, setIsInEditMode] = createSignal(false);
+
   
   // Model selection state - use prop or default
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
-  // Stop local loading state when we receive the expected image AND status is success
+  // Stop local loading when we get any new non-empty image after starting generation
   createEffect(() => {
     const currentImage = props.generatedImage;
-    if (currentImage && 
-        currentImage === expectedImageUrl() && 
-        props.status === 'success') {
-      // We got the image we were waiting for AND server confirms success
-      setTimeout(() => {
-        setIsLocallyGenerating(false);
-        setExpectedImageUrl('');
-      }, 200); // Slightly longer delay to ensure everything is ready
+    if (isLocallyGenerating() && currentImage && currentImage.length > 0) {
+      // We got a new image - stop loading
+      setIsLocallyGenerating(false);
     }
   });
   
@@ -92,14 +85,12 @@ export function ImageAgent(props: ImageAgentProps) {
       console.error('Failed to update agent status optimistically:', error);
     });
     
-    // Critical for edit mode - always clear image first
-    if (isInEditMode() || (props.generatedImage && showPromptInput())) {
-      props.onImageGenerated?.(agentId, '');
-    }
+    // ALWAYS clear the current image immediately when starting generation
+    // This prevents any old image from showing
+    props.onImageGenerated?.(agentId, '');
     
     // Start local generation tracking
     setIsLocallyGenerating(true);
-    setExpectedImageUrl('');
     
     // Sync to canvas before generating
     props.onPromptChange?.(agentId, currentPrompt);
@@ -117,13 +108,9 @@ export function ImageAgent(props: ImageAgentProps) {
       });
       
       if (result.image?.url) {
-        // Track the expected image URL - local loading will stop when this arrives via props
-        setExpectedImageUrl(result.image.url);
-        
         // Use the R2 URL for storage in Convex, not the base64 data
         props.onImageGenerated?.(agentId, result.image.url);
         setShowPromptInput(false); // Only hide input after successful generation
-        setIsInEditMode(false); // Exit edit mode
       } else {
         console.error(`Failed to generate image: No URL in result`);
         setIsLocallyGenerating(false); // Stop loading on error
@@ -144,7 +131,6 @@ export function ImageAgent(props: ImageAgentProps) {
   };
 
   const handleEditPrompt = () => {
-    setIsInEditMode(true); // Mark as being in edit mode
     setShowPromptInput(true);
   };
 
@@ -288,19 +274,12 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          <Show when={props.generatedImage && props.status !== 'processing' && !isLocallyGenerating()}>
+          <Show when={props.generatedImage && !isGenerating()}>
             <div class="relative w-full h-full">
               <img
                 src={props.generatedImage!}
                 alt="Generated image"
                 class="w-full h-full object-cover rounded-md"
-                onLoad={() => {
-                  // When any image loads, make sure we're not in loading state
-                  if (props.generatedImage === expectedImageUrl()) {
-                    setIsLocallyGenerating(false);
-                    setExpectedImageUrl('');
-                  }
-                }}
               />
               <div class="absolute top-2 right-2 flex gap-1">
                 <Button
