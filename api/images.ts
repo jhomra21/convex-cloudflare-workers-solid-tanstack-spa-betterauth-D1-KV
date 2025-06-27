@@ -5,6 +5,24 @@ import type { Env, HonoVariables } from './types';
 
 const imagesApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
+// Helper function to update agent status
+async function updateAgentStatus(
+  convexUrl: string, 
+  agentId: string, 
+  status: 'idle' | 'processing' | 'success' | 'failed'
+) {
+  try {
+    const convex = new ConvexHttpClient(convexUrl);
+    await convex.mutation(api.agents.updateAgentStatus, {
+      agentId: agentId as any, // Cast to handle Convex ID type
+      status,
+    });
+    console.log(`✅ Set agent status to ${status}:`, agentId);
+  } catch (error) {
+    console.error(`❌ Failed to update agent status to ${status}:`, error);
+  }
+}
+
 // Generate and store an image
 imagesApi.post('/', async (c) => {
   const user = c.get('user');
@@ -12,13 +30,19 @@ imagesApi.post('/', async (c) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
+  let agentId; // Declare agentId in outer scope
+  
   try {
     const data = await c.req.json();
     const { prompt, model = "@cf/black-forest-labs/flux-1-schnell", steps = 4, seed } = data;
+    agentId = data.agentId; // Assign to outer scope variable
 
     if (!prompt) {
       return c.json({ error: 'Prompt is required' }, 400);
     }
+
+    // Note: Client handles optimistic "processing" status for instant feedback
+    // Server only handles final success/failed status for reliability
 
 
     // Check environment bindings
@@ -70,6 +94,12 @@ imagesApi.post('/', async (c) => {
         if (!falResponse.ok) {
           const errorText = await falResponse.text();
           console.error('❌ FAL AI error:', errorText);
+          
+          // Set agent status to failed if agentId is provided
+          if (agentId && c.env.CONVEX_URL) {
+            await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
+          }
+          
           return c.json({ error: 'FAL AI generation failed' }, 500);
         }
 
@@ -166,6 +196,11 @@ imagesApi.post('/', async (c) => {
       userId: user.id,
     });
 
+    // Set agent status to success if agentId is provided
+    if (agentId) {
+      await updateAgentStatus(c.env.CONVEX_URL, agentId, 'success');
+    }
+
     return c.json({
       success: true,
       image: {
@@ -179,6 +214,11 @@ imagesApi.post('/', async (c) => {
       }
     });
   } catch (error) {
+    // Set agent status to failed if agentId is provided
+    if (agentId && c.env.CONVEX_URL) {
+      await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
+    }
+
     return c.json({ 
       error: 'Failed to generate image', 
       details: error.message,

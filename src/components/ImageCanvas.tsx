@@ -14,6 +14,8 @@ class Agent {
     public position: { x: number; y: number } = { x: 0, y: 0 },
     public size: { width: number; height: number } = { width: 320, height: 384 },
     public generatedImage: string = '',
+    public status: 'idle' | 'processing' | 'success' | 'failed' = 'idle',
+    public model: 'normal' | 'pro' = 'normal',
     public _version: number = 0 // Track changes to force reactivity
   ) {}
 }
@@ -80,7 +82,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
         optimisticPos || { x: agent.positionX, y: agent.positionY },
         optimisticSize || { width: agent.width, height: agent.height },
         agent.imageUrl || '',
-        0
+        agent.status,
+        agent.model,
+        0 // _version
       );
     });
   };
@@ -525,6 +529,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
                 generatedImage={agent.generatedImage}
                 onImageGenerated={updateAgentImage}
                 onPromptChange={updateAgentPrompt}
+                status={agent.status}
+                model={agent.model}
                 class={cn(
                   "shadow-lg border-2 transition-all duration-200",
                   draggedAgent() === agent.id 

@@ -16,6 +16,8 @@ export const getCanvasAgents = query({
       width: v.number(),
       height: v.number(),
       imageUrl: v.optional(v.string()),
+      model: v.union(v.literal("normal"), v.literal("pro")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -38,11 +40,20 @@ export const createAgent = mutation({
     positionY: v.number(),
     width: v.number(),
     height: v.number(),
+    model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
   },
   returns: v.id("agents"),
   handler: async (ctx, args) => {
     const agentId = await ctx.db.insert("agents", {
-      ...args,
+      canvasId: args.canvasId,
+      userId: args.userId,
+      prompt: args.prompt,
+      positionX: args.positionX,
+      positionY: args.positionY,
+      width: args.width,
+      height: args.height,
+      model: args.model || "normal",
+      status: "idle",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -99,6 +110,39 @@ export const updateAgentImage = mutation({
   handler: async (ctx, { agentId, imageUrl }) => {
     await ctx.db.patch(agentId, {
       imageUrl,
+      status: "success",
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Update agent status
+export const updateAgentStatus = mutation({
+  args: {
+    agentId: v.id("agents"),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, status }) => {
+    await ctx.db.patch(agentId, {
+      status,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Update agent model
+export const updateAgentModel = mutation({
+  args: {
+    agentId: v.id("agents"),
+    model: v.union(v.literal("normal"), v.literal("pro")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, model }) => {
+    await ctx.db.patch(agentId, {
+      model,
       updatedAt: Date.now(),
     });
     return null;

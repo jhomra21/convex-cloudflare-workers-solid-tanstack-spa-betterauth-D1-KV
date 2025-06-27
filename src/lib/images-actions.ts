@@ -8,6 +8,7 @@ interface GenerateImageOptions {
   model?: string;
   steps?: number;
   seed?: number;
+  agentId?: string;
 }
 
 export function useGenerateImage() {

@@ -32,6 +32,8 @@ export default defineSchema({
     width: v.number(),
     height: v.number(),
     imageUrl: v.optional(v.string()),
+    model: v.union(v.literal("normal"), v.literal("pro")),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

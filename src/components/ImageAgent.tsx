@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, createEffect } from 'solid-js';
+import { createSignal, createUniqueId, Show } from 'solid-js';
 import { useGenerateImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -6,10 +6,10 @@ import { Input } from '~/components/ui/input';
 import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
+import { convexClient, convexApi } from '~/lib/convex';
 
-// Global state to persist input values and loading states across component re-creations
+// Global state to persist input values across component re-creations
 const agentPromptState = new Map<string, string>();
-const agentLoadingState = new Map<string, boolean>();
 
 export interface ImageAgentProps {
   id?: string;
@@ -21,6 +21,8 @@ export interface ImageAgentProps {
   generatedImage?: string;
   onImageGenerated?: (id: string, image: string) => void;
   onPromptChange?: (id: string, prompt: string) => void;
+  status?: 'idle' | 'processing' | 'success' | 'failed';
+  model?: 'normal' | 'pro';
   class?: string;
 }
 
@@ -32,26 +34,15 @@ export function ImageAgent(props: ImageAgentProps) {
   const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // Use local reactive state but initialize from global
-  const [isGenerating, setIsGenerating] = createSignal(agentLoadingState.get(agentId) || false);
+  // Status-based loading state
+  const isGenerating = () => props.status === 'processing';
+  const hasFailed = () => props.status === 'failed';
   
-  // Track edit mode - critical for handling loading state correctly
+  // Track edit mode - critical for handling state correctly
   const [isInEditMode, setIsInEditMode] = createSignal(false);
   
-  // Model selection state
-  const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>('normal');
-  
-  // Fix stale loading state on mount
-  if (agentLoadingState.get(agentId) && props.generatedImage) {
-    agentLoadingState.set(agentId, false);
-    setIsGenerating(false);
-  }
-  
-  // Override setIsGenerating to also update global state
-  const setIsGeneratingGlobal = (value: boolean) => {
-    agentLoadingState.set(agentId, value);
-    setIsGenerating(value);
-  };
+  // Model selection state - use prop or default
+  const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
   // Handle prompt changes locally and persist to global state
   const handlePromptChange = (value: string) => {
@@ -73,13 +64,18 @@ export function ImageAgent(props: ImageAgentProps) {
       return;
     }
     
+    // Immediate optimistic update for instant feedback (fire and forget)
+    convexClient.mutation(convexApi.agents.updateAgentStatus, {
+      agentId: agentId as any,
+      status: 'processing',
+    }).catch(error => {
+      console.error('Failed to update agent status optimistically:', error);
+    });
+    
     // Critical for edit mode - always clear image first
     if (isInEditMode() || (props.generatedImage && showPromptInput())) {
       props.onImageGenerated?.(agentId, '');
     }
-    
-    // Set loading state after clearing image
-    setIsGeneratingGlobal(true);
     
     // Sync to canvas before generating
     props.onPromptChange?.(agentId, currentPrompt);
@@ -93,6 +89,7 @@ export function ImageAgent(props: ImageAgentProps) {
         prompt: currentPrompt,
         model,
         steps: 4,
+        agentId, // Pass agentId to the API for status updates
       });
       
       if (result.image?.url) {
@@ -108,8 +105,6 @@ export function ImageAgent(props: ImageAgentProps) {
     } catch (error) {
       toast.error('Failed to generate image');
       console.error(error);
-    } finally {
-      setIsGeneratingGlobal(false);
     }
   };
 
@@ -241,8 +236,21 @@ export function ImageAgent(props: ImageAgentProps) {
             </div>
           </Show>
 
-          {/* Empty state - only show when not generating AND no image */}
-          <Show when={!isGenerating() && !props.generatedImage}>
+          {/* Failed state */}
+          <Show when={hasFailed()}>
+            <div class="flex flex-col items-center justify-center h-full text-destructive">
+              <div class="w-16 h-16 border-2 border-dashed border-destructive/30 rounded-lg flex items-center justify-center mb-3">
+                <Icon name="x" class="h-8 w-8 opacity-70" />
+              </div>
+              <p class="text-sm">Generation failed</p>
+              <Button variant="outline" size="sm" onClick={handleGenerate} class="mt-2">
+                Try again
+              </Button>
+            </div>
+          </Show>
+
+          {/* Empty state - only show when idle AND no image */}
+          <Show when={props.status === 'idle' && !props.generatedImage}>
             <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
               <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
                 <Icon name="image" class="h-8 w-8 opacity-50" />
