@@ -6,6 +6,9 @@ import { cn } from '~/lib/utils';
 import { useQuery } from '~/lib/convex';
 import { convexApi, convexClient } from '~/lib/convex';
 import { useRouteContext } from '@tanstack/solid-router';
+import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
+import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
+import { ErrorBoundary, MutationErrorBoundary } from '~/components/ErrorBoundary';
 
 class Agent {
   constructor(
@@ -39,18 +42,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
     () => canvas()?._id ? { canvasId: canvas()!._id } : undefined
   );
   
-  // Local state for UI interactions only
-  const [draggedAgent, setDraggedAgent] = createSignal<string | null>(null);
-  const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = createSignal(false);
-  const [resizingAgent, setResizingAgent] = createSignal<string | null>(null);
-  const [resizeHandle, setResizeHandle] = createSignal<string | null>(null); // 'nw', 'ne', 'sw', 'se'
-  const [resizeStartSize, setResizeStartSize] = createSignal({ width: 0, height: 0 });
-  const [resizeStartPos, setResizeStartPos] = createSignal({ x: 0, y: 0 });
-  
   // Optimistic position updates during drag (visual only)
   const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, { x: number; y: number }>>(new Map());
   const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, { width: number; height: number }>>(new Map());
+  
+  // Z-index management for proper stacking
+  const [maxZIndex, setMaxZIndex] = createSignal(1);
+  const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
   
   // Create canvas if it doesn't exist
   createEffect(async () => {
@@ -90,7 +88,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   };
 
   // Debounced save for transforms
-  const debouncedSaves = new Map<string, NodeJS.Timeout>();
+  const debouncedSaves = new Map<string, number>();
   
   const saveAgentTransform = (agentId: string, position: { x: number; y: number }, size: { width: number; height: number }) => {
     if (!canvas()?._id) return;
@@ -98,11 +96,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
     // Clear existing timeout
     const existingTimeout = debouncedSaves.get(agentId);
     if (existingTimeout) {
-      clearTimeout(existingTimeout);
+      window.clearTimeout(existingTimeout);
     }
     
     // Set new timeout
-    const timeout = setTimeout(async () => {
+    const timeout = window.setTimeout(async () => {
       try {
         await convexClient.mutation(convexApi.agents.updateAgentTransform, {
           agentId: agentId as any,
@@ -271,167 +269,75 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   };
 
+  // Z-index management functions
+  const bringAgentToFront = (agentId: string) => {
+    const currentMax = maxZIndex();
+    const newZIndex = currentMax + 1;
+    setMaxZIndex(newZIndex);
+    setAgentZIndices(prev => new Map(prev).set(agentId, newZIndex));
+  };
+
+  const getAgentZIndex = (agentId: string, isDragged: boolean) => {
+    if (isDragged) return 9999; // Always on top while dragging
+    return agentZIndices().get(agentId) || 1;
+  };
+
+  // Use custom hooks for drag and resize (after function definitions)
+  const dragHook = useCanvasDrag({
+    onDragStart: bringAgentToFront, // Bring to front when drag starts
+    onDragMove: updateAgentPosition,
+    onDragEnd: (agentId) => {
+      const agent = agents().find(a => a.id === agentId);
+      if (agent) {
+        saveAgentTransform(agentId, agent.position, agent.size);
+      }
+    },
+  });
+
+  const resizeHook = useCanvasResize({
+    onResizeMove: (agentId, size, positionAdjustment) => {
+      updateAgentSize(agentId, size);
+      if (positionAdjustment) {
+        const agent = agents().find(a => a.id === agentId);
+        if (agent) {
+          const newPos = {
+            x: agent.position.x + positionAdjustment.x,
+            y: agent.position.y + positionAdjustment.y,
+          };
+          updateAgentPosition(agentId, newPos);
+        }
+      }
+    },
+    onResizeEnd: (agentId) => {
+      const agent = agents().find(a => a.id === agentId);
+      if (agent) {
+        saveAgentTransform(agentId, agent.position, agent.size);
+      }
+    },
+  });
+
+  // Simple handlers that delegate to the hooks
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
-    e.preventDefault();
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
-
-    setDraggedAgent(agentId);
-    setIsDragging(true);
     
-    // Calculate offset from mouse to agent's top-left corner
-    const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
-    if (canvasEl) {
-      const canvasRect = canvasEl.getBoundingClientRect();
-      const offsetX = e.clientX - (canvasRect.left + (agent.position?.x || 0));
-      const offsetY = e.clientY - (canvasRect.top + (agent.position?.y || 0));
-      setDragOffset({ x: offsetX, y: offsetY });
-    }
-
-    // Add global mouse move and up listeners
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    const agentId = draggedAgent();
-    if (!agentId || !isDragging()) return;
-
-    const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
-    if (!canvasEl) return;
-
-    const canvasRect = canvasEl.getBoundingClientRect();
-    const offset = dragOffset();
-    
-    // Calculate new position relative to canvas
-    let newX = e.clientX - canvasRect.left - offset.x + canvasEl.scrollLeft;
-    let newY = e.clientY - canvasRect.top - offset.y + canvasEl.scrollTop;
-
-    // Constrain to canvas boundaries (with some padding)
-    const agentWidth = 320; // 80 * 4 (w-80 = 20rem = 320px)
-    const agentHeight = 384; // 96 * 4 (h-96 = 24rem = 384px)
-    
-    const maxX = Math.max(0, canvasEl.clientWidth - agentWidth);
-    const maxY = Math.max(0, canvasEl.clientHeight - agentHeight);
-    
-    newX = Math.max(0, Math.min(newX, maxX));
-    newY = Math.max(0, Math.min(newY, maxY));
-
-    updateAgentPosition(agentId, { x: newX, y: newY });
-  };
-
-  const handleMouseUp = () => {
-    const draggedId = draggedAgent();
-    const resizingId = resizingAgent();
-    
-    setDraggedAgent(null);
-    setIsDragging(false);
-    setResizingAgent(null);
-    setResizeHandle(null);
-    
-    // Remove global listeners
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-    document.removeEventListener('mousemove', handleResizeMove);
-    
-    // Force save for any remaining drag/resize operations
-    if (draggedId) {
-      const agent = agents().find(a => a.id === draggedId);
-      if (agent) {
-        saveAgentTransform(draggedId, agent.position, agent.size);
-      }
-    }
-    if (resizingId && resizingId !== draggedId) {
-      const agent = agents().find(a => a.id === resizingId);
-      if (agent) {
-        saveAgentTransform(resizingId, agent.position, agent.size);
-      }
-    }
+    // Bring to front on any interaction (not just drag start)
+    bringAgentToFront(agentId);
+    dragHook.handleMouseDown(e, agentId, agent.position);
   };
 
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent drag from starting
-    
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
-
-    setResizingAgent(agentId);
-    setResizeHandle(handle);
-    setResizeStartSize(agent.size || { width: 320, height: 384 });
-    setResizeStartPos({ x: e.clientX, y: e.clientY });
-
-    // Add global mouse move listener for resize
-    document.addEventListener('mousemove', handleResizeMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const handleResizeMove = (e: MouseEvent) => {
-    const agentId = resizingAgent();
-    const handle = resizeHandle();
-    if (!agentId || !handle) return;
-
-    const startSize = resizeStartSize();
-    const startPos = resizeStartPos();
     
-    const deltaX = e.clientX - startPos.x;
-    const deltaY = e.clientY - startPos.y;
-
-    let newWidth = startSize.width;
-    let newHeight = startSize.height;
-
-    // Calculate new size based on resize handle
-    switch (handle) {
-      case 'se': // Bottom-right
-        newWidth = startSize.width + deltaX;
-        newHeight = startSize.height + deltaY;
-        break;
-      case 'sw': // Bottom-left  
-        newWidth = startSize.width - deltaX;
-        newHeight = startSize.height + deltaY;
-        break;
-      case 'ne': // Top-right
-        newWidth = startSize.width + deltaX;
-        newHeight = startSize.height - deltaY;
-        break;
-      case 'nw': // Top-left
-        newWidth = startSize.width - deltaX;
-        newHeight = startSize.height - deltaY;
-        break;
-    }
-
-    // Apply constraints
-    const minWidth = 200;
-    const maxWidth = 600;
-    const minHeight = 250;
-    const maxHeight = 800;
-
-    newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
-    newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
-
-    updateAgentSize(agentId, { width: newWidth, height: newHeight });
-
-    // For left/top handles, also update position to keep the opposite corner fixed
-    if (handle.includes('w') || handle.includes('n')) {
-      const agent = agents().find(a => a.id === agentId);
-      if (agent && agent.position) {
-        let newX = agent.position.x;
-        let newY = agent.position.y;
-        
-        if (handle.includes('w')) { // Left side
-          newX = agent.position.x + (startSize.width - newWidth);
-        }
-        if (handle.includes('n')) { // Top side
-          newY = agent.position.y + (startSize.height - newHeight);
-        }
-        
-        updateAgentPosition(agentId, { x: newX, y: newY });
-      }
-    }
+    // Bring to front on resize as well
+    bringAgentToFront(agentId);
+    resizeHook.handleResizeStart(e, agentId, handle, agent.size);
   };
 
   return (
-    <div class={cn("flex flex-col h-full overflow-hidden", props.class)}>
+    <ErrorBoundary>
+      <div class={cn("flex flex-col h-full overflow-hidden", props.class)}>
       {/* Toolbar */}
       <div class="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div class="flex items-center gap-2">
@@ -508,40 +414,47 @@ export function ImageCanvas(props: ImageCanvasProps) {
         </Show>
 
         <For each={agents()}>
-          {(agent) => (
-            <div
-              class="absolute select-none"
-              style={{
-                left: `${agent.position.x}px`,
-                top: `${agent.position.y}px`,
-                transform: draggedAgent() === agent.id ? 'scale(1.05)' : 'scale(1)',
-                transition: draggedAgent() === agent.id ? 'none' : 'transform 0.2s ease',
-                'z-index': draggedAgent() === agent.id ? 50 : 1
-              }}
-            >
-              <ImageAgent
-                id={agent.id}
-                prompt={agent.prompt}
-                onRemove={removeAgent}
-                onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                size={agent.size}
-                onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-                generatedImage={agent.generatedImage}
-                onImageGenerated={updateAgentImage}
-                onPromptChange={updateAgentPrompt}
-                status={agent.status}
-                model={agent.model}
-                class={cn(
-                  "shadow-lg border-2 transition-all duration-200",
-                  draggedAgent() === agent.id 
-                    ? "border-primary shadow-xl" 
-                    : resizingAgent() === agent.id
-                    ? "border-secondary shadow-lg"
-                    : "border-transparent hover:border-muted-foreground/20"
-                )}
-              />
-            </div>
-          )}
+          {(agent) => {
+            // Memoize drag state to prevent unnecessary re-renders of other agents
+            const isDragged = () => dragHook.draggedAgent() === agent.id;
+            const isResizing = () => resizeHook.resizingAgent() === agent.id;
+            const zIndex = () => getAgentZIndex(agent.id, isDragged());
+            
+            return (
+              <div
+                class="absolute select-none"
+                style={{
+                  left: `${agent.position.x}px`,
+                  top: `${agent.position.y}px`,
+                  transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
+                  transition: isDragged() ? 'none' : 'transform 0.2s ease',
+                  'z-index': zIndex()
+                }}
+              >
+                <ImageAgent
+                  id={agent.id}
+                  prompt={agent.prompt}
+                  onRemove={removeAgent}
+                  onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                  size={agent.size}
+                  onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                  generatedImage={agent.generatedImage}
+                  onImageGenerated={updateAgentImage}
+                  onPromptChange={updateAgentPrompt}
+                  status={agent.status}
+                  model={agent.model}
+                  class={cn(
+                    "shadow-lg border-2 transition-all duration-200",
+                    isDragged() 
+                      ? "border-primary shadow-xl" 
+                      : isResizing()
+                      ? "border-secondary shadow-lg"
+                      : "border-transparent hover:border-muted-foreground/20"
+                  )}
+                />
+              </div>
+            );
+          }}
         </For>
       </div>
 
@@ -558,5 +471,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

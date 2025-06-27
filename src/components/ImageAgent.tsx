@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, createEffect, on } from 'solid-js';
+import { createSignal, createUniqueId, Show, createMemo } from 'solid-js';
 import { useGenerateImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -7,9 +7,10 @@ import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
 import { convexClient, convexApi } from '~/lib/convex';
-
-// Global state to persist input values across component re-creations
-const agentPromptState = new Map<string, string>();
+import { useImageCrossfade } from '~/lib/hooks/use-image-crossfade';
+import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
+import { useStableStatus } from '~/lib/hooks/use-stable-props';
+import { ErrorBoundary } from '~/components/ErrorBoundary';
 
 export interface ImageAgentProps {
   id?: string;
@@ -29,85 +30,26 @@ export interface ImageAgentProps {
 export function ImageAgent(props: ImageAgentProps) {
   const agentId = props.id || createUniqueId();
   
-  // Initialize from global state or props
-  const initialPrompt = agentPromptState.get(agentId) || props.prompt || '';
-  const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
+  // Use persistent state hook for prompt
+  const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
   
-  // --- Image crossfade state ---
-  const [isPreloading, setIsPreloading] = createSignal(false);
-  const [activeImageUrl, setActiveImageUrl] = createSignal<string | undefined>(props.generatedImage);
-  const [newImageUrl, setNewImageUrl] = createSignal<string | undefined>(undefined);
-  const [isTransitioning, setIsTransitioning] = createSignal(false);
+  // Use crossfade hook for image transitions
+  const crossfade = useImageCrossfade(() => props.generatedImage);
+  
+  // Use stable status to minimize re-renders
+  const stableStatus = useStableStatus(() => props.status);
   
   // Computed loading state: true if backend is processing OR we are preloading a new image
-  const isLoading = () => props.status === 'processing' || isPreloading();
-  const hasFailed = () => props.status === 'failed';
-  const hasImage = () => !!activeImageUrl() || !!newImageUrl();
-
-  // Initialize from props on mount
-  createEffect(() => {
-    if (props.generatedImage && !activeImageUrl()) {
-      setActiveImageUrl(props.generatedImage);
-    }
-  });
-
-  // Handle image changes from props
-  createEffect(on(() => props.generatedImage, (newUrl, prevUrl) => {
-    if (!newUrl) {
-      // Image was cleared
-      setActiveImageUrl(undefined);
-      setNewImageUrl(undefined);
-      return;
-    }
-    
-    if (newUrl !== prevUrl && newUrl !== activeImageUrl()) {
-      console.log("New image URL received:", newUrl);
-      
-      // Start preloading the new image
-      setIsPreloading(true);
-      
-      // Preload the new image off-screen
-      const img = new Image();
-      img.onload = () => {
-        console.log("New image loaded, beginning transition");
-        
-        // Set the new image URL first, before starting transition
-        setNewImageUrl(newUrl);
-        
-        // Short delay to ensure the new image is in DOM before transition starts
-        requestAnimationFrame(() => {
-          // Start the crossfade transition
-          setIsTransitioning(true);
-          
-          // After transition completes, update the active image and reset
-          // This timeout should match the CSS transition duration
-          setTimeout(() => {
-            setActiveImageUrl(newUrl);
-            setNewImageUrl(undefined);
-            setIsTransitioning(false);
-            setIsPreloading(false);
-            console.log("Transition complete");
-          }, 200); // Match this with the CSS transition duration (200ms)
-        });
-      };
-      
-      img.onerror = () => {
-        console.error("Failed to load image:", newUrl);
-        setNewImageUrl(undefined);
-        setIsPreloading(false);
-      };
-      
-      img.src = newUrl;
-    }
-  }, { defer: true }));
+  const isLoading = () => stableStatus().isProcessing || crossfade.isLoading();
+  const hasFailed = () => stableStatus().isFailed;
+  const hasImage = () => crossfade.hasImage();
   
   // Model selection state
   const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
   
   const handlePromptChange = (value: string) => {
-    setLocalPrompt(value);
-    agentPromptState.set(agentId, value); // Persist across re-creations
+    setLocalPrompt(value); // This automatically persists via the hook
   };
 
   // Only sync to canvas when user finishes editing
@@ -179,20 +121,22 @@ export function ImageAgent(props: ImageAgentProps) {
     }
   };
 
-  const agentSize = props.size || { width: 320, height: 384 };
+  // Memoize agent size to prevent unnecessary recalculations
+  const agentSize = createMemo(() => props.size || { width: 320, height: 384 });
 
   return (
-    <Card 
-      class={cn(
-        "flex flex-col relative transition-all duration-300",
-        isLoading() ? "border border-secondary/50" : "",
-        props.class
-      )}
-      style={{
-        width: `${agentSize.width}px`,
-        height: `${agentSize.height}px`
-      }}
-    >
+    <ErrorBoundary>
+      <Card 
+        class={cn(
+          "flex flex-col relative transition-all duration-300",
+          isLoading() ? "border border-secondary/50" : "",
+          props.class
+        )}
+        style={{
+          width: `${agentSize().width}px`,
+          height: `${agentSize().height}px`
+        }}
+      >
       {/* Drag Handle - Larger clickable area */}
       <div 
         class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-center border-b border-muted/40"
@@ -305,25 +249,25 @@ export function ImageAgent(props: ImageAgentProps) {
           {/* Image container - always present but conditionally shown */}
           <div class="relative w-full h-full">
             {/* Current Image (fading out during transition) */}
-            <Show when={activeImageUrl()}>
+            <Show when={crossfade.activeImageUrl()}>
               <img
-                src={activeImageUrl()}
+                src={crossfade.activeImageUrl()}
                 alt="Generated image"
                 class={cn(
                   "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
-                  isTransitioning() ? "opacity-0 hidden" : "opacity-100" 
+                  crossfade.isTransitioning() ? "opacity-0 hidden" : "opacity-100" 
                 )}
               />
             </Show>
             
             {/* New Image (fading in during transition) */}
-            <Show when={newImageUrl()}>
+            <Show when={crossfade.newImageUrl()}>
               <img
-                src={newImageUrl()}
+                src={crossfade.newImageUrl()}
                 alt="New generated image"
                 class={cn(
                   "absolute inset-0 w-full h-full object-cover rounded-md transition-opacity duration-200",
-                  isTransitioning() ? "opacity-100" : "opacity-0"
+                  crossfade.isTransitioning() ? "opacity-100" : "opacity-0"
                 )}
               />
             </Show>
@@ -391,5 +335,6 @@ export function ImageAgent(props: ImageAgentProps) {
         </>
       )}
     </Card>
+    </ErrorBoundary>
   );
 }

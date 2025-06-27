@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename)
 export default defineConfig({
   plugins: [
     cloudflare({
+      // viteEnvironment:{name:'worker'},
       // experimental: { remoteBindings: true }
     }),
     TanStackRouterVite({ target: 'solid', autoCodeSplitting: true }),

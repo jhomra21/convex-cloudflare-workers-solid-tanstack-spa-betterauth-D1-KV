@@ -4,7 +4,7 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
-| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer";
+| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" | "circle-x";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -294,6 +294,22 @@ const MousePointerIcon = (props: ComponentProps<"svg">) => (
   </svg>
 );
 
+const TriangleAlertIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-triangle-alert" {...props}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </svg>
+);
+
+const CircleXIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x" {...props}>
+    <circle cx="12" cy="12" r="10"/>
+    <path d="m15 9-6 6"/>
+    <path d="m9 9 6 6"/>
+  </svg>
+);
+
 export const Icon = (props: IconProps) => {
   const [local, others] = splitProps(props, ["name", "class", "width", "height"]);
   
@@ -428,6 +444,12 @@ export const Icon = (props: IconProps) => {
       </Match>
       <Match when={local.name === "mouse-pointer"}>
         <MousePointerIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "triangle-alert"}>
+        <TriangleAlertIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "circle-x"}>
+        <CircleXIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
     </Switch>
   );

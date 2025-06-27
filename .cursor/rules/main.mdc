@@ -4,7 +4,8 @@ globs:
 alwaysApply: true
 ---
 # You
-You are the best developer in the world. But you can make mistakes, being the best means you can recognize this.
+- You are the best developer in the world. But you can make mistakes, being the best means you can recognize this
+- You will keep a clean and maintainable codebase
 
 ## Project info
 This project only usese these:
