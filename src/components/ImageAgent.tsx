@@ -29,103 +29,75 @@ export interface ImageAgentProps {
 export function ImageAgent(props: ImageAgentProps) {
   const agentId = props.id || createUniqueId();
   
-  // Initialize from global state or props
-  const initialPrompt = agentPromptState.get(agentId) || props.prompt || '';
-  const [localPrompt, setLocalPrompt] = createSignal(initialPrompt);
+  const [localPrompt, setLocalPrompt] = createSignal(props.prompt || '');
   const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
-  
-  // --- Simplified State Machine ---
-  const [isGenerating, setIsGenerating] = createSignal(false);
-  const [hasFailed, setHasFailed] = createSignal(false);
-  // The URL that is actually rendered in the <img> tag.
-  // It's initialized from props but managed internally during generation.
+  const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
+
+  // --- State derived from props ---
+  // The parent component is the source of truth for the agent's status.
+  const isProcessing = () => props.status === 'processing';
+  const hasFailed = () => props.status === 'failed';
+
+  // --- Internal state for smooth visual transitions ---
+  // We need this to keep the spinner on while the new image downloads.
+  const [isPreloading, setIsPreloading] = createSignal(false);
+  // This is the URL that is actually rendered. We only update it AFTER preloading.
   const [displayUrl, setDisplayUrl] = createSignal(props.generatedImage);
   
-  // Model selection state - use prop or default
-  const [selectedModel, setSelectedModel] = createSignal<'normal' | 'pro'>(props.model || 'normal');
+  // The final loading state for the UI combines parent status and internal preloading.
+  const isLoading = () => isProcessing() || isPreloading();
   
-  // Effect to handle external prop changes (e.g., initial load from canvas state)
+  // This effect syncs the displayUrl with the prop from the parent,
+  // but uses a preloader to prevent flashes of unstyled/broken images.
   createEffect(() => {
-    // If the prop changes and we are NOT in the middle of generating, update the display.
-    // This syncs the component with the parent's state.
-    // IMPORTANT: Don't clear displayUrl when props.generatedImage becomes empty during generation
-    if (props.generatedImage !== displayUrl() && 
-        !isGenerating() && 
-        props.generatedImage !== '') {
-      setDisplayUrl(props.generatedImage);
+    const newImageUrl = props.generatedImage;
+
+    // If a new URL arrives and it's different from what we're showing...
+    if (newImageUrl && newImageUrl !== displayUrl()) {
+      setIsPreloading(true);
+      const img = new Image();
+      img.onload = () => {
+        // Only once the image is fully loaded, update our display URL
+        // and turn off the preloading flag.
+        setDisplayUrl(newImageUrl);
+        setIsPreloading(false);
+        setShowPromptInput(false);
+        toast.success('Image ready!');
+      };
+      img.onerror = () => {
+        console.error(`Failed to preload image: ${newImageUrl}`);
+        setIsPreloading(false);
+        toast.error('Failed to load image.');
+      };
+      img.src = newImageUrl;
+    } else if (!newImageUrl && displayUrl()) {
+      // If the parent clears the image, clear our display URL too.
+      setDisplayUrl(undefined);
     }
   });
-  
-  const handlePromptChange = (value: string) => {
-    setLocalPrompt(value);
-    agentPromptState.set(agentId, value); // Persist across re-creations
-  };
 
-  // Only sync to canvas when user finishes editing
-  const handleBlur = () => {
-    props.onPromptChange?.(agentId, localPrompt());
-  };
-  
   const generateImage = useGenerateImage();
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     const currentPrompt = localPrompt().trim();
     if (!currentPrompt) {
       toast.error('Please enter a prompt');
       return;
     }
     
-    // 1. Start loading state immediately
-    setIsGenerating(true);
-    setHasFailed(false);
-    
-    // 2. Sync prompt with parent
+    // Sync prompt with parent so it can be saved.
     props.onPromptChange?.(agentId, currentPrompt);
-    
-    try {
-      const model = selectedModel() === 'pro' 
+
+    // This mutation updates the DB. The parent's useQuery will get the
+    // new state (status: 'processing') and send it down as props.
+    generateImage.mutate({
+      prompt: currentPrompt,
+      model: selectedModel() === 'pro' 
         ? 'fal-ai/flux-kontext-lora/text-to-image'
-        : '@cf/black-forest-labs/flux-1-schnell';
-        
-      const result = await generateImage.mutateAsync({
-        prompt: currentPrompt,
-        model,
-        steps: 4,
-        agentId,
-      });
-      
-      if (result.image?.url) {
-        const newImageUrl = result.image.url;
-
-        // 3. Inform parent of new URL for persistence
-        props.onImageGenerated?.(agentId, newImageUrl);
-
-        // 4. Preload the new image BEFORE changing any state
-        const img = new Image();
-        img.onload = () => {
-          // 5. THIS IS THE KEY: Only update the display and stop loading AFTER the image is loaded
-          setDisplayUrl(newImageUrl);
-          setIsGenerating(false);
-          setShowPromptInput(false);
-          toast.success('Image generated successfully!');
-        };
-        img.onerror = () => {
-          console.error(`Failed to load image: ${newImageUrl}`);
-          setHasFailed(true);
-          setIsGenerating(false);
-          toast.error('Failed to load generated image.');
-        };
-        img.src = newImageUrl;
-        
-      } else {
-        throw new Error("Generation resulted in no URL.");
-      }
-    } catch (error) {
-      toast.error('Failed to generate image');
-      console.error(error);
-      setHasFailed(true);
-      setIsGenerating(false);
-    }
+        : '@cf/black-forest-labs/flux-1-schnell',
+      steps: 4,
+      agentId,
+    });
   };
 
   const handleRegenerate = () => {
@@ -134,6 +106,10 @@ export function ImageAgent(props: ImageAgentProps) {
 
   const handleEditPrompt = () => {
     setShowPromptInput(true);
+  };
+
+  const handleBlur = () => {
+    props.onPromptChange?.(agentId, localPrompt());
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -149,7 +125,7 @@ export function ImageAgent(props: ImageAgentProps) {
     <Card 
       class={cn(
         "flex flex-col relative transition-all duration-300",
-        isGenerating() ? "border border-secondary/50" : "",
+        isLoading() ? "border border-secondary/50" : "",
         props.class
       )}
       style={{
@@ -177,14 +153,13 @@ export function ImageAgent(props: ImageAgentProps) {
         <div class="flex-shrink-0 mb-4">
           <Show when={showPromptInput() || !displayUrl()}>
             <div class="space-y-2">
-              {/* Model Selection */}
               <div class="flex gap-1 p-1 bg-muted/30 rounded-md">
                 <Button
                   variant={selectedModel() === 'normal' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setSelectedModel('normal')}
                   class="flex-1 h-7 text-xs"
-                  disabled={isGenerating()}
+                  disabled={isLoading()}
                 >
                   Normal
                 </Button>
@@ -193,30 +168,29 @@ export function ImageAgent(props: ImageAgentProps) {
                   size="sm"
                   onClick={() => setSelectedModel('pro')}
                   class="flex-1 h-7 text-xs"
-                  disabled={isGenerating()}
+                  disabled={isLoading()}
                 >
                   Pro
                 </Button>
               </div>
               
-              {/* Prompt Input */}
               <div class="flex gap-2">
                 <Input
                   placeholder="Enter your prompt..."
                   value={localPrompt()}
-                  onChange={handlePromptChange}
+                  onChange={setLocalPrompt}
                   onKeyDown={handleKeyDown}
                   onBlur={handleBlur}
                   class="flex-1"
-                  disabled={isGenerating()}
+                  disabled={isLoading()}
                 />
                 <Button
                   onClick={handleGenerate}
-                  disabled={isGenerating() || !localPrompt().trim()}
+                  disabled={isLoading() || !localPrompt().trim()}
                   size="sm"
-                  class={isGenerating() ? "bg-secondary hover:bg-secondary/90 text-muted-foreground" : ""}
+                  class={isLoading() ? "bg-secondary hover:bg-secondary/90 text-muted-foreground" : ""}
                 >
-                  <Show when={isGenerating()} fallback={<Icon name="play" class="h-4 w-4" />}>
+                  <Show when={isLoading()} fallback={<Icon name="play" class="h-4 w-4" />}>
                     <Icon name="loader" class="h-4 w-4 animate-spin" />
                   </Show>
                 </Button>
@@ -233,7 +207,7 @@ export function ImageAgent(props: ImageAgentProps) {
                 variant="ghost"
                 size="sm"
                 onClick={handleEditPrompt}
-                disabled={isGenerating()}
+                disabled={isLoading()}
               >
                 <Icon name="edit" class="h-3 w-3" />
               </Button>
@@ -244,7 +218,7 @@ export function ImageAgent(props: ImageAgentProps) {
         {/* Image Section */}
         <div class="flex-1 flex items-center justify-center relative">
           {/* Empty state - only show when idle AND no image */}
-          <Show when={!displayUrl() && !isGenerating() && !hasFailed()}>
+          <Show when={!displayUrl() && !isLoading() && !hasFailed()}>
             <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
               <div class="w-16 h-16 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center mb-3">
                 <Icon name="image" class="h-8 w-8 opacity-50" />
@@ -254,7 +228,7 @@ export function ImageAgent(props: ImageAgentProps) {
           </Show>
 
           {/* Failed state */}
-          <Show when={hasFailed() && !isGenerating()}>
+          <Show when={hasFailed() && !isLoading()}>
             <div class="flex flex-col items-center justify-center h-full text-destructive">
               <div class="w-16 h-16 border-2 border-dashed border-destructive/30 rounded-lg flex items-center justify-center mb-3">
                 <Icon name="x" class="h-8 w-8 opacity-70" />
@@ -272,7 +246,7 @@ export function ImageAgent(props: ImageAgentProps) {
               {/* The image is always rendered but opacity controlled by CSS */}
               <div 
                 class="relative w-full h-full transition-opacity duration-300" 
-                classList={{ 'opacity-0': isGenerating() }}
+                classList={{ 'opacity-0': isLoading() }}
               >
                 <img
                   src={displayUrl()!}
@@ -285,7 +259,7 @@ export function ImageAgent(props: ImageAgentProps) {
                     variant="secondary"
                     size="sm"
                     onClick={handleRegenerate}
-                    disabled={isGenerating()}
+                    disabled={isLoading()}
                   >
                     <Icon name="refresh-cw" class="h-3 w-3" />
                   </Button>
@@ -304,7 +278,7 @@ export function ImageAgent(props: ImageAgentProps) {
           </Show>
           
           {/* Loading state - completely independent overlay component */}
-          <Show when={isGenerating()}>
+          <Show when={isLoading()}>
             <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
               <div class="flex flex-col items-center gap-3">
                 <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
