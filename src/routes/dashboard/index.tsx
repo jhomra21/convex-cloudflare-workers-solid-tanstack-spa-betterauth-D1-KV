@@ -43,6 +43,13 @@ export function DashboardIndex() {
       icon: '🔄',
       path: '/dashboard/tasks',
       color: 'border-blue-200 dark:border-blue-800'
+    },
+    {
+      title: 'Images',
+      description: 'Interactive canvas for image generation and editing backed by Fal.ai and Convex',
+      icon: '🖼️',
+      path: '/dashboard/images',
+      color: 'border-red-200 dark:border-red-800'
     }
     // to add more items here, follow the format below
     //,

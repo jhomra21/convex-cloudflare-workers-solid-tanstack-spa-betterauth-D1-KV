@@ -82,7 +82,7 @@ import {
               <div class="flex h-screen w-screen overflow-hidden bg-muted/40">
                 <AppSidebar />
                 <SidebarInset class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-all duration-150 ease-in-out flex flex-col">
-                  <header class={`flex h-16 shrink-0 items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700 bg-background/95 backdrop-blur-sm sticky top-0 z-20 md:relative md:z-10 transition-shadow duration-150 will-change-scroll-position ${isScrolled() ? 'shadow-md' : ''}`}>
+                  <header class={`flex h-16 shrink-0 items-center rounded-t-xl gap-2 p-2 border-b border-gray-200 dark:border-gray-700 bg-background/95 backdrop-blur-sm sticky top-0 z-20 md:relative md:z-10 transition-shadow duration-150 will-change-scroll-position ${isScrolled() ? 'shadow-md' : ''}`}>
                     <div class="flex items-center gap-2 px-4">
                       <Tooltip openDelay={500}>
                         <TooltipTrigger>
