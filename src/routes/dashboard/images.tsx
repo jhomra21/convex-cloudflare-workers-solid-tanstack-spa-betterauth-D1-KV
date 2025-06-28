@@ -127,7 +127,11 @@ function ImagesPage() {
       <div class="flex-1 overflow-hidden">
         <Tabs value={activeTab()} class="h-full flex flex-col">
           <TabsContent value="canvas" class="flex-1 m-0 p-0">
-            <ImageCanvas class="h-full" activeCanvasId={activeCanvasId()} />
+            <ImageCanvas 
+              class="h-full" 
+              activeCanvasId={activeCanvasId()} 
+              onCanvasDisabled={() => setActiveCanvasId(null)}
+            />
           </TabsContent>
           
           <TabsContent value="history" class="h-full m-0 p-4">

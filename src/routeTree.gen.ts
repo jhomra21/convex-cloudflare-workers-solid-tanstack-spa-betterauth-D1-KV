@@ -27,6 +27,9 @@ import { Route as DashboardAccountImport } from './routes/dashboard/account'
 const ApiAuthCallbackGoogleLazyImport = createFileRoute(
   '/api/auth/callback/google',
 )()
+const ApiAuthCallbackGithubLazyImport = createFileRoute(
+  '/api/auth/callback/github',
+)()
 
 // Create/Update Routes
 
@@ -84,6 +87,14 @@ const ApiAuthCallbackGoogleLazyRoute = ApiAuthCallbackGoogleLazyImport.update({
   getParentRoute: () => rootRoute,
 } as any).lazy(() =>
   import('./routes/api/auth/callback/google.lazy').then((d) => d.Route),
+)
+
+const ApiAuthCallbackGithubLazyRoute = ApiAuthCallbackGithubLazyImport.update({
+  id: '/api/auth/callback/github',
+  path: '/api/auth/callback/github',
+  getParentRoute: () => rootRoute,
+} as any).lazy(() =>
+  import('./routes/api/auth/callback/github.lazy').then((d) => d.Route),
 )
 
 // Populate the FileRoutesByPath interface
@@ -146,6 +157,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof DashboardIndexImport
       parentRoute: typeof DashboardImport
     }
+    '/api/auth/callback/github': {
+      id: '/api/auth/callback/github'
+      path: '/api/auth/callback/github'
+      fullPath: '/api/auth/callback/github'
+      preLoaderRoute: typeof ApiAuthCallbackGithubLazyImport
+      parentRoute: typeof rootRoute
+    }
     '/api/auth/callback/google': {
       id: '/api/auth/callback/google'
       path: '/api/auth/callback/google'
@@ -187,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
 }
 
@@ -198,6 +217,7 @@ export interface FileRoutesByTo {
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
 }
 
@@ -211,6 +231,7 @@ export interface FileRoutesById {
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
 }
 
@@ -225,6 +246,7 @@ export interface FileRouteTypes {
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard/'
+    | '/api/auth/callback/github'
     | '/api/auth/callback/google'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -235,6 +257,7 @@ export interface FileRouteTypes {
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard'
+    | '/api/auth/callback/github'
     | '/api/auth/callback/google'
   id:
     | '__root__'
@@ -246,6 +269,7 @@ export interface FileRouteTypes {
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard/'
+    | '/api/auth/callback/github'
     | '/api/auth/callback/google'
   fileRoutesById: FileRoutesById
 }
@@ -254,6 +278,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   DashboardRoute: typeof DashboardRouteWithChildren
+  ApiAuthCallbackGithubLazyRoute: typeof ApiAuthCallbackGithubLazyRoute
   ApiAuthCallbackGoogleLazyRoute: typeof ApiAuthCallbackGoogleLazyRoute
 }
 
@@ -261,6 +286,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   DashboardRoute: DashboardRouteWithChildren,
+  ApiAuthCallbackGithubLazyRoute: ApiAuthCallbackGithubLazyRoute,
   ApiAuthCallbackGoogleLazyRoute: ApiAuthCallbackGoogleLazyRoute,
 }
 
@@ -277,6 +303,7 @@ export const routeTree = rootRoute
         "/",
         "/auth",
         "/dashboard",
+        "/api/auth/callback/github",
         "/api/auth/callback/google"
       ]
     },
@@ -315,6 +342,9 @@ export const routeTree = rootRoute
     "/dashboard/": {
       "filePath": "dashboard/index.tsx",
       "parent": "/dashboard"
+    },
+    "/api/auth/callback/github": {
+      "filePath": "api/auth/callback/github.lazy.tsx"
     },
     "/api/auth/callback/google": {
       "filePath": "api/auth/callback/google.lazy.tsx"

@@ -11,7 +11,6 @@ import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
 import { toast } from 'solid-sonner';
-import { useNavigate } from '@tanstack/solid-router';
 
 class Agent {
   constructor(
@@ -33,13 +32,16 @@ class Agent {
 export interface ImageCanvasProps {
   class?: string;
   activeCanvasId?: string | null; // null = use default canvas, string = use specific canvas
+  onCanvasDisabled?: () => void; // Callback when shared canvas becomes unavailable
 }
 
 export function ImageCanvas(props: ImageCanvasProps) {
-  // Auth context and navigation
+  // Auth context
   const context = useRouteContext({ from: '/dashboard' });
   const userId = createMemo(() => context()?.session?.user?.id);
-  const navigate = useNavigate();
+  
+  // Flag to prevent multiple redirects
+  const [hasRedirected, setHasRedirected] = createSignal(false);
   
   // Convex queries - choose query based on activeCanvasId
   const defaultCanvas = useQuery(
@@ -58,13 +60,18 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
   createEffect(() => {
     // Only handle this for shared canvases (when activeCanvasId is provided)
-    if (props.activeCanvasId && userId()) {
+    if (props.activeCanvasId && userId() && !hasRedirected()) {
       const canvasData = specificCanvas();
       // If we were trying to access a specific canvas but it's now null,
       // it means sharing was disabled or access was revoked
       if (canvasData === null) {
-        toast.error('Canvas sharing has been disabled by the owner. Redirecting to your canvas.');
-        navigate({ to: '/dashboard/images' }); // This will remove the activeCanvasId and show user's own canvas
+        setHasRedirected(true); // Prevent multiple calls
+        
+        // Show notification
+        toast.error('Canvas sharing has been disabled by the owner. Switched to your canvas.');
+        
+        // Clear the active canvas ID to switch to user's default canvas
+        props.onCanvasDisabled?.();
       }
     }
   });

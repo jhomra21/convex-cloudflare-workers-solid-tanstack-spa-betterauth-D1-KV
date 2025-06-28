@@ -55,6 +55,12 @@ export function useGoogleSignInMutation() {
     }));
 }
 
+export function useGithubSignInMutation() {
+    return useMutation(() => ({
+        mutationFn: () => authClient.signIn.social({ provider: 'github' }),
+    }));
+}
+
 type UserUpdateVariables = { 
   name: string; 
   image: string | null | undefined;
@@ -107,7 +113,7 @@ export function useDeleteUserMutation() {
     onSuccess: () => {
       // Clear all queries and navigate to goodbye page
       queryClient.clear();
-      navigate({ to: '/auth', search: { deleted: 'true' } });
+      navigate({ to: '/auth', search: { deleted: 'true', redirect: undefined } });
     }
   }));
 }

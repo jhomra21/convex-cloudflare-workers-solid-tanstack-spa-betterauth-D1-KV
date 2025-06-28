@@ -9,6 +9,8 @@ type Env = {
     BETTER_AUTH_SECRET: string;
     GOOGLE_CLIENT_ID: string;
     GOOGLE_CLIENT_SECRET: string;
+    GITHUB_CLIENT_ID: string;
+    GITHUB_CLIENT_SECRET: string;
 }
 
 // Cache the auth instance to avoid re-initialization on every request in a warm worker
@@ -53,6 +55,13 @@ export const getAuth = (env: Env) => {
                 clientSecret: env.GOOGLE_CLIENT_SECRET,
                 redirectURI: process.env.NODE_ENV === 'development' 
                     ? 'http://localhost:3000/api/auth/callback/google'
+                    : undefined
+            },
+            github: {
+                clientId: env.GITHUB_CLIENT_ID,
+                clientSecret: env.GITHUB_CLIENT_SECRET,
+                redirectURI: process.env.NODE_ENV === 'development' 
+                    ? 'http://localhost:3000/api/auth/callback/github'
                     : undefined
             }
         }
