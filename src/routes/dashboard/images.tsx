@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { convexClient, convexApi } from "~/lib/convex";
 import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
+import { storeShareIntent, getAndClearShareIntent } from '~/lib/share-intent';
 
 export const Route = createFileRoute('/dashboard/images')({
   component: ImagesPage,
@@ -29,11 +30,35 @@ function ImagesPage() {
   // Track active canvas ID (null = default canvas, string = specific canvas)
   const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
   
-  // Handle share parameter on mount
+  // Track processed shares to prevent infinite loops
+  const [processedShareIds, setProcessedShareIds] = createSignal<Set<string>>(new Set());
+
+  // Handle share parameter and share intents
   createEffect(() => {
     const shareId = search().share;
-    if (shareId && userId()) {
-      handleJoinSharedCanvas(shareId as string);
+    
+    if (shareId) {
+      // Check if we already processed this share ID
+      if (processedShareIds().has(shareId)) {
+        return;
+      }
+      
+      // Store share intent immediately for persistence across auth
+      storeShareIntent(shareId);
+      
+      if (userId()) {
+        setProcessedShareIds(prev => new Set([...prev, shareId]));
+        handleJoinSharedCanvas(shareId as string);
+      }
+    } else {
+      // Check for pending share intent from previous auth flow
+      const pendingShareId = getAndClearShareIntent();
+      if (pendingShareId && userId()) {
+        setProcessedShareIds(prev => new Set([...prev, pendingShareId]));
+        handleJoinSharedCanvas(pendingShareId);
+        // Update URL to show the share (this will trigger effect again, but we'll skip it)
+        window.history.replaceState({}, '', '/dashboard/images?share=' + pendingShareId);
+      }
     }
   });
   

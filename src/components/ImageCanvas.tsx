@@ -10,6 +10,8 @@ import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
+import { toast } from 'solid-sonner';
+import { useNavigate } from '@tanstack/solid-router';
 
 class Agent {
   constructor(
@@ -23,6 +25,7 @@ class Agent {
     public type: 'image-generate' | 'image-edit' = 'image-generate',
     public connectedAgentId?: string,
     public uploadedImageUrl?: string,
+    public activeImageUrl?: string,
     public _version: number = 0 // Track changes to force reactivity
   ) {}
 }
@@ -33,9 +36,10 @@ export interface ImageCanvasProps {
 }
 
 export function ImageCanvas(props: ImageCanvasProps) {
-  // Auth context
+  // Auth context and navigation
   const context = useRouteContext({ from: '/dashboard' });
   const userId = createMemo(() => context()?.session?.user?.id);
+  const navigate = useNavigate();
   
   // Convex queries - choose query based on activeCanvasId
   const defaultCanvas = useQuery(
@@ -50,6 +54,21 @@ export function ImageCanvas(props: ImageCanvasProps) {
   
   // Use the appropriate canvas
   const canvas = createMemo(() => props.activeCanvasId ? specificCanvas() : defaultCanvas());
+  
+  // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
+  createEffect(() => {
+    // Only handle this for shared canvases (when activeCanvasId is provided)
+    if (props.activeCanvasId && userId()) {
+      const canvasData = specificCanvas();
+      // If we were trying to access a specific canvas but it's now null,
+      // it means sharing was disabled or access was revoked
+      if (canvasData === null) {
+        toast.error('Canvas sharing has been disabled by the owner. Redirecting to your canvas.');
+        navigate({ to: '/dashboard/images' }); // This will remove the activeCanvasId and show user's own canvas
+      }
+    }
+  });
+  
   const dbAgents = useQuery(
     convexApi.agents.getCanvasAgents,
     () => canvas()?._id ? { canvasId: canvas()!._id } : undefined
@@ -98,6 +117,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         agent.type || 'image-generate',
         agent.connectedAgentId,
         agent.uploadedImageUrl,
+        agent.activeImageUrl,
         0 // _version
       );
     });
@@ -396,6 +416,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
             canvasName={canvas()?.name}
             currentShareId={canvas()?.shareId}
             isShareable={canvas()?.isShareable}
+            canvasOwnerId={canvas()?.userId}
+            currentUserId={userId()}
           >
             <Button
               size="sm"
@@ -501,6 +523,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   type={agent.type}
                   connectedAgentId={agent.connectedAgentId}
                   uploadedImageUrl={agent.uploadedImageUrl}
+                  activeImageUrl={agent.activeImageUrl}
                   availableAgents={agents().map(a => ({
                     id: a.id,
                     prompt: a.prompt,

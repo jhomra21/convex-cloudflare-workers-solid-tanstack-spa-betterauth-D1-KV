@@ -21,6 +21,7 @@ export const getCanvasAgents = query({
       type: v.union(v.literal("image-generate"), v.literal("image-edit")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
+      activeImageUrl: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -252,6 +253,22 @@ export const updateAgentUploadedImage = mutation({
   handler: async (ctx, { agentId, uploadedImageUrl }) => {
     await ctx.db.patch(agentId, {
       uploadedImageUrl,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Update the active image URL for an edit agent
+export const updateAgentActiveImage = mutation({
+  args: {
+    agentId: v.id("agents"),
+    activeImageUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, activeImageUrl }) => {
+    await ctx.db.patch(agentId, {
+      activeImageUrl,
       updatedAt: Date.now(),
     });
     return null;

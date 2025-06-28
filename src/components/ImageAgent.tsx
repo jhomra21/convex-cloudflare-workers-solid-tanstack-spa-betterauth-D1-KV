@@ -27,6 +27,7 @@ export interface ImageAgentProps {
   type?: 'image-generate' | 'image-edit';
   connectedAgentId?: string;
   uploadedImageUrl?: string;
+  activeImageUrl?: string;
   availableAgents?: Array<{id: string; prompt: string; imageUrl?: string}>;
   onConnectAgent?: (sourceAgentId: string, targetAgentId: string) => void;
   onDisconnectAgent?: (agentId: string) => void;
@@ -48,8 +49,13 @@ export function ImageAgent(props: ImageAgentProps) {
     return null;
   };
   
-  // Get input image from either uploaded image or connected agent
+  // Get input image from either active image, uploaded image, or connected agent
   const getInputImage = () => {
+    // For edit agents, prefer activeImageUrl (user's choice)
+    if (props.type === 'image-edit' && props.activeImageUrl) {
+      return props.activeImageUrl;
+    }
+    
     if (props.uploadedImageUrl) {
       return props.uploadedImageUrl;
     }
@@ -198,6 +204,19 @@ export function ImageAgent(props: ImageAgentProps) {
   const handleRegenerate = () => {
     handleGenerate();
   };
+  
+  const handleSelectImage = async (imageUrl: string) => {
+    try {
+      await convexClient.mutation(convexApi.agents.updateAgentActiveImage, {
+        agentId: agentId as any,
+        activeImageUrl: imageUrl,
+      });
+      toast.success('Active image updated');
+    } catch (error) {
+      console.error('Failed to update active image:', error);
+      toast.error('Failed to update active image');
+    }
+  };
 
   const handleEditPrompt = () => {
     setShowPromptInput(true);
@@ -253,27 +272,29 @@ export function ImageAgent(props: ImageAgentProps) {
         <div class="flex-shrink-0 mb-4">
           <Show when={showPromptInput() || !hasImage()}>
             <div class="space-y-2">
-              {/* Model Selection */}
-              <div class="flex gap-1 p-1 bg-muted/30 rounded-md">
-                <Button
-                  variant={selectedModel() === 'normal' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setSelectedModel('normal')}
-                  class="flex-1 h-7 text-xs"
-                  disabled={isLoading()}
-                >
-                  Normal
-                </Button>
-                <Button
-                  variant={selectedModel() === 'pro' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setSelectedModel('pro')}
-                  class="flex-1 h-7 text-xs"
-                  disabled={isLoading()}
-                >
-                  Pro
-                </Button>
-              </div>
+              {/* Model Selection - Only show for image-generate agents */}
+              <Show when={props.type !== 'image-edit'}>
+                <div class="flex gap-1 p-1 bg-muted/30 rounded-md">
+                  <Button
+                    variant={selectedModel() === 'normal' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setSelectedModel('normal')}
+                    class="flex-1 h-7 text-xs"
+                    disabled={isLoading()}
+                  >
+                    Normal
+                  </Button>
+                  <Button
+                    variant={selectedModel() === 'pro' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setSelectedModel('pro')}
+                    class="flex-1 h-7 text-xs"
+                    disabled={isLoading()}
+                  >
+                    Pro
+                  </Button>
+                </div>
+              </Show>
               
               {/* Prompt Input */}
               <div class="flex gap-2">
@@ -504,6 +525,35 @@ export function ImageAgent(props: ImageAgentProps) {
               </div>
             </Show>
           </div>
+          
+          {/* Image Selection for Edit Agents */}
+          <Show when={props.type === 'image-edit' && props.uploadedImageUrl && props.generatedImage && !isLoading()}>
+            <div class="absolute bottom-2 left-2 right-2 z-10">
+              <div class="bg-background/95 backdrop-blur-sm border rounded-md p-2">
+                <div class="text-xs font-medium mb-2 text-center">Choose input for next edit:</div>
+                <div class="flex gap-2">
+                  <Button
+                    variant={getInputImage() === props.uploadedImageUrl ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSelectImage(props.uploadedImageUrl!)}
+                    class="flex-1 text-xs"
+                  >
+                    <Icon name="upload" class="h-3 w-3 mr-1" />
+                    Original
+                  </Button>
+                  <Button
+                    variant={getInputImage() === props.generatedImage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSelectImage(props.generatedImage!)}
+                    class="flex-1 text-xs"
+                  >
+                    <Icon name="sparkles" class="h-3 w-3 mr-1" />
+                    Generated
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Show>
           
           {/* Loading state - completely independent overlay component */}
           <Show when={isLoading()}>

@@ -1,6 +1,7 @@
 import { redirect } from '@tanstack/solid-router';
 import { authClient } from './auth-client';
 import type { QueryClient } from '@tanstack/solid-query';
+import { storeShareIntent } from './share-intent';
 
 // Centralized session query options that can be reused across the app.
 export const sessionQueryOptions = () => ({
@@ -37,12 +38,21 @@ export const protectedLoader = async ({ context }: { context: { queryClient: Que
   const session = await getSessionWithCache(queryClient);
 
   if (!session) {
+    const redirectUrl = window.location.pathname + window.location.search;
+    
+    // Check if this is a share link and store the intent before redirecting
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share');
+    if (shareId) {
+      storeShareIntent(shareId);
+    }
+    
     throw redirect({
       to: '/auth',
       search: {
-        // Pass the current path as a redirect parameter to return after login
-        redirect: window.location.pathname,
-      },
+        redirect: redirectUrl,
+        deleted: undefined,
+      } as { redirect: string | undefined; deleted: string | undefined },
     });
   }
   return { session };

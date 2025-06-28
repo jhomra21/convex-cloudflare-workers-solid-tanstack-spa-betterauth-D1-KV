@@ -51,6 +51,9 @@ export const getAuth = (env: Env) => {
                 prompt: "select_account",
                 clientId: env.GOOGLE_CLIENT_ID,
                 clientSecret: env.GOOGLE_CLIENT_SECRET,
+                redirectURI: process.env.NODE_ENV === 'development' 
+                    ? 'http://localhost:3000/api/auth/callback/google'
+                    : undefined
             }
         }
     });

@@ -1,6 +1,6 @@
 // This file contains commented out email and password log in with better-auth.
 // It is not used in the app due to worker free tier CPU limits and password hashing, but is kept here for reference.
-import { createFileRoute, useNavigate, useSearch } from '@tanstack/solid-router';
+import { createFileRoute, useSearch, useNavigate } from '@tanstack/solid-router';
 import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import { useQuery, type QueryObserverResult } from '@tanstack/solid-query';
 import { Button } from '~/components/ui/button';
@@ -13,6 +13,7 @@ import {
   // useSignUpMutation, 
   useGoogleSignInMutation 
 } from '~/lib/auth-actions';
+
 import type { User, Session } from 'better-auth';
 
 type SessionQueryResult = {
@@ -31,8 +32,9 @@ type AuthTab = 'signIn' | 'signUp';
 
 function AuthPage() {
   const sessionQuery = useQuery(() => sessionQueryOptions()) as QueryObserverResult<SessionQueryResult, Error>;
-  const navigate = useNavigate();
+
   const search = useSearch({ from: '/auth' });
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = createSignal<AuthTab>('signIn');
   const [name, setName] = createSignal('');
@@ -68,7 +70,14 @@ function AuthPage() {
   createEffect(() => {
     if (sessionQuery.isPending || sessionQuery.data) {
       setContainerHeight('auto');
-      navigate({ to: '/dashboard' });
+      
+      // Don't navigate if we're currently in an OAuth callback flow
+      if (window.location.pathname.includes('/auth/callback')) {
+        console.log('Skipping navigation - in OAuth callback flow');
+        return;
+      }
+      
+      navigate({ to: '/dashboard', replace: true });
       return;
     }
 
@@ -206,6 +215,7 @@ function AuthPage() {
 
               <Button variant="outline" class="w-full mt-4" onClick={() => {
                 setLoadingAction('google');
+                
                 googleSignInMutation.mutate(undefined, {
                     onError: (err) => {
                         handleError(err);
@@ -234,4 +244,10 @@ function AuthPage() {
 
 export const Route = createFileRoute('/auth')({
   component: AuthPage,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      redirect: (search.redirect as string) || undefined,
+      deleted: (search.deleted as string) || undefined,
+    };
+  },
 });

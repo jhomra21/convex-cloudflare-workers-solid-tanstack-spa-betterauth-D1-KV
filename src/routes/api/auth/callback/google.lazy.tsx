@@ -1,5 +1,6 @@
 import { createLazyFileRoute, useNavigate } from '@tanstack/solid-router'
 import { createEffect } from 'solid-js'
+import { hasShareIntent } from '~/lib/share-intent'
 
 export const Route = createLazyFileRoute('/api/auth/callback/google')({
   component: GoogleCallbackComponent,
@@ -21,18 +22,21 @@ function GoogleCallbackComponent() {
         });
 
         if (response.ok) {
-          // The cookie is set. Now we can navigate to the dashboard.
-          navigate({ to: '/dashboard', replace: true });
+          if (hasShareIntent()) {
+            navigate({ to: '/dashboard/images', replace: true });
+          } else {
+            navigate({ to: '/dashboard', replace: true });
+          }
         } else {
           const error = await response.json();
           console.error('Authentication failed:', error);
           // On failure, redirect to the home page for now.
-          navigate({ to: '/', replace: true });
+          window.location.href = '/';
         }
       } catch (e) {
         console.error('An error occurred during authentication:', e);
         // On failure, redirect to the home page for now.
-        navigate({ to: '/', replace: true });
+        window.location.href = '/';
       }
     })();
   });
