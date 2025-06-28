@@ -3,13 +3,13 @@ import { ImageAgent } from './ImageAgent';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
-import { useQuery } from '~/lib/convex';
-import { convexApi, convexClient } from '~/lib/convex';
-import { useRouteContext } from '@tanstack/solid-router';
+import { convexApi, useQuery, useMutation } from '~/lib/convex';
+import { useCurrentUserId } from '~/lib/auth-actions';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
+import { CanvasActiveUsers } from '~/components/CanvasActiveUsers';
 import { toast } from 'solid-sonner';
 
 class Agent {
@@ -37,8 +37,7 @@ export interface ImageCanvasProps {
 
 export function ImageCanvas(props: ImageCanvasProps) {
   // Auth context
-  const context = useRouteContext({ from: '/dashboard' });
-  const userId = createMemo(() => context()?.session?.user?.id);
+  const userId = useCurrentUserId();
   
   // Flag to prevent multiple redirects
   const [hasRedirected, setHasRedirected] = createSignal(false);
@@ -46,22 +45,22 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Convex queries - choose query based on activeCanvasId
   const defaultCanvas = useQuery(
     convexApi.canvas.getCanvas,
-    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : undefined
+    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null
   );
   
   const specificCanvas = useQuery(
     convexApi.canvas.getCanvasById,
-    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : undefined
+    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null
   );
   
   // Use the appropriate canvas
-  const canvas = createMemo(() => props.activeCanvasId ? specificCanvas() : defaultCanvas());
+  const canvas = createMemo(() => props.activeCanvasId ? specificCanvas.data() : defaultCanvas.data());
   
   // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
   createEffect(() => {
     // Only handle this for shared canvases (when activeCanvasId is provided)
     if (props.activeCanvasId && userId() && !hasRedirected()) {
-      const canvasData = specificCanvas();
+      const canvasData = specificCanvas.data();
       // If we were trying to access a specific canvas but it's now null,
       // it means sharing was disabled or access was revoked
       if (canvasData === null) {
@@ -78,7 +77,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   
   const dbAgents = useQuery(
     convexApi.agents.getCanvasAgents,
-    () => canvas()?._id ? { canvasId: canvas()!._id } : undefined
+    () => canvas()?._id ? { canvasId: canvas()!._id } : null
   );
   
   // Optimistic position updates during drag (visual only)
@@ -89,11 +88,25 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const [maxZIndex, setMaxZIndex] = createSignal(1);
   const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
   
-  // Create canvas if it doesn't exist
+  // Mutation hooks
+  const createCanvasMutation = useMutation();
+  const updateAgentTransformMutation = useMutation();
+  const createAgentMutation = useMutation();
+  const deleteAgentMutation = useMutation();
+  const connectAgentsMutation = useMutation();
+  const disconnectAgentsMutation = useMutation();
+  const updateAgentPromptMutation = useMutation();
+  const clearCanvasAgentsMutation = useMutation();
+  
+  // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
   createEffect(async () => {
-    if (userId() && canvas() === null) {
+    // Only create canvas if:
+    // 1. User is logged in
+    // 2. No canvas exists
+    // 3. We're not currently trying to access a shared canvas (which might be temporarily null)
+    if (userId() && canvas() === null && !props.activeCanvasId) {
       try {
-        await convexClient.mutation(convexApi.canvas.createCanvas, {
+        await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
           userId: userId()!,
         });
       } catch (error) {
@@ -104,11 +117,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Convert Convex agents to Agent objects for rendering with optimistic updates
   const agents = () => {
-    if (!dbAgents()) return [];
+    if (!dbAgents.data()) return [];
     const positions = optimisticPositions();
     const sizes = optimisticSizes();
     
-    return dbAgents()!.map(agent => {
+    return dbAgents.data()!.map((agent: any) => {
       // Use optimistic position/size if available, otherwise use database values
       const optimisticPos = positions.get(agent._id);
       const optimisticSize = sizes.get(agent._id);
@@ -145,7 +158,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     // Set new timeout
     const timeout = window.setTimeout(async () => {
       try {
-        await convexClient.mutation(convexApi.agents.updateAgentTransform, {
+        await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
           agentId: agentId as any,
           positionX: position.x,
           positionY: position.y,
@@ -169,7 +182,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       }
       
       debouncedSaves.delete(agentId);
-    }, 25);
+    }, 150);
     
     debouncedSaves.set(agentId, timeout);
   };
@@ -224,7 +237,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Create in Convex first
-      await convexClient.mutation(convexApi.agents.createAgent, {
+      await createAgentMutation.mutate(convexApi.agents.createAgent, {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
@@ -244,7 +257,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const removeAgent = async (id: string) => {
     try {
       // Remove from Convex
-      await convexClient.mutation(convexApi.agents.deleteAgent, {
+      await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
         agentId: id as any,
       });
       
@@ -256,7 +269,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   const connectAgents = async (sourceAgentId: string, targetAgentId: string) => {
     try {
-      await convexClient.mutation(convexApi.agents.connectAgents, {
+      await connectAgentsMutation.mutate(convexApi.agents.connectAgents, {
         sourceAgentId: sourceAgentId as any,
         targetAgentId: targetAgentId as any,
       });
@@ -267,7 +280,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   const disconnectAgent = async (agentId: string) => {
     try {
-      await convexClient.mutation(convexApi.agents.disconnectAgents, {
+      await disconnectAgentsMutation.mutate(convexApi.agents.disconnectAgents, {
         agentId: agentId as any,
       });
     } catch (error) {
@@ -302,7 +315,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Save to Convex (debounced)
-      await convexClient.mutation(convexApi.agents.updateAgentPrompt, {
+      await updateAgentPromptMutation.mutate(convexApi.agents.updateAgentPrompt, {
         agentId: id as any,
         prompt,
       });
@@ -383,22 +396,30 @@ export function ImageCanvas(props: ImageCanvasProps) {
       {/* Toolbar */}
       <div class="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div class="flex items-center gap-2">
-          <span class="text-sm text-muted-foreground">
-            {agents().length} agent{agents().length !== 1 ? 's' : ''}
-          </span>
-          <Show when={props.activeCanvasId}>
-            <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-md">
-              <Icon name="users" class="h-3 w-3" />
-              <span>Shared Canvas</span>
-            </div>
-          </Show>
-          <Show when={!props.activeCanvasId && canvas()?.isShareable}>
-            <div class="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs rounded-md">
-              <Icon name="share" class="h-3 w-3" />
-              <span>Sharing Enabled</span>
-            </div>
-          </Show>
+        <span class="text-sm text-muted-foreground">
+        {agents().length} agent{agents().length !== 1 ? 's' : ''}
+        </span>
+        <Show when={props.activeCanvasId}>
+        <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-md">
+        <Icon name="users" class="h-3 w-3" />
+        <span>Shared Canvas</span>
         </div>
+        </Show>
+        <Show when={!props.activeCanvasId && canvas()?.isShareable}>
+        <div class="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs rounded-md">
+        <Icon name="share" class="h-3 w-3" />
+        <span>Sharing Enabled</span>
+        </div>
+        </Show>
+          {/* Show active users for shared canvases */}
+            <Show when={canvas()?._id && (props.activeCanvasId || canvas()?.isShareable)}>
+              <CanvasActiveUsers 
+                canvasId={canvas()?._id}
+                currentUserId={userId()}
+                class="border-l pl-2 ml-2"
+              />
+            </Show>
+          </div>
         <div class="flex items-center gap-2">
           <Button
             onClick={() => addAgent('', 'image-generate')}
@@ -442,7 +463,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
             onClick={async () => {
               if (!canvas()?._id) return;
               try {
-                await convexClient.mutation(convexApi.agents.clearCanvasAgents, {
+                await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
                   canvasId: canvas()!._id,
                 });
                 // Convex will automatically update via real-time subscription
@@ -468,7 +489,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           "background-size": "20px 20px"
         }}
       >
-        <Show when={!canvas() || !dbAgents()}>
+        <Show when={!canvas() || !dbAgents.data()}>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="text-center">
               <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
@@ -477,7 +498,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           </div>
         </Show>
 
-        <Show when={canvas() && dbAgents() && agents().length === 0}>
+        <Show when={canvas() && dbAgents.data() && agents().length === 0}>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="text-center">
               <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
@@ -531,7 +552,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   connectedAgentId={agent.connectedAgentId}
                   uploadedImageUrl={agent.uploadedImageUrl}
                   activeImageUrl={agent.activeImageUrl}
-                  availableAgents={agents().map(a => ({
+                  availableAgents={agents().map((a: any) => ({
                     id: a.id,
                     prompt: a.prompt,
                     imageUrl: a.generatedImage

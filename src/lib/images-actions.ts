@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { convexApi, useQuery } from './convex';
-import { useRouteContext } from '@tanstack/solid-router';
-import { createMemo } from 'solid-js';
+import { useCurrentUserId } from './auth-actions';
 
 interface GenerateImageOptions {
   prompt: string;
@@ -50,8 +49,7 @@ export function useGenerateImage() {
 
 // This function gets images directly from Convex, not through the Hono API
 export function useUserImages() {
-  const context = useRouteContext({ from: '/dashboard' });
-  const userId = createMemo(() => context()?.session?.user?.id as string);
+  const userId = useCurrentUserId();
   
   // Use existing custom Convex integration for real-time queries
   return useQuery(

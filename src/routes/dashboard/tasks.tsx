@@ -1,22 +1,29 @@
-import { For, createSignal, Show, onMount, onCleanup, createMemo } from "solid-js";
-import { createFileRoute, useRouteContext } from "@tanstack/solid-router";
+import { For, createSignal, Show, onMount, onCleanup } from "solid-js";
+import { createFileRoute } from "@tanstack/solid-router";
 import { toast } from "solid-sonner";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { convexApi, convexClient, useQuery } from "~/lib/convex";
+import { convexApi, useQuery, useMutation } from "~/lib/convex";
+import { useCurrentUserId } from "~/lib/auth-actions";
 import { Icon } from "~/components/ui/icon";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import * as TextFieldPrimitive from "@kobalte/core/text-field";
 
 function TasksPage() {
-  const context = useRouteContext({ from: '/dashboard' });
-  const userId = createMemo(() => context()?.session?.user?.id);
-  const tasks = useQuery(
+  const userId = useCurrentUserId();
+  const tasksQuery = useQuery(
     convexApi.tasks.getTasks, 
-    () => userId() ? { userId: userId()! } : { userId: "" }
+    () => userId() ? { userId: userId()! } : null
   );
+  
+  // Mutation hooks
+  const createTaskMutation = useMutation();
+  const updateStatusMutation = useMutation();
+  const updateTextMutation = useMutation();
+  const deleteTaskMutation = useMutation();
+  
   const [newTaskText, setNewTaskText] = createSignal("");
   const [filter, setFilter] = createSignal<"all" | "completed" | "active">("all");
   const [editingTaskId, setEditingTaskId] = createSignal<string | null>(null);
@@ -27,15 +34,16 @@ function TasksPage() {
   const [showDeleteButtons, setShowDeleteButtons] = createSignal<string | null>(null);
 
   const filteredTasks = () => {
-    if (!tasks() || !userId()) return [];
+    const tasks = tasksQuery.data();
+    if (!tasks || !userId()) return [];
     
     switch (filter()) {
       case "completed":
-        return tasks()?.filter(task => task.isCompleted) || [];
+        return tasks.filter(task => task.isCompleted);
       case "active":
-        return tasks()?.filter(task => !task.isCompleted) || [];
+        return tasks.filter(task => !task.isCompleted);
       default:
-        return tasks() || [];
+        return tasks;
     }
   };
 
@@ -47,31 +55,30 @@ function TasksPage() {
       return;
     }
     
-    const promise = convexClient.mutation(convexApi.tasks.createTask, { 
-      text: newTaskText(),
-      userId: userId()!
-    });
-    
-    toast.promise(promise, {
-      loading: "Creating task...",
-      success: "Task created",
-      error: "Failed to create task"
-    });
-    
-    setNewTaskText("");
+    try {
+      await createTaskMutation.mutate(convexApi.tasks.createTask, { 
+        text: newTaskText(),
+        userId: userId()!
+      });
+      
+      toast.success("Task created");
+      setNewTaskText("");
+    } catch (error) {
+      toast.error("Failed to create task");
+    }
   };
 
   const setCompleted = async (taskId: Doc<"tasks">["_id"], isCompleted: boolean) => {
-    const promise = convexClient.mutation(convexApi.tasks.updateTaskStatus, { 
-      taskId, 
-      isCompleted 
-    });
-    
-    toast.promise(promise, {
-      loading: "Updating task...",
-      success: `Task ${isCompleted ? "completed" : "marked active"}`,
-      error: "Failed to update task"
-    });
+    try {
+      await updateStatusMutation.mutate(convexApi.tasks.updateTaskStatus, { 
+        taskId, 
+        isCompleted 
+      });
+      
+      toast.success(`Task ${isCompleted ? "completed" : "marked active"}`);
+    } catch (error) {
+      toast.error("Failed to update task");
+    }
   };
 
   const confirmDelete = (taskId: Doc<"tasks">["_id"]) => {
@@ -95,16 +102,15 @@ function TasksPage() {
   };
 
   const deleteTask = async (taskId: Doc<"tasks">["_id"]) => {
-    const promise = convexClient.mutation(convexApi.tasks.deleteTask, { taskId });
-    
-    toast.promise(promise, {
-      loading: "Deleting task...",
-      success: "Task deleted",
-      error: "Failed to delete task"
-    });
-    
-    // Use the same animation pattern for consistency
-    cancelDelete();
+    try {
+      await deleteTaskMutation.mutate(convexApi.tasks.deleteTask, { taskId });
+      
+      toast.success("Task deleted");
+      // Use the same animation pattern for consistency
+      cancelDelete();
+    } catch (error) {
+      toast.error("Failed to delete task");
+    }
   };
 
   const startEditing = (task: Doc<"tasks">) => {
@@ -124,18 +130,17 @@ function TasksPage() {
       return;
     }
 
-    const promise = convexClient.mutation(convexApi.tasks.updateTaskText, {
-      taskId,
-      text: newText
-    });
+    try {
+      await updateTextMutation.mutate(convexApi.tasks.updateTaskText, {
+        taskId,
+        text: newText
+      });
 
-    toast.promise(promise, {
-      loading: "Updating task...",
-      success: "Task updated",
-      error: "Failed to update task"
-    });
-
-    setEditingTaskId(null);
+      toast.success("Task updated");
+      setEditingTaskId(null);
+    } catch (error) {
+      toast.error("Failed to update task");
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent, taskId: Doc<"tasks">["_id"]) => {
@@ -226,12 +231,22 @@ function TasksPage() {
                   value={newTaskText()}
                   onChange={(value) => setNewTaskText(value)}
                   class="flex-grow"
+                  disabled={createTaskMutation.isLoading()}
                 />
-                <Button type="submit" variant="sf-compute">
+                <Button 
+                  type="submit" 
+                  variant="sf-compute"
+                  disabled={createTaskMutation.isLoading() || !newTaskText().trim()}
+                >
                   <Icon name="plus" class="mr-2 h-4 w-4" />
-                  Add Task
+                  {createTaskMutation.isLoading() ? "Creating..." : "Add Task"}
                 </Button>
               </div>
+              {createTaskMutation.error() && (
+                <p class="text-red-500 text-sm mt-2">
+                  {createTaskMutation.error()?.message}
+                </p>
+              )}
             </CardContent>
           </form>
         </Card>
@@ -239,13 +254,35 @@ function TasksPage() {
         {/* Tasks List */}
         <Card class="!border-none !shadow-none">
           <CardContent class="!px-0">
-            <div class="space-y-2">
-              <For each={filteredTasks()} fallback={
-                <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
-                  <Icon name="square-check" class="mx-auto h-12 w-12 opacity-20 mb-2" />
-                  <p>No tasks found. Add a task to get started.</p>
-                </div>
-              }>
+            {/* Loading State */}
+            <Show when={tasksQuery.isLoading()}>
+              <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 duration-300">
+                <Icon name="clock" class="mx-auto h-12 w-12 opacity-20 mb-2" />
+                <p>Loading tasks...</p>
+              </div>
+            </Show>
+
+            {/* Error State */}
+            <Show when={tasksQuery.error()}>
+              <div class="text-center py-8 text-red-500 animate-in fade-in-0 duration-300">
+                <Icon name="x" class="mx-auto h-12 w-12 opacity-20 mb-2" />
+                <p class="mb-4">Failed to load tasks: {tasksQuery.error()?.message}</p>
+                <Button onClick={() => tasksQuery.reset()} variant="outline">
+                  <Icon name="clock" class="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </Show>
+
+            {/* Tasks Content */}
+            <Show when={!tasksQuery.isLoading() && !tasksQuery.error()}>
+              <div class="space-y-2">
+                <For each={filteredTasks()} fallback={
+                  <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+                    <Icon name="square-check" class="mx-auto h-12 w-12 opacity-20 mb-2" />
+                    <p>No tasks found. Add a task to get started.</p>
+                  </div>
+                }>
                 {(task) => (
                   <div 
                     class="flex items-center justify-between rounded-md border p-3 hover:bg-muted/40 transition-all duration-200 animate-in fade-in-0 slide-in-from-top-1 duration-300 ease-out"
@@ -365,11 +402,14 @@ function TasksPage() {
                     </Show>
                   </div>
                 )}
-              </For>
-            </div>
+                </For>
+              </div>
+            </Show>
           </CardContent>
           <CardFooter class="text-sm text-muted-foreground">
-            {filteredTasks().length} {filteredTasks().length === 1 ? "task" : "tasks"} ({tasks()?.filter(t => t.isCompleted).length || 0} completed)
+            <Show when={!tasksQuery.isLoading() && !tasksQuery.error()}>
+              {filteredTasks().length} {filteredTasks().length === 1 ? "task" : "tasks"} ({tasksQuery.data()?.filter((t: Doc<"tasks">) => t.isCompleted).length || 0} completed)
+            </Show>
           </CardFooter>
         </Card>
       </div>

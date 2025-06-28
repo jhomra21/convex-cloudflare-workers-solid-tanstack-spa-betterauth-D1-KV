@@ -50,6 +50,7 @@ export default defineSchema({
   sharedCanvases: defineTable({
     originalCanvasId: v.id("canvases"),
     sharedWithUserId: v.string(),
+    sharedWithUserName: v.string(), // Store user's display name
     sharedByUserId: v.string(),
     joinedAt: v.number(),
     isActive: v.boolean(),

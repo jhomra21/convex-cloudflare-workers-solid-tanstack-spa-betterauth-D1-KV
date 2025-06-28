@@ -152,7 +152,7 @@ export const disableCanvasSharing = mutation({
   args: { canvasId: v.id("canvases") },
   returns: v.null(),
   handler: async (ctx, { canvasId }) => {
-    // Remove all shared access
+    // Delete all shared access entries (clean removal)
     const sharedEntries = await ctx.db
       .query("sharedCanvases")
       .withIndex("by_original_canvas", (q) => 
@@ -160,7 +160,7 @@ export const disableCanvasSharing = mutation({
       .collect();
     
     for (const entry of sharedEntries) {
-      await ctx.db.patch(entry._id, { isActive: false });
+      await ctx.db.delete(entry._id);
     }
     
     // Disable sharing on canvas
@@ -178,10 +178,11 @@ export const disableCanvasSharing = mutation({
 export const joinSharedCanvas = mutation({
   args: { 
     shareId: v.string(), 
-    userId: v.string() 
+    userId: v.string(),
+    userName: v.string() // User's display name
   },
   returns: v.union(v.id("canvases"), v.null()),
-  handler: async (ctx, { shareId, userId }) => {
+  handler: async (ctx, { shareId, userId, userName }) => {
     // Find canvas by shareId
     const canvas = await ctx.db
       .query("canvases")
@@ -210,6 +211,7 @@ export const joinSharedCanvas = mutation({
       await ctx.db.insert("sharedCanvases", {
         originalCanvasId: canvas._id,
         sharedWithUserId: userId,
+        sharedWithUserName: userName,
         sharedByUserId: canvas.userId,
         joinedAt: Date.now(),
         isActive: true,
@@ -222,7 +224,7 @@ export const joinSharedCanvas = mutation({
 
 // Get canvases shared with user
 export const getSharedCanvases = query({
-  args: { userId: v.string() },
+  args: { userId: v.string(), userName: v.optional(v.string()) },
   returns: v.array(v.object({
     _id: v.id("canvases"),
     name: v.string(),
@@ -231,10 +233,10 @@ export const getSharedCanvases = query({
     updatedAt: v.number(),
     shareId: v.optional(v.string()),
     isShareable: v.optional(v.boolean()),
-    sharedBy: v.string(), // Original owner's userId
+    sharedBy: v.string(), // Original owner's name (fallback to ID)
     joinedAt: v.number(),
   })),
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId, userName }) => {
     const sharedEntries = await ctx.db
       .query("sharedCanvases")
       .withIndex("by_shared_with_user", (q) => 
@@ -245,6 +247,10 @@ export const getSharedCanvases = query({
     for (const entry of sharedEntries) {
       const canvas = await ctx.db.get(entry.originalCanvasId);
       if (canvas) {
+        // For the owner name, we'll use a fallback since we don't store it
+        // In a full implementation, you'd want to store owner names too
+        const ownerName = `User-${canvas.userId.slice(-4).toUpperCase()}`;
+        
         canvases.push({
           _id: canvas._id,
           name: canvas.name,
@@ -253,13 +259,57 @@ export const getSharedCanvases = query({
           updatedAt: canvas.updatedAt,
           shareId: canvas.shareId,
           isShareable: canvas.isShareable,
-          sharedBy: entry.sharedByUserId,
+          sharedBy: ownerName,
           joinedAt: entry.joinedAt,
         });
       }
     }
     
     return canvases;
+  },
+});
+
+// Get users currently sharing a canvas (including owner)
+export const getCanvasActiveUsers = query({
+  args: { canvasId: v.id("canvases"), ownerName: v.optional(v.string()) },
+  returns: v.array(v.object({
+    userId: v.string(),
+    userName: v.string(),
+    joinedAt: v.number(),
+    isOwner: v.boolean(),
+  })),
+  handler: async (ctx, { canvasId, ownerName }) => {
+    // Get the canvas to find the owner
+    const canvas = await ctx.db.get(canvasId);
+    if (!canvas) return [];
+    
+    const users = [];
+    
+    // Add the canvas owner first
+    users.push({
+      userId: canvas.userId,
+      userName: ownerName || `User-${canvas.userId.slice(-4).toUpperCase()}`,
+      joinedAt: canvas.createdAt,
+      isOwner: true,
+    });
+    
+    // Add shared users (guests)
+    const sharedEntries = await ctx.db
+      .query("sharedCanvases")
+      .withIndex("by_original_canvas", (q) => 
+        q.eq("originalCanvasId", canvasId).eq("isActive", true))
+      .collect();
+    
+    for (const entry of sharedEntries) {
+      users.push({
+        userId: entry.sharedWithUserId,
+        userName: entry.sharedWithUserName,
+        joinedAt: entry.joinedAt,
+        isOwner: false,
+      });
+    }
+    
+    return users;
   },
 });
 
