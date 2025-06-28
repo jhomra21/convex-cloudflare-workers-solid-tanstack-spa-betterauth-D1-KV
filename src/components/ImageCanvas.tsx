@@ -585,7 +585,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
             class="canvas-content w-full h-full"
             style={{
               transform: `scale(${viewport().zoom})`,
-              "transform-origin": "top left", // Use top-left to avoid coordinate offset issues
+              "transform-origin": "center center", // Center scaling for better UX
               transition: "transform 0.2s ease-out"
             }}
           >
