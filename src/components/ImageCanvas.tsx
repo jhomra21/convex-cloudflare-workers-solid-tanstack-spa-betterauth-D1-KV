@@ -88,6 +88,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
     convexApi.agents.getCanvasAgents,
     () => canvas()?._id ? { canvasId: canvas()!._id } : null
   );
+
+  // User's own canvas for viewport preferences (works for both own and shared canvases)
+  const userOwnCanvas = useQuery(
+    convexApi.canvas.getCanvas,
+    () => userId() ? { userId: userId()! } : null
+  );
   
   // =============================================
   // Mutations
@@ -117,7 +123,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Debounced viewport save to prevent excessive API calls
   let viewportSaveTimeout: any;
   const saveViewportState = (newViewport: { x: number; y: number; zoom: number }) => {
-    if (!canvas()?._id) return;
+    const userCanvas = userOwnCanvas.data();
+    if (!userCanvas?._id || !userId()) return;
     
     if (viewportSaveTimeout) {
       clearTimeout(viewportSaveTimeout);
@@ -126,7 +133,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     viewportSaveTimeout = setTimeout(async () => {
       try {
         await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
-          canvasId: canvas()!._id,
+          canvasId: userCanvas._id,
           viewport: newViewport,
         });
       } catch (error) {
@@ -166,11 +173,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Effects and Derived State
   // =============================================
   
-  // Restore viewport state when canvas loads
+  // Restore viewport state when canvas loads (using user's own canvas viewport)
   createEffect(() => {
-    const canvasData = canvas();
-    if (canvasData) {
-      setViewport(canvasData.viewport || { x: 0, y: 0, zoom: 1.0 });
+    const userCanvasData = userOwnCanvas.data();
+    if (userCanvasData) {
+      setViewport(userCanvasData.viewport || { x: 0, y: 0, zoom: 1.0 });
     }
   });
   
