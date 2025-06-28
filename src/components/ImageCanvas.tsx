@@ -1,5 +1,7 @@
 import { createSignal, For, Show, createEffect, createMemo } from 'solid-js';
 import { ImageAgent } from './ImageAgent';
+import { AgentConnection } from './AgentConnection';
+import { AgentToolbar } from './AgentToolbar';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
@@ -8,10 +10,11 @@ import { useCurrentUserId } from '~/lib/auth-actions';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
-import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
-import { CanvasActiveUsers } from '~/components/CanvasActiveUsers';
 import { toast } from 'solid-sonner';
 
+/**
+ * Agent data model used for rendering on canvas
+ */
 class Agent {
   constructor(
     public id: string,
@@ -25,7 +28,7 @@ class Agent {
     public connectedAgentId?: string,
     public uploadedImageUrl?: string,
     public activeImageUrl?: string,
-    public _version: number = 0 // Track changes to force reactivity
+    public _version: number = 0 // Track changes for reactivity
   ) {}
 }
 
@@ -36,13 +39,37 @@ export interface ImageCanvasProps {
 }
 
 export function ImageCanvas(props: ImageCanvasProps) {
-  // Auth context
-  const userId = useCurrentUserId();
+  // =============================================
+  // State Management
+  // =============================================
   
-  // Flag to prevent multiple redirects
+  // Authentication state
+  const userId = useCurrentUserId();
   const [hasRedirected, setHasRedirected] = createSignal(false);
   
-  // Convex queries - choose query based on activeCanvasId
+  // Viewport state management
+  const [viewport, setViewport] = createSignal({
+    x: 0,    // Pan X position (pixels)
+    y: 0,    // Pan Y position (pixels)
+    zoom: 1.0 // Zoom level (0.5 to 2.0)
+  });
+  
+  // UI state
+  const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit'>('none');
+  
+  // Agent transform state (position and size during drag/resize operations)
+  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, { x: number; y: number }>>(new Map());
+  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, { width: number; height: number }>>(new Map());
+  
+  // Z-index management for proper agent stacking
+  const [maxZIndex, setMaxZIndex] = createSignal(1);
+  const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
+  
+  // =============================================
+  // Data Fetching
+  // =============================================
+  
+  // Canvas data - choose query based on activeCanvasId
   const defaultCanvas = useQuery(
     convexApi.canvas.getCanvas,
     () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null
@@ -53,8 +80,112 @@ export function ImageCanvas(props: ImageCanvasProps) {
     () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null
   );
   
-  // Use the appropriate canvas
+  // Current active canvas data
   const canvas = createMemo(() => props.activeCanvasId ? specificCanvas.data() : defaultCanvas.data());
+  
+  // Canvas agents data
+  const dbAgents = useQuery(
+    convexApi.agents.getCanvasAgents,
+    () => canvas()?._id ? { canvasId: canvas()!._id } : null
+  );
+  
+  // =============================================
+  // Mutations
+  // =============================================
+  const createCanvasMutation = useMutation();
+  const updateAgentTransformMutation = useMutation();
+  const createAgentMutation = useMutation();
+  const deleteAgentMutation = useMutation();
+  const connectAgentsMutation = useMutation();
+  const disconnectAgentsMutation = useMutation();
+  const updateAgentPromptMutation = useMutation();
+  const clearCanvasAgentsMutation = useMutation();
+  const updateCanvasViewportMutation = useMutation();
+  
+  // =============================================
+  // Zoom Utilities
+  // =============================================
+  
+  // Zoom constraints
+  const MIN_ZOOM = 0.5; // 50%
+  const MAX_ZOOM = 2.0; // 200%
+  const ZOOM_STEP = 0.25; // 25% increments
+  
+  // Constrain zoom level to safe bounds
+  const constrainZoom = (zoom: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+  
+  // Debounced viewport save to prevent excessive API calls
+  let viewportSaveTimeout: any;
+  const saveViewportState = (newViewport: { x: number; y: number; zoom: number }) => {
+    if (!canvas()?._id) return;
+    
+    if (viewportSaveTimeout) {
+      clearTimeout(viewportSaveTimeout);
+    }
+    
+    viewportSaveTimeout = setTimeout(async () => {
+      try {
+        await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
+          canvasId: canvas()!._id,
+          viewport: newViewport,
+        });
+      } catch (error) {
+        console.error('Failed to save viewport state:', error);
+      }
+    }, 500); // 500ms debounce
+  };
+  
+  // Zoom functions
+  const zoomIn = () => {
+    const currentViewport = viewport();
+    const newViewport = {
+      ...currentViewport,
+      zoom: constrainZoom(currentViewport.zoom + ZOOM_STEP)
+    };
+    setViewport(newViewport);
+    saveViewportState(newViewport);
+  };
+  
+  const zoomOut = () => {
+    const currentViewport = viewport();
+    const newViewport = {
+      ...currentViewport,
+      zoom: constrainZoom(currentViewport.zoom - ZOOM_STEP)
+    };
+    setViewport(newViewport);
+    saveViewportState(newViewport);
+  };
+  
+  const resetZoom = () => {
+    const newViewport = { x: 0, y: 0, zoom: 1.0 };
+    setViewport(newViewport);
+    saveViewportState(newViewport);
+  };
+  
+  // =============================================
+  // Effects and Derived State
+  // =============================================
+  
+  // Restore viewport state when canvas loads
+  createEffect(() => {
+    const canvasData = canvas();
+    if (canvasData) {
+      setViewport(canvasData.viewport || { x: 0, y: 0, zoom: 1.0 });
+    }
+  });
+  
+  // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
+  createEffect(async () => {
+    if (userId() && canvas() === null && !props.activeCanvasId) {
+      try {
+        await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
+          userId: userId()!,
+        });
+      } catch (error) {
+        console.error('Failed to create canvas:', error);
+      }
+    }
+  });
   
   // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
   createEffect(() => {
@@ -65,52 +196,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
       // it means sharing was disabled or access was revoked
       if (canvasData === null) {
         setHasRedirected(true); // Prevent multiple calls
-        
-        // Show notification
         toast.error('Canvas sharing has been disabled by the owner. Switched to your canvas.');
-        
-        // Clear the active canvas ID to switch to user's default canvas
         props.onCanvasDisabled?.();
-      }
-    }
-  });
-  
-  const dbAgents = useQuery(
-    convexApi.agents.getCanvasAgents,
-    () => canvas()?._id ? { canvasId: canvas()!._id } : null
-  );
-  
-  // Optimistic position updates during drag (visual only)
-  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, { x: number; y: number }>>(new Map());
-  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, { width: number; height: number }>>(new Map());
-  
-  // Z-index management for proper stacking
-  const [maxZIndex, setMaxZIndex] = createSignal(1);
-  const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
-  
-  // Mutation hooks
-  const createCanvasMutation = useMutation();
-  const updateAgentTransformMutation = useMutation();
-  const createAgentMutation = useMutation();
-  const deleteAgentMutation = useMutation();
-  const connectAgentsMutation = useMutation();
-  const disconnectAgentsMutation = useMutation();
-  const updateAgentPromptMutation = useMutation();
-  const clearCanvasAgentsMutation = useMutation();
-  
-  // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
-  createEffect(async () => {
-    // Only create canvas if:
-    // 1. User is logged in
-    // 2. No canvas exists
-    // 3. We're not currently trying to access a shared canvas (which might be temporarily null)
-    if (userId() && canvas() === null && !props.activeCanvasId) {
-      try {
-        await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
-          userId: userId()!,
-        });
-      } catch (error) {
-        console.error('Failed to create canvas:', error);
       }
     }
   });
@@ -142,53 +229,37 @@ export function ImageCanvas(props: ImageCanvasProps) {
       );
     });
   };
-
-  // Debounced save for transforms
-  const debouncedSaves = new Map<string, number>();
   
-  const saveAgentTransform = (agentId: string, position: { x: number; y: number }, size: { width: number; height: number }) => {
-    if (!canvas()?._id) return;
+  // Find pairs of connected agents
+  const connectedAgentPairs = createMemo(() => {
+    const result = [];
+    const agentsList = agents();
     
-    // Clear existing timeout
-    const existingTimeout = debouncedSaves.get(agentId);
-    if (existingTimeout) {
-      window.clearTimeout(existingTimeout);
+    for (const agent of agentsList) {
+      if (agent.type === 'image-edit' && agent.connectedAgentId) {
+        const sourceAgent = agentsList.find(a => a.id === agent.connectedAgentId);
+        if (sourceAgent) {
+          result.push({
+            source: sourceAgent,
+            target: agent
+          });
+        }
+      }
     }
     
-    // Set new timeout
-    const timeout = window.setTimeout(async () => {
-      try {
-        await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
-          agentId: agentId as any,
-          positionX: position.x,
-          positionY: position.y,
-          width: size.width,
-          height: size.height,
-        });
-        
-        // Clear optimistic updates once saved to Convex
-        setOptimisticPositions(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(agentId);
-          return newMap;
-        });
-        setOptimisticSizes(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(agentId);
-          return newMap;
-        });
-      } catch (error) {
-        console.error('Failed to save agent transform:', error);
-      }
-      
-      debouncedSaves.delete(agentId);
-    }, 150);
-    
-    debouncedSaves.set(agentId, timeout);
-  };
+    return result;
+  });
 
+  // =============================================
+  // Agent Interaction Handlers
+  // =============================================
+  
+  // Create a new agent
   const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' = 'image-generate') => {
     if (!canvas()?._id || !userId()) return;
+    
+    // Set the active agent type for UI cues only
+    setActiveAgentType(type === 'image-generate' ? 'generate' : 'edit');
     
     // Smart positioning based on available canvas space
     const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
@@ -236,7 +307,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
     
     try {
-      // Create in Convex first
+      // Create in Convex
       await createAgentMutation.mutate(convexApi.agents.createAgent, {
         canvasId: canvas()!._id,
         userId: userId()!,
@@ -248,25 +319,27 @@ export function ImageCanvas(props: ImageCanvasProps) {
         type,
       });
       
-      // Convex will automatically update via real-time subscription
     } catch (error) {
       console.error('Failed to create agent:', error);
+      toast.error('Failed to create agent');
+    } finally {
+      // Reset active agent type
+      setActiveAgentType('none');
     }
   };
-
+  
+  // Remove an agent
   const removeAgent = async (id: string) => {
     try {
-      // Remove from Convex
       await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
         agentId: id as any,
       });
-      
-      // Convex will automatically update via real-time subscription
     } catch (error) {
       console.error('Failed to delete agent:', error);
     }
   };
-
+  
+  // Connect two agents
   const connectAgents = async (sourceAgentId: string, targetAgentId: string) => {
     try {
       await connectAgentsMutation.mutate(convexApi.agents.connectAgents, {
@@ -277,7 +350,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
       console.error('Failed to connect agents:', error);
     }
   };
-
+  
+  // Disconnect an agent
   const disconnectAgent = async (agentId: string) => {
     try {
       await disconnectAgentsMutation.mutate(convexApi.agents.disconnectAgents, {
@@ -287,34 +361,95 @@ export function ImageCanvas(props: ImageCanvasProps) {
       console.error('Failed to disconnect agent:', error);
     }
   };
+  
+  // Clear all agents from canvas
+  const clearCanvas = async () => {
+    if (!canvas()?._id) return;
+    try {
+      await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
+        canvasId: canvas()!._id,
+      });
+    } catch (error) {
+      console.error('Failed to clear canvas:', error);
+    }
+  };
 
+  // =============================================
+  // Position and Size Management
+  // =============================================
+  
+  // Debounced saves for transforms to reduce API calls
+  const debouncedSaves = new Map<string, number>();
+  
+  // Save transform (position and size) to database with debounce
+  const saveAgentTransform = (
+    agentId: string, 
+    position: { x: number; y: number }, 
+    size: { width: number; height: number }
+  ) => {
+    if (!canvas()?._id) return;
+    
+    // Clear existing timeout
+    const existingTimeout = debouncedSaves.get(agentId);
+    if (existingTimeout) {
+      window.clearTimeout(existingTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = window.setTimeout(async () => {
+      try {
+        await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
+          agentId: agentId as any,
+          positionX: position.x,
+          positionY: position.y,
+          width: size.width,
+          height: size.height,
+        });
+        
+        // Clear optimistic updates once saved to Convex
+        setOptimisticPositions(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(agentId);
+          return newMap;
+        });
+        setOptimisticSizes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(agentId);
+          return newMap;
+        });
+      } catch (error) {
+        console.error('Failed to save agent transform:', error);
+      }
+      
+      debouncedSaves.delete(agentId);
+    }, 150);
+    
+    debouncedSaves.set(agentId, timeout);
+  };
+  
+  // Update agent position with optimistic update
   const updateAgentPosition = (id: string, position: { x: number; y: number }) => {
-    // Immediate optimistic update for smooth visuals
     setOptimisticPositions(prev => new Map(prev).set(id, position));
     
-    // Find agent for size (from current state)
     const agent = agents().find(a => a.id === id);
     if (agent) {
       saveAgentTransform(id, position, agent.size);
     }
   };
-
+  
+  // Update agent size with optimistic update
   const updateAgentSize = (id: string, size: { width: number; height: number }) => {
-    // Immediate optimistic update for smooth visuals
     setOptimisticSizes(prev => new Map(prev).set(id, size));
     
-    // Find agent for position (from current state)
     const agent = agents().find(a => a.id === id);
     if (agent) {
       saveAgentTransform(id, agent.position, size);
     }
   };
-
+  
+  // Update agent prompt text
   const updateAgentPrompt = async (id: string, prompt: string) => {
-    // No local state update needed - Convex handles the update
-    
     try {
-      // Save to Convex (debounced)
       await updateAgentPromptMutation.mutate(convexApi.agents.updateAgentPrompt, {
         agentId: id as any,
         prompt,
@@ -324,22 +459,31 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   };
 
-  // Z-index management functions
+  // =============================================
+  // Z-index and Stacking Management
+  // =============================================
+  
+  // Bring an agent to the front of the stack
   const bringAgentToFront = (agentId: string) => {
     const currentMax = maxZIndex();
     const newZIndex = currentMax + 1;
     setMaxZIndex(newZIndex);
     setAgentZIndices(prev => new Map(prev).set(agentId, newZIndex));
   };
-
+  
+  // Get z-index for an agent
   const getAgentZIndex = (agentId: string, isDragged: boolean) => {
     if (isDragged) return 9999; // Always on top while dragging
     return agentZIndices().get(agentId) || 1;
   };
 
-  // Use custom hooks for drag and resize (after function definitions)
+  // =============================================
+  // Drag and Resize Hooks
+  // =============================================
+  
+  // Use custom hooks for drag and resize
   const dragHook = useCanvasDrag({
-    onDragStart: bringAgentToFront, // Bring to front when drag starts
+    onDragStart: bringAgentToFront, 
     onDragMove: updateAgentPosition,
     onDragEnd: (agentId) => {
       const agent = agents().find(a => a.id === agentId);
@@ -347,6 +491,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
         saveAgentTransform(agentId, agent.position, agent.size);
       }
     },
+    constrainToBounds: true, // Using stable parent container for boundaries
+    zoomLevel: () => viewport().zoom,
   });
 
   const resizeHook = useCanvasResize({
@@ -371,222 +517,223 @@ export function ImageCanvas(props: ImageCanvasProps) {
     },
   });
 
-  // Simple handlers that delegate to the hooks
+  // =============================================
+  // Event Handlers
+  // =============================================
+  
+  // Mouse down handler for agent dragging
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
     
-    // Bring to front on any interaction (not just drag start)
     bringAgentToFront(agentId);
     dragHook.handleMouseDown(e, agentId, agent.position);
   };
-
+  
+  // Resize start handler for agent resizing
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
     
-    // Bring to front on resize as well
     bringAgentToFront(agentId);
     resizeHook.handleResizeStart(e, agentId, handle, agent.size);
   };
+  
+  // Helper methods for the toolbar
+  const handleAddGenerateAgent = () => addAgent('', 'image-generate');
+  const handleAddEditAgent = () => addAgent('', 'image-edit');
 
+  // =============================================
+  // Render
+  // =============================================
+  
   return (
     <ErrorBoundary>
       <div class={cn("flex flex-col h-full overflow-hidden", props.class)}>
-      {/* Toolbar */}
-      <div class="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div class="flex items-center gap-2">
-        <span class="text-sm text-muted-foreground">
-        {agents().length} agent{agents().length !== 1 ? 's' : ''}
-        </span>
-        <Show when={props.activeCanvasId}>
-        <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-md">
-        <Icon name="users" class="h-3 w-3" />
-        <span>Shared Canvas</span>
-        </div>
-        </Show>
-        <Show when={!props.activeCanvasId && canvas()?.isShareable}>
-        <div class="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs rounded-md">
-        <Icon name="share" class="h-3 w-3" />
-        <span>Sharing Enabled</span>
-        </div>
-        </Show>
-          {/* Show active users for shared canvases */}
-            <Show when={canvas()?._id && (props.activeCanvasId || canvas()?.isShareable)}>
-              <CanvasActiveUsers 
-                canvasId={canvas()?._id}
-                currentUserId={userId()}
-                class="border-l pl-2 ml-2"
-              />
-            </Show>
-          </div>
-        <div class="flex items-center gap-2">
-          <Button
-            onClick={() => addAgent('', 'image-generate')}
-            size="sm"
-            class="flex items-center gap-2"
-          >
-            <Icon name="image" class="h-4 w-4" />
-            Generate Agent
-          </Button>
-          <Button
-            onClick={() => addAgent('', 'image-edit')}
-            size="sm"
-            variant="outline"
-            class="flex items-center gap-2"
-          >
-            <Icon name="edit" class="h-4 w-4" />
-            Edit Agent
-          </Button>
-          
-          <ShareCanvasDialog
-            canvasId={canvas()?._id}
-            canvasName={canvas()?.name}
-            currentShareId={canvas()?.shareId}
-            isShareable={canvas()?.isShareable}
-            canvasOwnerId={canvas()?.userId}
-            currentUserId={userId()}
-          >
-            <Button
-              size="sm"
-              variant={canvas()?.isShareable ? "default" : "outline"}
-              class={cn(
-                "flex items-center gap-2",
-                canvas()?.isShareable && "bg-blue-600 hover:bg-blue-700 border-blue-600"
-              )}
-            >
-              <Icon name={canvas()?.isShareable ? "users" : "share"} class="h-4 w-4" />
-              {canvas()?.isShareable ? "Shared" : "Share"}
-            </Button>
-          </ShareCanvasDialog>
-          <Button
-            onClick={async () => {
-              if (!canvas()?._id) return;
-              try {
-                await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
-                  canvasId: canvas()!._id,
-                });
-                // Convex will automatically update via real-time subscription
-              } catch (error) {
-                console.error('Failed to clear canvas:', error);
-              }
+        {/* Toolbar */}
+        <AgentToolbar
+          activeAgentType={activeAgentType()}
+          agentCount={agents().length}
+          isSharedCanvas={!!props.activeCanvasId}
+          isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
+          canvasId={canvas()?._id}
+          canvasName={canvas()?.name}
+          currentShareId={canvas()?.shareId}
+          canvasOwnerId={canvas()?.userId}
+          currentUserId={userId()}
+          onAddGenerateAgent={handleAddGenerateAgent}
+          onAddEditAgent={handleAddEditAgent}
+          onClearCanvas={clearCanvas}
+        />
+
+        {/* Canvas */}
+        <div 
+          class="canvas-container flex-1 relative overflow-auto bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0"
+          style={{ 
+            "background-image": "radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)",
+            "background-size": `${20 * viewport().zoom}px ${20 * viewport().zoom}px`
+          }}
+        >
+          <div 
+            class="canvas-content w-full h-full"
+            style={{
+              transform: `scale(${viewport().zoom})`,
+              "transform-origin": "top left", // Use top-left to avoid coordinate offset issues
+              transition: "transform 0.2s ease-out"
             }}
-            variant="outline"
-            size="sm"
-            disabled={agents().length === 0}
           >
-            <Icon name="trash-2" class="h-4 w-4" />
-            Clear All
-          </Button>
-        </div>
-      </div>
-
-      {/* Canvas */}
-      <div 
-        class="canvas-container flex-1 relative overflow-auto bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0"
-        style={{ 
-          "background-image": "radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)",
-          "background-size": "20px 20px"
-        }}
-      >
-        <Show when={!canvas() || !dbAgents.data()}>
-          <div class="absolute inset-0 flex items-center justify-center">
-            <div class="text-center">
-              <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-              <p class="text-sm text-muted-foreground">Loading canvas...</p>
-            </div>
-          </div>
-        </Show>
-
-        <Show when={canvas() && dbAgents.data() && agents().length === 0}>
-          <div class="absolute inset-0 flex items-center justify-center">
-            <div class="text-center">
-              <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
-                <Icon name="image" class="h-8 w-8 text-muted-foreground/50" />
+          {/* Loading State */}
+          <Show when={!canvas() || !dbAgents.data()}>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="text-center">
+                <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                <p class="text-sm text-muted-foreground">Loading canvas...</p>
               </div>
-              <h3 class="text-lg font-medium text-muted-foreground mb-2">
-                Empty Canvas
-              </h3>
-              <p class="text-sm text-muted-foreground/80 mb-4">
-                Add your first image agent to get started
-              </p>
-              <Button onClick={() => addAgent()} size="sm">
-                <Icon name="plus" class="h-4 w-4 mr-2" />
-                Add Agent
+            </div>
+          </Show>
+
+          {/* Empty State */}
+          <Show when={canvas() && dbAgents.data() && agents().length === 0}>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="text-center">
+                <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
+                  <Icon name="image" class="h-8 w-8 text-muted-foreground/50" />
+                </div>
+                <h3 class="text-lg font-medium text-muted-foreground mb-2">
+                  Empty Canvas
+                </h3>
+                <p class="text-sm text-muted-foreground/80 mb-4">
+                  Add your first image agent to get started
+                </p>
+                <Button onClick={handleAddGenerateAgent} size="sm">
+                  <Icon name="plus" class="h-4 w-4 mr-2" />
+                  Add Agent
+                </Button>
+              </div>
+            </div>
+          </Show>
+
+          {/* Agent Connection Lines */}
+          <For each={connectedAgentPairs()}>
+            {(pair) => (
+              <AgentConnection
+                sourcePosition={pair.source.position}
+                targetPosition={pair.target.position}
+                sourceWidth={pair.source.size.width}
+                sourceHeight={pair.source.size.height}
+                targetWidth={pair.target.size.width}
+                targetHeight={pair.target.size.height}
+                sourceId={pair.source.id}
+                targetId={pair.target.id}
+              />
+            )}
+          </For>
+
+          {/* Agents */}
+          <For each={agents()}>
+            {(agent) => {
+              // Memoize drag state to prevent unnecessary re-renders of other agents
+              const isDragged = () => dragHook.draggedAgent() === agent.id;
+              const isResizing = () => resizeHook.resizingAgent() === agent.id;
+              const zIndex = () => getAgentZIndex(agent.id, isDragged());
+              
+              return (
+                <div
+                  class="absolute select-none"
+                  style={{
+                    left: `${agent.position.x}px`,
+                    top: `${agent.position.y}px`,
+                    transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
+                    transition: isDragged() ? 'none' : 'transform 0.2s ease',
+                    'z-index': zIndex()
+                  }}
+                >
+                  <ImageAgent
+                    id={agent.id}
+                    prompt={agent.prompt}
+                    onRemove={removeAgent}
+                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                    size={agent.size}
+                    onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                    generatedImage={agent.generatedImage}
+                    onPromptChange={updateAgentPrompt}
+                    status={agent.status}
+                    model={agent.model}
+                    type={agent.type}
+                    connectedAgentId={agent.connectedAgentId}
+                    uploadedImageUrl={agent.uploadedImageUrl}
+                    activeImageUrl={agent.activeImageUrl}
+                    availableAgents={agents().map((a: any) => ({
+                      id: a.id,
+                      prompt: a.prompt,
+                      imageUrl: a.generatedImage
+                    }))}
+                    onConnectAgent={connectAgents}
+                    onDisconnectAgent={disconnectAgent}
+                    class={cn(
+                      "shadow-lg border-2 transition-all duration-200",
+                      isDragged() 
+                        ? "border-primary shadow-xl" 
+                        : isResizing()
+                        ? "border-secondary shadow-lg"
+                        : "border-transparent hover:border-muted-foreground/20"
+                    )}
+                  />
+                </div>
+              );
+            }}
+          </For>
+          </div>
+        </div>
+
+        {/* Status Bar */}
+        <div class="flex items-center justify-between px-4 py-2 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
+          <span>Drag agents around the canvas to organize your workspace</span>
+          <div class="flex items-center gap-4">
+            {/* Zoom Controls */}
+            <div class="flex items-center gap-1">
+              <Button
+                onClick={zoomOut}
+                size="sm"
+                variant="ghost"
+                disabled={viewport().zoom <= MIN_ZOOM}
+                class="h-6 w-6 p-0"
+                title="Zoom Out"
+              >
+                <span class="text-xs font-bold">−</span>
+              </Button>
+              <span class="text-xs text-muted-foreground min-w-12 text-center font-mono">
+                {Math.round(viewport().zoom * 100)}%
+              </span>
+              <Button
+                onClick={zoomIn}
+                size="sm"
+                variant="ghost"
+                disabled={viewport().zoom >= MAX_ZOOM}
+                class="h-6 w-6 p-0"
+                title="Zoom In"
+              >
+                <span class="text-xs font-bold">+</span>
+              </Button>
+              <Button
+                onClick={resetZoom}
+                size="sm"
+                variant="ghost"
+                disabled={viewport().zoom === 1.0}
+                class="h-6 w-6 p-0 ml-1"
+                title="Reset Zoom (100%)"
+              >
+                <Icon name="refresh-cw" class="h-2 w-2" />
               </Button>
             </div>
+            <span>•</span>
+            <span class="flex items-center gap-1">
+              <Icon name="mouse-pointer" class="h-3 w-3" />
+              Drag to move
+            </span>
           </div>
-        </Show>
-
-        <For each={agents()}>
-          {(agent) => {
-            // Memoize drag state to prevent unnecessary re-renders of other agents
-            const isDragged = () => dragHook.draggedAgent() === agent.id;
-            const isResizing = () => resizeHook.resizingAgent() === agent.id;
-            const zIndex = () => getAgentZIndex(agent.id, isDragged());
-            
-            return (
-              <div
-                class="absolute select-none"
-                style={{
-                  left: `${agent.position.x}px`,
-                  top: `${agent.position.y}px`,
-                  transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
-                  transition: isDragged() ? 'none' : 'transform 0.2s ease',
-                  'z-index': zIndex()
-                }}
-              >
-                <ImageAgent
-                  id={agent.id}
-                  prompt={agent.prompt}
-                  onRemove={removeAgent}
-                  onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                  size={agent.size}
-                  onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-                  generatedImage={agent.generatedImage}
-
-                  onPromptChange={updateAgentPrompt}
-                  status={agent.status}
-                  model={agent.model}
-                  type={agent.type}
-                  connectedAgentId={agent.connectedAgentId}
-                  uploadedImageUrl={agent.uploadedImageUrl}
-                  activeImageUrl={agent.activeImageUrl}
-                  availableAgents={agents().map((a: any) => ({
-                    id: a.id,
-                    prompt: a.prompt,
-                    imageUrl: a.generatedImage
-                  }))}
-                  onConnectAgent={connectAgents}
-                  onDisconnectAgent={disconnectAgent}
-                  class={cn(
-                    "shadow-lg border-2 transition-all duration-200",
-                    isDragged() 
-                      ? "border-primary shadow-xl" 
-                      : isResizing()
-                      ? "border-secondary shadow-lg"
-                      : "border-transparent hover:border-muted-foreground/20"
-                  )}
-                />
-              </div>
-            );
-          }}
-        </For>
-      </div>
-
-      {/* Status Bar */}
-      <div class="flex items-center justify-between px-4 py-2 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
-        <span>Drag agents around the canvas to organize your workspace</span>
-        <div class="flex items-center gap-4">
-          <span>Canvas: {agents().length} / ∞</span>
-          <span>•</span>
-          <span class="flex items-center gap-1">
-            <Icon name="mouse-pointer" class="h-3 w-3" />
-            Drag to move
-          </span>
         </div>
       </div>
-    </div>
     </ErrorBoundary>
   );
 }

@@ -13,6 +13,7 @@ export interface UseDragOptions {
   constrainToBounds?: boolean;
   agentWidth?: number;
   agentHeight?: number;
+  zoomLevel?: () => number; // Function to get current zoom level
 }
 
 export function useCanvasDrag(options: UseDragOptions = {}) {
@@ -23,6 +24,7 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     constrainToBounds = true,
     agentWidth = 320,
     agentHeight = 384,
+    zoomLevel,
   } = options;
 
   const [draggedAgent, setDraggedAgent] = createSignal<string | null>(null);
@@ -44,8 +46,14 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
     if (canvasEl) {
       const canvasRect = canvasEl.getBoundingClientRect();
-      const offsetX = e.clientX - (canvasRect.left + agentPosition.x);
-      const offsetY = e.clientY - (canvasRect.top + agentPosition.y);
+      const currentZoom = zoomLevel?.() || 1.0;
+      
+      // Convert agent position to screen coordinates (multiply by zoom)
+      const agentScreenX = agentPosition.x * currentZoom;
+      const agentScreenY = agentPosition.y * currentZoom;
+      
+      const offsetX = e.clientX - (canvasRect.left + agentScreenX);
+      const offsetY = e.clientY - (canvasRect.top + agentScreenY);
       setDragOffset({ x: offsetX, y: offsetY });
     }
 
@@ -63,15 +71,24 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
 
     const canvasRect = canvasEl.getBoundingClientRect();
     const offset = dragOffset();
+    const currentZoom = zoomLevel?.() || 1.0;
     
-    // Calculate new position relative to canvas
-    let newX = e.clientX - canvasRect.left - offset.x + canvasEl.scrollLeft;
-    let newY = e.clientY - canvasRect.top - offset.y + canvasEl.scrollTop;
+    // Calculate mouse position in screen coordinates
+    const screenX = e.clientX - canvasRect.left - offset.x + canvasEl.scrollLeft;
+    const screenY = e.clientY - canvasRect.top - offset.y + canvasEl.scrollTop;
+    
+    // Convert screen coordinates to content coordinates (divide by zoom)
+    let newX = screenX / currentZoom;
+    let newY = screenY / currentZoom;
 
-    // Constrain to canvas boundaries if enabled
+    // Constrain to canvas boundaries if enabled (in content space)
     if (constrainToBounds) {
-      const maxX = Math.max(0, canvasEl.clientWidth - agentWidth);
-      const maxY = Math.max(0, canvasEl.clientHeight - agentHeight);
+      // Calculate available content space
+      const contentWidth = canvasEl.clientWidth / currentZoom;
+      const contentHeight = canvasEl.clientHeight / currentZoom;
+      
+      const maxX = Math.max(0, contentWidth - agentWidth);
+      const maxY = Math.max(0, contentHeight - agentHeight);
       
       newX = Math.max(0, Math.min(newX, maxX));
       newY = Math.max(0, Math.min(newY, maxY));

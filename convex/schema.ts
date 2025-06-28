@@ -24,6 +24,11 @@ export default defineSchema({
     updatedAt: v.number(),
     shareId: v.optional(v.string()),
     isShareable: v.optional(v.boolean()),
+    viewport: v.optional(v.object({
+      x: v.number(),      // Pan X position (pixels)
+      y: v.number(),      // Pan Y position (pixels) 
+      zoom: v.number(),   // Zoom level (0.5 to 2.0)
+    })),
   }).index("by_userId", ["userId"])
     .index("by_shareId", ["shareId"]),
   agents: defineTable({

@@ -19,6 +19,11 @@ export const getCanvas = query({
       updatedAt: v.number(),
       shareId: v.optional(v.string()),
       isShareable: v.optional(v.boolean()),
+      viewport: v.optional(v.object({
+        x: v.number(),
+        y: v.number(),
+        zoom: v.number(),
+      })),
     }),
     v.null()
   ),
@@ -46,6 +51,11 @@ export const getCanvasById = query({
       updatedAt: v.number(),
       shareId: v.optional(v.string()),
       isShareable: v.optional(v.boolean()),
+      viewport: v.optional(v.object({
+        x: v.number(),
+        y: v.number(),
+        zoom: v.number(),
+      })),
     }),
     v.null()
   ),
@@ -105,6 +115,34 @@ export const updateCanvas = mutation({
     }
     
     await ctx.db.patch(canvasId, updates);
+    return null;
+  },
+});
+
+// Update canvas viewport (zoom and pan)
+export const updateCanvasViewport = mutation({
+  args: {
+    canvasId: v.id("canvases"),
+    viewport: v.object({
+      x: v.number(),
+      y: v.number(),
+      zoom: v.number(),
+    }),
+  },
+  returns: v.null(),
+  handler: async (ctx, { canvasId, viewport }) => {
+    // Constrain viewport values to safe bounds
+    const constrainedViewport = {
+      x: viewport.x, // Allow any pan position for now
+      y: viewport.y, // Allow any pan position for now
+      zoom: Math.max(0.5, Math.min(2.0, viewport.zoom)), // Constrain zoom
+    };
+    
+    await ctx.db.patch(canvasId, {
+      viewport: constrainedViewport,
+      updatedAt: Date.now(),
+    });
+    
     return null;
   },
 });
