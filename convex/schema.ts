@@ -22,7 +22,10 @@ export default defineSchema({
     userId: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_userId", ["userId"]),
+    shareId: v.optional(v.string()),
+    isShareable: v.optional(v.boolean()),
+  }).index("by_userId", ["userId"])
+    .index("by_shareId", ["shareId"]),
   agents: defineTable({
     canvasId: v.id("canvases"),
     userId: v.string(),
@@ -43,4 +46,14 @@ export default defineSchema({
     .index("by_canvas", ["canvasId"])
     .index("by_user", ["userId"])
     .index("by_connected_agent", ["connectedAgentId"]),
+  sharedCanvases: defineTable({
+    originalCanvasId: v.id("canvases"),
+    sharedWithUserId: v.string(),
+    sharedByUserId: v.string(),
+    joinedAt: v.number(),
+    isActive: v.boolean(),
+  })
+    .index("by_shared_with_user", ["sharedWithUserId", "isActive"])
+    .index("by_original_canvas", ["originalCanvasId", "isActive"])
+    .index("by_shared_by_user", ["sharedByUserId"]),
 }); 

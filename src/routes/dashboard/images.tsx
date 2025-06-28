@@ -1,19 +1,63 @@
-import { createFileRoute } from "@tanstack/solid-router";
+import { createFileRoute, useSearch, useRouteContext } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
 import { ImageCard } from "~/components/ImageCard";
 import { useUserImages } from "~/lib/images-actions";
-import { Show, For, createSignal } from "solid-js";
+import { Show, For, createSignal, createEffect } from "solid-js";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { convexClient, convexApi } from "~/lib/convex";
+import { toast } from 'solid-sonner';
+import { CanvasSelector } from '~/components/CanvasSelector';
 
 export const Route = createFileRoute('/dashboard/images')({
   component: ImagesPage,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      share: (search.share as string) || undefined,
+    } as { share?: string };
+  },
 });
 
 function ImagesPage() {
   const imagesQuery = useUserImages();
   const [activeTab, setActiveTab] = createSignal("canvas");
+  const search = useSearch({ from: '/dashboard/images' });
+  const context = useRouteContext({ from: '/dashboard' });
+  const userId = () => context()?.session?.user?.id;
+  
+  // Track active canvas ID (null = default canvas, string = specific canvas)
+  const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
+  
+  // Handle share parameter on mount
+  createEffect(() => {
+    const shareId = search().share;
+    if (shareId && userId()) {
+      handleJoinSharedCanvas(shareId as string);
+    }
+  });
+  
+  const handleJoinSharedCanvas = async (shareId: string) => {
+    try {
+      const canvasId = await convexClient.mutation(convexApi.canvas.joinSharedCanvas, {
+        shareId,
+        userId: userId()!,
+      });
+      
+      if (canvasId) {
+        // Set the active canvas to the shared canvas
+        setActiveCanvasId(canvasId);
+        toast.success('Successfully joined shared canvas!');
+        // Remove share parameter from URL
+        window.history.replaceState({}, '', '/dashboard/images');
+      } else {
+        toast.error('Canvas not found or no longer shareable');
+      }
+    } catch (error) {
+      console.error('Failed to join canvas:', error);
+      toast.error('Failed to join shared canvas');
+    }
+  };
   
   return (
     <div class="h-full flex flex-col">
@@ -21,11 +65,21 @@ function ImagesPage() {
       <div class="flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div class="container mx-auto max-w-7xl px-4 py-4">
           <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-2xl font-semibold mb-1">AI Image Studio</h1>
-              <p class="text-muted-foreground text-sm">
-                Create and organize AI-generated images with intelligent agents
-              </p>
+            <div class="flex items-center gap-4">
+              <div>
+                <h1 class="text-2xl font-semibold mb-1">AI Image Studio</h1>
+                <p class="text-muted-foreground text-sm">
+                  Create and organize AI-generated images with intelligent agents
+                </p>
+              </div>
+              
+              <div class="border-l pl-4 ml-4">
+                <div class="text-xs text-muted-foreground mb-1">Canvas</div>
+                <CanvasSelector
+                  activeCanvasId={activeCanvasId()}
+                  onCanvasChange={setActiveCanvasId}
+                />
+              </div>
             </div>
             
             <Tabs value={activeTab()} onChange={setActiveTab}>
@@ -48,7 +102,7 @@ function ImagesPage() {
       <div class="flex-1 overflow-hidden">
         <Tabs value={activeTab()} class="h-full flex flex-col">
           <TabsContent value="canvas" class="flex-1 m-0 p-0">
-            <ImageCanvas class="h-full" />
+            <ImageCanvas class="h-full" activeCanvasId={activeCanvasId()} />
           </TabsContent>
           
           <TabsContent value="history" class="h-full m-0 p-4">

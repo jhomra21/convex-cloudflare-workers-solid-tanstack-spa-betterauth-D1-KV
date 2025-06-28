@@ -4,7 +4,7 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
-| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" | "circle-x" | "upload";
+| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" | "circle-x" | "upload" | "share" | "copy" | "users" | "chevron-down";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -318,6 +318,35 @@ const UploadIcon = (props: ComponentProps<"svg">) => (
   </svg>
 );
 
+const ShareIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 1 1 0-2.684m0 2.684 6.632 3.316m-6.632-6 6.632-3.316m0 0a3 3 0 1 1 5.367-2.684 3 3 0 0 1-5.367 2.684zm0 9.316a3 3 0 1 1 5.367 2.684 3 3 0 0 1-5.367-2.684z"/>
+  </svg>
+);
+
+const CopyIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </svg>
+);
+
+const UsersIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="m22 21-3.5-3.5"/>
+    <path d="m17 17 5 5"/>
+    <circle cx="20" cy="8" r="3"/>
+  </svg>
+);
+
+const ChevronDownIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="m6 9 6 6 6-6"/>
+  </svg>
+);
+
 export const Icon = (props: IconProps) => {
   const [local, others] = splitProps(props, ["name", "class", "width", "height"]);
   
@@ -461,6 +490,18 @@ export const Icon = (props: IconProps) => {
       </Match>
       <Match when={local.name === "upload"}>
         <UploadIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "share"}>
+        <ShareIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "copy"}>
+        <CopyIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "users"}>
+        <UsersIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "chevron-down"}>
+        <ChevronDownIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
     </Switch>
   );

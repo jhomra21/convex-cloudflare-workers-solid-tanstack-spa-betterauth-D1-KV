@@ -9,6 +9,7 @@ import { useRouteContext } from '@tanstack/solid-router';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
+import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
 
 class Agent {
   constructor(
@@ -28,6 +29,7 @@ class Agent {
 
 export interface ImageCanvasProps {
   class?: string;
+  activeCanvasId?: string | null; // null = use default canvas, string = use specific canvas
 }
 
 export function ImageCanvas(props: ImageCanvasProps) {
@@ -35,11 +37,19 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const context = useRouteContext({ from: '/dashboard' });
   const userId = createMemo(() => context()?.session?.user?.id);
   
-  // Convex queries
-  const canvas = useQuery(
+  // Convex queries - choose query based on activeCanvasId
+  const defaultCanvas = useQuery(
     convexApi.canvas.getCanvas,
-    () => userId() ? { userId: userId()! } : undefined
+    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : undefined
   );
+  
+  const specificCanvas = useQuery(
+    convexApi.canvas.getCanvasById,
+    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : undefined
+  );
+  
+  // Use the appropriate canvas
+  const canvas = createMemo(() => props.activeCanvasId ? specificCanvas() : defaultCanvas());
   const dbAgents = useQuery(
     convexApi.agents.getCanvasAgents,
     () => canvas()?._id ? { canvasId: canvas()!._id } : undefined
@@ -349,6 +359,18 @@ export function ImageCanvas(props: ImageCanvasProps) {
           <span class="text-sm text-muted-foreground">
             {agents().length} agent{agents().length !== 1 ? 's' : ''}
           </span>
+          <Show when={props.activeCanvasId}>
+            <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-md">
+              <Icon name="users" class="h-3 w-3" />
+              <span>Shared Canvas</span>
+            </div>
+          </Show>
+          <Show when={!props.activeCanvasId && canvas()?.isShareable}>
+            <div class="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs rounded-md">
+              <Icon name="share" class="h-3 w-3" />
+              <span>Sharing Enabled</span>
+            </div>
+          </Show>
         </div>
         <div class="flex items-center gap-2">
           <Button
@@ -368,6 +390,25 @@ export function ImageCanvas(props: ImageCanvasProps) {
             <Icon name="edit" class="h-4 w-4" />
             Edit Agent
           </Button>
+          
+          <ShareCanvasDialog
+            canvasId={canvas()?._id}
+            canvasName={canvas()?.name}
+            currentShareId={canvas()?.shareId}
+            isShareable={canvas()?.isShareable}
+          >
+            <Button
+              size="sm"
+              variant={canvas()?.isShareable ? "default" : "outline"}
+              class={cn(
+                "flex items-center gap-2",
+                canvas()?.isShareable && "bg-blue-600 hover:bg-blue-700 border-blue-600"
+              )}
+            >
+              <Icon name={canvas()?.isShareable ? "users" : "share"} class="h-4 w-4" />
+              {canvas()?.isShareable ? "Shared" : "Share"}
+            </Button>
+          </ShareCanvasDialog>
           <Button
             onClick={async () => {
               if (!canvas()?._id) return;
