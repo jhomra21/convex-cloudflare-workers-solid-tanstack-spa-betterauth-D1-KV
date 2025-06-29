@@ -315,7 +315,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Create in Convex
-      await createAgentMutation.mutate(convexApi.agents.createAgent, {
+      const result = await createAgentMutation.mutate(convexApi.agents.createAgent, {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
@@ -325,6 +325,10 @@ export function ImageCanvas(props: ImageCanvasProps) {
         height: 384,
         type,
       });
+      
+      // Note: Convex queries update automatically via real-time subscriptions
+      // Small delay helps ensure the agent is available for dragging
+      console.log('Agent created successfully:', result);
       
     } catch (error) {
       console.error('Failed to create agent:', error);
@@ -530,8 +534,25 @@ export function ImageCanvas(props: ImageCanvasProps) {
   
   // Mouse down handler for agent dragging
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
-    const agent = agents().find(a => a.id === agentId);
-    if (!agent) return;
+    // First check if agent exists in raw database data
+    const rawAgent = dbAgents.data()?.find((a: any) => a._id === agentId);
+    if (!rawAgent) {
+      console.warn('Agent not found in database yet:', agentId);
+      return;
+    }
+    
+    // Then get the processed agent with optimistic updates
+    const currentAgents = agents();
+    const agent = currentAgents.find(a => a.id === agentId);
+    if (!agent) {
+      console.error('Agent found in DB but not in processed agents array!', {
+        agentId,
+        rawAgent: !!rawAgent,
+        totalAgents: currentAgents.length,
+        agentIds: currentAgents.map(a => a.id)
+      });
+      return;
+    }
     
     bringAgentToFront(agentId);
     dragHook.handleMouseDown(e, agentId, agent.position);
