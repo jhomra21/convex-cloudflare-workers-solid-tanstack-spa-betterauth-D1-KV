@@ -36,7 +36,6 @@ async function updateAgentImageAndStatus(
       agentId: agentId as any, // Cast to handle Convex ID type
       imageUrl,
     });
-    console.log(`✅ Set agent image and status to ${status}:`, agentId);
   } catch (error) {
     console.error(`❌ Failed to update agent image and status:`, agentId, error);
   }
@@ -80,7 +79,6 @@ imagesApi.post('/edit', async (c) => {
       return c.json({ error: 'Database service not configured' }, 500);
     }
 
-    console.log('🎨 Using FAL AI for image editing with model:', model);
     
     let imageBuffer;
     let base64Image;
@@ -117,7 +115,6 @@ imagesApi.post('/edit', async (c) => {
       }
 
       const falResult = await falResponse.json() as any;
-      console.log('✅ FAL AI editing response received');
 
       // Extract image data from FAL response
       if (falResult.images && falResult.images.length > 0) {
@@ -129,7 +126,6 @@ imagesApi.post('/edit', async (c) => {
           const base64Data = imageDataUri.split(',')[1];
           base64Image = base64Data;
           imageBuffer = Buffer.from(base64Data, 'base64');
-          console.log('✅ Extracted base64 data from FAL AI data URI');
         } else {
           // Fallback: download from URL (in case it's still a remote URL)
           const imageResponse = await fetch(imageDataUri);
@@ -139,7 +135,6 @@ imagesApi.post('/edit', async (c) => {
           
           imageBuffer = await imageResponse.arrayBuffer();
           base64Image = Buffer.from(imageBuffer).toString('base64');
-          console.log('✅ Downloaded edited image from FAL AI URL');
         }
       } else {
         console.error('❌ No images in FAL editing response:', falResult);
@@ -170,7 +165,6 @@ imagesApi.post('/edit', async (c) => {
     try {
       const verification = await c.env.convex_cf_workers_images_test.head(filename);
     } catch (verifyError) {
-      console.log('❌ R2 verification failed:', verifyError.message);
     }
 
     // Create a public URL using R2 public domain
@@ -266,7 +260,6 @@ imagesApi.post('/', async (c) => {
         return c.json({ error: 'FAL AI service not configured' }, 500);
       }
 
-      console.log('🎨 Using FAL AI for model:', model);
       
       try {
         const falResponse = await fetch('https://fal.run/' + model, {
@@ -310,7 +303,6 @@ imagesApi.post('/', async (c) => {
             const base64Data = imageDataUri.split(',')[1];
             base64Image = base64Data;
             imageBuffer = Buffer.from(base64Data, 'base64');
-            console.log('✅ Extracted base64 data from FAL AI data URI');
           } else {
             // Fallback: download from URL (in case it's still a remote URL)
             const imageResponse = await fetch(imageDataUri);
@@ -320,7 +312,6 @@ imagesApi.post('/', async (c) => {
             
             imageBuffer = await imageResponse.arrayBuffer();
             base64Image = Buffer.from(imageBuffer).toString('base64');
-            console.log('✅ Downloaded image from FAL AI URL');
           }
         } else {
           console.error('❌ No images in FAL response:', falResult);
@@ -339,7 +330,6 @@ imagesApi.post('/', async (c) => {
         num_steps: steps,
         seed: seed || Math.floor(Math.random() * 4294967295),
       });
-      console.log('✅ Workers AI raw response type:', typeof result, result.constructor.name);
 
       // Handle different response formats from Workers AI
       if (result instanceof ReadableStream) {
@@ -372,7 +362,6 @@ imagesApi.post('/', async (c) => {
     try {
       const verification = await c.env.convex_cf_workers_images_test.head(filename);
     } catch (verifyError) {
-      console.log('❌ R2 verification failed:', verifyError.message);
     }
 
     // Create a public URL using R2 public domain

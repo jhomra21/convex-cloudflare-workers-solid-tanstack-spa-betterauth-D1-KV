@@ -1,19 +1,26 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
+import {
+  screenToContent,
+  constrainToCanvasBounds,
+  getCanvasElement,
+  createCoordinateTransformer,
+  type Position,
+  type Size,
+} from '~/lib/utils/canvas-coordinates';
 
 export interface DragState {
   draggedAgent: string | null;
-  dragOffset: { x: number; y: number };
+  dragOffset: Position;
   isDragging: boolean;
 }
 
 export interface UseDragOptions {
   onDragStart?: (agentId: string) => void;
-  onDragMove?: (agentId: string, position: { x: number; y: number }) => void;
+  onDragMove?: (agentId: string, position: Position) => void;
   onDragEnd?: (agentId: string) => void;
   constrainToBounds?: boolean;
-  agentWidth?: number;
-  agentHeight?: number;
-  zoomLevel?: () => number; // Function to get current zoom level
+  agentSize?: Size;
+  zoomLevel?: () => number;
 }
 
 export function useCanvasDrag(options: UseDragOptions = {}) {
@@ -22,103 +29,87 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     onDragMove,
     onDragEnd,
     constrainToBounds = true,
-    agentWidth = 320,
-    agentHeight = 384,
+    agentSize = { width: 320, height: 384 },
     zoomLevel,
   } = options;
 
   const [draggedAgent, setDraggedAgent] = createSignal<string | null>(null);
-  const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = createSignal<Position>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = createSignal(false);
+  
+  // Track active event listeners for cleanup
+  let isListening = false;
 
   const handleMouseDown = (
     e: MouseEvent,
     agentId: string,
-    agentPosition: { x: number; y: number }
+    agentPosition: Position
   ) => {
     e.preventDefault();
+    
+    const canvasEl = getCanvasElement();
+    if (!canvasEl) return;
     
     setDraggedAgent(agentId);
     setIsDragging(true);
     onDragStart?.(agentId);
     
-    // Calculate offset from mouse to agent's top-left corner
-    const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
-    if (canvasEl) {
-      const canvasRect = canvasEl.getBoundingClientRect();
-      const currentZoom = zoomLevel?.() || 1.0;
-      
-      // Calculate center-based scaling offset
-      const containerWidth = canvasEl.clientWidth;
-      const containerHeight = canvasEl.clientHeight;
-      const scaledWidth = containerWidth * currentZoom;
-      const scaledHeight = containerHeight * currentZoom;
-      const centerOffsetX = (containerWidth - scaledWidth) / 2;
-      const centerOffsetY = (containerHeight - scaledHeight) / 2;
-      
-      // Convert agent position to screen coordinates accounting for center scaling
-      const agentScreenX = centerOffsetX + (agentPosition.x * currentZoom);
-      const agentScreenY = centerOffsetY + (agentPosition.y * currentZoom);
-      
-      const offsetX = e.clientX - (canvasRect.left + agentScreenX);
-      const offsetY = e.clientY - (canvasRect.top + agentScreenY);
-      setDragOffset({ x: offsetX, y: offsetY });
-    }
+    // Calculate offset using shared coordinate utilities
+    const canvasRect = canvasEl.getBoundingClientRect();
+    const currentZoom = zoomLevel?.() || 1.0;
+    const containerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
+    
+    const transformer = createCoordinateTransformer(canvasRect, containerSize, currentZoom);
+    const agentScreenPos = transformer.toScreen(agentPosition);
+    
+    const offsetX = e.clientX - agentScreenPos.x;
+    const offsetY = e.clientY - agentScreenPos.y;
+    setDragOffset({ x: offsetX, y: offsetY });
 
-    // Add global mouse move and up listeners
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    // Add global mouse move and up listeners with tracking
+    if (!isListening) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      // Add cleanup for interrupted operations
+      document.addEventListener('visibilitychange', handleInterruption);
+      window.addEventListener('beforeunload', handleInterruption);
+      isListening = true;
+    }
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     const agentId = draggedAgent();
     if (!agentId || !isDragging()) return;
 
-    const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
+    const canvasEl = getCanvasElement();
     if (!canvasEl) return;
 
-    const canvasRect = canvasEl.getBoundingClientRect();
     const offset = dragOffset();
     const currentZoom = zoomLevel?.() || 1.0;
+    const canvasRect = canvasEl.getBoundingClientRect();
+    const containerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
     
-    // Calculate mouse position in screen coordinates
-    const screenX = e.clientX - canvasRect.left - offset.x + canvasEl.scrollLeft;
-    const screenY = e.clientY - canvasRect.top - offset.y + canvasEl.scrollTop;
+    // Calculate mouse position adjusting for drag offset
+    const mouseScreenPos = {
+      x: e.clientX - offset.x,
+      y: e.clientY - offset.y,
+    };
     
-    // Calculate center-based scaling offset
-    const containerWidth = canvasEl.clientWidth;
-    const containerHeight = canvasEl.clientHeight;
-    const scaledWidth = containerWidth * currentZoom;
-    const scaledHeight = containerHeight * currentZoom;
-    const centerOffsetX = (containerWidth - scaledWidth) / 2;
-    const centerOffsetY = (containerHeight - scaledHeight) / 2;
+    const scrollOffset = {
+      x: canvasEl.scrollLeft,
+      y: canvasEl.scrollTop,
+    };
     
-    // Convert screen coordinates to content coordinates accounting for center scaling
-    let newX = (screenX - centerOffsetX) / currentZoom;
-    let newY = (screenY - centerOffsetY) / currentZoom;
+    // Convert to content coordinates using shared utilities
+    const transformer = createCoordinateTransformer(canvasRect, containerSize, currentZoom);
+    let newPosition = transformer.toContent(mouseScreenPos, scrollOffset);
 
-    // Constrain to canvas boundaries if enabled (in content space)
+    // Constrain to canvas boundaries if enabled
     if (constrainToBounds) {
-      // Calculate available content space accounting for center scaling
-      const contentWidth = canvasEl.clientWidth / currentZoom;
-      const contentHeight = canvasEl.clientHeight / currentZoom;
-      
-      // When zoomed out, center scaling creates negative coordinate space
-      // We need to account for the offset in our boundaries
-      const centerOffsetInContentSpace = centerOffsetX / currentZoom;
-      const centerOffsetYInContentSpace = centerOffsetY / currentZoom;
-      
-      // Boundaries in content space (can go negative when zoomed out)
-      const minX = -centerOffsetInContentSpace;
-      const minY = -centerOffsetYInContentSpace;
-      const maxX = minX + contentWidth - agentWidth;
-      const maxY = minY + contentHeight - agentHeight;
-      
-      newX = Math.max(minX, Math.min(newX, maxX));
-      newY = Math.max(minY, Math.min(newY, maxY));
+      newPosition = transformer.constrainBounds(newPosition, agentSize);
     }
 
-    onDragMove?.(agentId, { x: newX, y: newY });
+    onDragMove?.(agentId, newPosition);
   };
 
   const handleMouseUp = () => {
@@ -127,19 +118,48 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     setDraggedAgent(null);
     setIsDragging(false);
     
-    // Remove global listeners
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    removeEventListeners();
     
     if (draggedId) {
       onDragEnd?.(draggedId);
     }
   };
 
+  const handleInterruption = () => {
+    // Clean up if drag is interrupted (page visibility change, beforeunload, etc.)
+    if (isDragging()) {
+      const draggedId = draggedAgent();
+      setDraggedAgent(null);
+      setIsDragging(false);
+      
+      removeEventListeners();
+      
+      if (draggedId) {
+        onDragEnd?.(draggedId);
+      }
+    }
+  };
+
+  const removeEventListeners = () => {
+    if (isListening) {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('visibilitychange', handleInterruption);
+      window.removeEventListener('beforeunload', handleInterruption);
+      isListening = false;
+    }
+  };
+
+  // Cleanup on component unmount
+  onCleanup(() => {
+    removeEventListeners();
+  });
+
   return {
     draggedAgent,
     isDragging,
     handleMouseDown,
     handleMouseUp, // Export for manual cleanup
+    cleanup: removeEventListeners, // Export cleanup function
   };
 }

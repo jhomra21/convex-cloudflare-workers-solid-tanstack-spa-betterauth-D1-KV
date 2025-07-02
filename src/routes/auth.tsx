@@ -74,7 +74,7 @@ function AuthPage() {
 
       // Don't navigate if we're currently in an OAuth callback flow
       if (window.location.pathname.includes('/auth/callback')) {
-        console.log('Skipping navigation - in OAuth callback flow');
+        // console.log('Skipping navigation - in OAuth callback flow');
         return;
       }
 

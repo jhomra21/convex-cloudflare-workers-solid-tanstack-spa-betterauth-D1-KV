@@ -1,15 +1,16 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
+import { type Position, type Size } from '~/lib/utils/canvas-coordinates';
 
 export interface ResizeState {
   resizingAgent: string | null;
   resizeHandle: string | null;
-  resizeStartSize: { width: number; height: number };
-  resizeStartPos: { x: number; y: number };
+  resizeStartSize: Size;
+  resizeStartPos: Position;
 }
 
 export interface UseResizeOptions {
   onResizeStart?: (agentId: string, handle: string) => void;
-  onResizeMove?: (agentId: string, size: { width: number; height: number }, position?: { x: number; y: number }) => void;
+  onResizeMove?: (agentId: string, size: Size, position?: Position) => void;
   onResizeEnd?: (agentId: string) => void;
   minWidth?: number;
   maxWidth?: number;
@@ -30,14 +31,17 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
 
   const [resizingAgent, setResizingAgent] = createSignal<string | null>(null);
   const [resizeHandle, setResizeHandle] = createSignal<string | null>(null);
-  const [resizeStartSize, setResizeStartSize] = createSignal({ width: 0, height: 0 });
-  const [resizeStartPos, setResizeStartPos] = createSignal({ x: 0, y: 0 });
+  const [resizeStartSize, setResizeStartSize] = createSignal<Size>({ width: 0, height: 0 });
+  const [resizeStartPos, setResizeStartPos] = createSignal<Position>({ x: 0, y: 0 });
+  
+  // Track active event listeners for cleanup
+  let isListening = false;
 
   const handleResizeStart = (
     e: MouseEvent,
     agentId: string,
     handle: string,
-    currentSize: { width: number; height: number }
+    currentSize: Size
   ) => {
     e.preventDefault();
     e.stopPropagation(); // Prevent drag from starting
@@ -49,9 +53,15 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     
     onResizeStart?.(agentId, handle);
 
-    // Add global mouse move listener for resize
-    document.addEventListener('mousemove', handleResizeMove);
-    document.addEventListener('mouseup', handleResizeEnd);
+    // Add global mouse move listener for resize with tracking
+    if (!isListening) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      // Add cleanup for interrupted operations
+      document.addEventListener('visibilitychange', handleInterruption);
+      window.addEventListener('beforeunload', handleInterruption);
+      isListening = true;
+    }
   };
 
   const handleResizeMove = (e: MouseEvent) => {
@@ -93,7 +103,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
 
     // Calculate position adjustment for left/top handles
-    let positionAdjustment: { x: number; y: number } | undefined;
+    let positionAdjustment: Position | undefined;
     if (handle.includes('w') || handle.includes('n')) {
       positionAdjustment = { x: 0, y: 0 };
       
@@ -114,19 +124,48 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     setResizingAgent(null);
     setResizeHandle(null);
     
-    // Remove global listeners
-    document.removeEventListener('mousemove', handleResizeMove);
-    document.removeEventListener('mouseup', handleResizeEnd);
+    removeEventListeners();
     
     if (resizingId) {
       onResizeEnd?.(resizingId);
     }
   };
 
+  const handleInterruption = () => {
+    // Clean up if resize is interrupted (page visibility change, beforeunload, etc.)
+    if (resizingAgent()) {
+      const resizingId = resizingAgent();
+      setResizingAgent(null);
+      setResizeHandle(null);
+      
+      removeEventListeners();
+      
+      if (resizingId) {
+        onResizeEnd?.(resizingId);
+      }
+    }
+  };
+
+  const removeEventListeners = () => {
+    if (isListening) {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.removeEventListener('visibilitychange', handleInterruption);
+      window.removeEventListener('beforeunload', handleInterruption);
+      isListening = false;
+    }
+  };
+
+  // Cleanup on component unmount
+  onCleanup(() => {
+    removeEventListeners();
+  });
+
   return {
     resizingAgent,
     resizeHandle,
     handleResizeStart,
     handleResizeEnd, // Export for manual cleanup
+    cleanup: removeEventListeners, // Export cleanup function
   };
 }

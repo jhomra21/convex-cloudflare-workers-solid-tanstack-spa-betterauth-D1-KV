@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, createMemo } from 'solid-js';
+import { createSignal, For, Show, createEffect, createMemo, onCleanup } from 'solid-js';
 import { ImageAgent } from './ImageAgent';
 import { AgentConnection } from './AgentConnection';
 import { AgentToolbar } from './AgentToolbar';
@@ -11,6 +11,12 @@ import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
+import { 
+  calculateGridPosition, 
+  getCanvasElement,
+  type Position,
+  type Size
+} from '~/lib/utils/canvas-coordinates';
 
 /**
  * Agent data model used for rendering on canvas
@@ -19,8 +25,8 @@ class Agent {
   constructor(
     public id: string,
     public prompt: string = '',
-    public position: { x: number; y: number } = { x: 0, y: 0 },
-    public size: { width: number; height: number } = { width: 320, height: 384 },
+    public position: Position = { x: 0, y: 0 },
+    public size: Size = { width: 320, height: 384 },
     public generatedImage: string = '',
     public status: 'idle' | 'processing' | 'success' | 'failed' = 'idle',
     public model: 'normal' | 'pro' = 'normal',
@@ -58,8 +64,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit'>('none');
   
   // Agent transform state (position and size during drag/resize operations)
-  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, { x: number; y: number }>>(new Map());
-  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, { width: number; height: number }>>(new Map());
+  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, Position>>(new Map());
+  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, Size>>(new Map());
   
   // Z-index management for proper agent stacking
   const [maxZIndex, setMaxZIndex] = createSignal(1);
@@ -209,13 +215,15 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   });
 
-  // Convert Convex agents to Agent objects for rendering with optimistic updates
-  const agents = () => {
-    if (!dbAgents.data()) return [];
+  // Memoized agent processing to avoid unnecessary recalculations
+  const agents = createMemo(() => {
+    const agentData = dbAgents.data();
+    if (!agentData) return [];
+    
     const positions = optimisticPositions();
     const sizes = optimisticSizes();
     
-    return dbAgents.data()!.map((agent: any) => {
+    return agentData.map((agent: any) => {
       // Use optimistic position/size if available, otherwise use database values
       const optimisticPos = positions.get(agent._id);
       const optimisticSize = sizes.get(agent._id);
@@ -235,16 +243,19 @@ export function ImageCanvas(props: ImageCanvasProps) {
         0 // _version
       );
     });
-  };
+  });
   
-  // Find pairs of connected agents
+  // Memoized connection pairs calculation - only recalculates when agents change
   const connectedAgentPairs = createMemo(() => {
-    const result = [];
     const agentsList = agents();
+    const result = [];
+    
+    // Create a map for faster lookups
+    const agentMap = new Map(agentsList.map(agent => [agent.id, agent]));
     
     for (const agent of agentsList) {
       if (agent.type === 'image-edit' && agent.connectedAgentId) {
-        const sourceAgent = agentsList.find(a => a.id === agent.connectedAgentId);
+        const sourceAgent = agentMap.get(agent.connectedAgentId);
         if (sourceAgent) {
           result.push({
             source: sourceAgent,
@@ -268,49 +279,21 @@ export function ImageCanvas(props: ImageCanvasProps) {
     // Set the active agent type for UI cues only
     setActiveAgentType(type === 'image-generate' ? 'generate' : 'edit');
     
-    // Smart positioning based on available canvas space
-    const canvasEl = document.querySelector('.canvas-container') as HTMLElement;
-    const agentWidth = 320; // w-80 = 320px
-    const agentHeight = 384; // h-96 = 384px
-    const padding = 20; // Minimum padding from edges
+    // Smart positioning using shared utilities
+    const canvasEl = getCanvasElement();
+    const agentSize: Size = { width: 320, height: 384 };
+    const padding = 20;
     
-    let newX = padding;
-    let newY = padding;
+    let newPosition: Position = { x: padding, y: padding };
     
     if (canvasEl) {
-      const canvasWidth = canvasEl.clientWidth;
-      const canvasHeight = canvasEl.clientHeight;
-      
-      // Calculate how many agents can fit in each direction
-      const agentsPerRow = Math.floor((canvasWidth - padding * 2) / (agentWidth + padding));
-      const agentsPerCol = Math.floor((canvasHeight - padding * 2) / (agentHeight + padding));
-      const totalSlotsAvailable = agentsPerRow * agentsPerCol;
+      const containerSize: Size = { 
+        width: canvasEl.clientWidth, 
+        height: canvasEl.clientHeight 
+      };
       
       const existingAgents = agents().length;
-      
-      if (existingAgents < totalSlotsAvailable) {
-        // We have space - use normal grid positioning
-        const gridCol = existingAgents % agentsPerRow;
-        const gridRow = Math.floor(existingAgents / agentsPerRow);
-        
-        newX = padding + (gridCol * (agentWidth + padding));
-        newY = padding + (gridRow * (agentHeight + padding));
-      } else {
-        // No space - place with slight overlap over existing agents
-        const overlapOffset = 30; // Small offset for overlapping
-        const baseAgentIndex = existingAgents % totalSlotsAvailable;
-        const overlapLayer = Math.floor(existingAgents / totalSlotsAvailable);
-        
-        const gridCol = baseAgentIndex % agentsPerRow;
-        const gridRow = Math.floor(baseAgentIndex / agentsPerRow);
-        
-        newX = padding + (gridCol * (agentWidth + padding)) + (overlapLayer * overlapOffset);
-        newY = padding + (gridRow * (agentHeight + padding)) + (overlapLayer * overlapOffset);
-        
-        // Ensure we don't go outside canvas bounds even with overlap
-        newX = Math.min(newX, canvasWidth - agentWidth - padding);
-        newY = Math.min(newY, canvasHeight - agentHeight - padding);
-      }
+      newPosition = calculateGridPosition(containerSize, agentSize, existingAgents, padding);
     }
     
     try {
@@ -319,16 +302,16 @@ export function ImageCanvas(props: ImageCanvasProps) {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
-        positionX: newX,
-        positionY: newY,
-        width: 320,
-        height: 384,
+        positionX: newPosition.x,
+        positionY: newPosition.y,
+        width: agentSize.width,
+        height: agentSize.height,
         type,
       });
       
       // Note: Convex queries update automatically via real-time subscriptions
       // Small delay helps ensure the agent is available for dragging
-      console.log('Agent created successfully:', result);
+      // console.log('Agent created successfully:', result);
       
     } catch (error) {
       console.error('Failed to create agent:', error);
@@ -395,8 +378,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Save transform (position and size) to database with debounce
   const saveAgentTransform = (
     agentId: string, 
-    position: { x: number; y: number }, 
-    size: { width: number; height: number }
+    position: Position, 
+    size: Size
   ) => {
     if (!canvas()?._id) return;
     
@@ -439,7 +422,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   };
   
   // Update agent position with optimistic update
-  const updateAgentPosition = (id: string, position: { x: number; y: number }) => {
+  const updateAgentPosition = (id: string, position: Position) => {
     setOptimisticPositions(prev => new Map(prev).set(id, position));
     
     const agent = agents().find(a => a.id === id);
@@ -449,7 +432,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   };
   
   // Update agent size with optimistic update
-  const updateAgentSize = (id: string, size: { width: number; height: number }) => {
+  const updateAgentSize = (id: string, size: Size) => {
     setOptimisticSizes(prev => new Map(prev).set(id, size));
     
     const agent = agents().find(a => a.id === id);
@@ -502,7 +485,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
         saveAgentTransform(agentId, agent.position, agent.size);
       }
     },
-    constrainToBounds: true, // Using stable parent container for boundaries
+    constrainToBounds: true,
+    agentSize: { width: 320, height: 384 },
     zoomLevel: () => viewport().zoom,
   });
 
@@ -512,7 +496,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       if (positionAdjustment) {
         const agent = agents().find(a => a.id === agentId);
         if (agent) {
-          const newPos = {
+          const newPos: Position = {
             x: agent.position.x + positionAdjustment.x,
             y: agent.position.y + positionAdjustment.y,
           };
@@ -526,6 +510,17 @@ export function ImageCanvas(props: ImageCanvasProps) {
         saveAgentTransform(agentId, agent.position, agent.size);
       }
     },
+  });
+
+  // Cleanup timeouts on unmount
+  onCleanup(() => {
+    if (viewportSaveTimeout) {
+      clearTimeout(viewportSaveTimeout);
+    }
+    
+    // Clear all debounced save timeouts
+    debouncedSaves.forEach(timeout => clearTimeout(timeout));
+    debouncedSaves.clear();
   });
 
   // =============================================
@@ -660,10 +655,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
           {/* Agents */}
           <For each={agents()}>
             {(agent) => {
-              // Memoize drag state to prevent unnecessary re-renders of other agents
-              const isDragged = () => dragHook.draggedAgent() === agent.id;
-              const isResizing = () => resizeHook.resizingAgent() === agent.id;
-              const zIndex = () => getAgentZIndex(agent.id, isDragged());
+              // Memoize expensive calculations per agent to prevent unnecessary re-renders
+              const agentState = createMemo(() => {
+                const isDragged = dragHook.draggedAgent() === agent.id;
+                const isResizing = resizeHook.resizingAgent() === agent.id;
+                const zIndex = getAgentZIndex(agent.id, isDragged);
+                
+                return {
+                  isDragged,
+                  isResizing,
+                  zIndex,
+                  transform: isDragged ? 'scale(1.05)' : 'scale(1)',
+                  transition: isDragged ? 'none' : 'transform 0.2s ease',
+                };
+              });
               
               return (
                 <div
@@ -671,9 +676,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   style={{
                     left: `${agent.position.x}px`,
                     top: `${agent.position.y}px`,
-                    transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
-                    transition: isDragged() ? 'none' : 'transform 0.2s ease',
-                    'z-index': zIndex()
+                    transform: agentState().transform,
+                    transition: agentState().transition,
+                    'z-index': agentState().zIndex
                   }}
                 >
                   <ImageAgent
@@ -700,9 +705,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
                     onDisconnectAgent={disconnectAgent}
                     class={cn(
                       "shadow-lg border-2 transition-all duration-200",
-                      isDragged() 
+                      agentState().isDragged 
                         ? "border-primary shadow-xl" 
-                        : isResizing()
+                        : agentState().isResizing
                         ? "border-secondary shadow-lg"
                         : "border-transparent hover:border-muted-foreground/20"
                     )}
