@@ -1,5 +1,6 @@
 import { createSignal, For, Show, createEffect, createMemo, onCleanup } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
+import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { AgentConnection } from './AgentConnection';
 import { AgentToolbar } from './AgentToolbar';
 import { Button } from '~/components/ui/button';
@@ -50,7 +51,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   });
   
   // UI state
-  const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit'>('none');
+  const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice'>('none');
   
   // Agent transform state (position and size during drag/resize operations)
   const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, Position>>(new Map());
@@ -59,6 +60,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Z-index management for proper agent stacking
   const [maxZIndex, setMaxZIndex] = createSignal(1);
   const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
+  const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
   
   // =============================================
   // Data Fetching
@@ -204,6 +206,28 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   });
 
+  // Bring newly created agents to front
+  createEffect(() => {
+    const currentAgents = dbAgents.data();
+    if (!currentAgents) return;
+    
+    const currentAgentIds = new Set(currentAgents.map((a: any) => a._id));
+    const prevIds = previousAgentIds();
+    
+    // Find new agents (ids that are in current but not in previous)
+    const newAgentIds = currentAgents
+      .map((a: any) => a._id)
+      .filter((id: string) => !prevIds.has(id));
+    
+    // Bring new agents to front
+    newAgentIds.forEach((id: string) => {
+      bringAgentToFront(id);
+    });
+    
+    // Update previous agent IDs
+    setPreviousAgentIds(currentAgentIds);
+  });
+
   // Memoized agent processing with proper typing and validation
   const agents = createMemo((): Agent[] => {
     const rawAgentData = dbAgents.data();
@@ -263,11 +287,15 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // =============================================
   
   // Create a new agent
-  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' = 'image-generate') => {
+  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' = 'image-generate') => {
     if (!canvas()?._id || !userId()) return;
     
     // Set the active agent type for UI cues only
-    setActiveAgentType(type === 'image-generate' ? 'generate' : 'edit');
+    setActiveAgentType(
+      type === 'image-generate' ? 'generate' : 
+      type === 'image-edit' ? 'edit' : 
+      type === 'voice-generate' ? 'voice' : 'none'
+    );
     
     // Smart positioning using shared utilities
     const canvasEl = getCanvasElement();
@@ -288,7 +316,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Create in Convex
-      await createAgentMutation.mutate(convexApi.agents.createAgent, {
+      const createParams: any = {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
@@ -297,7 +325,14 @@ export function ImageCanvas(props: ImageCanvasProps) {
         width: agentSize.width,
         height: agentSize.height,
         type,
-      });
+      };
+
+      // Add voice-specific fields for voice agents
+      if (type === 'voice-generate') {
+        createParams.voice = 'Aurora'; // Default voice
+      }
+
+      await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
       
       // Note: Convex queries update automatically via real-time subscriptions
       // Small delay helps ensure the agent is available for dragging
@@ -555,6 +590,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Helper methods for the toolbar
   const handleAddGenerateAgent = () => addAgent('', 'image-generate');
   const handleAddEditAgent = () => addAgent('', 'image-edit');
+  const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
 
   // =============================================
   // Render
@@ -576,6 +612,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           currentUserId={userId()}
           onAddGenerateAgent={handleAddGenerateAgent}
           onAddEditAgent={handleAddEditAgent}
+          onAddVoiceAgent={handleAddVoiceAgent}
           onClearCanvas={clearCanvas}
         />
 
@@ -659,6 +696,38 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   type: a.type
                 }))
               );
+              
+              // Render different agent types
+              if (agent.type === 'voice-generate') {
+                return (
+                  <div
+                    class="absolute select-none"
+                    style={{
+                      left: `${agent.position.x}px`,
+                      top: `${agent.position.y}px`,
+                      transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
+                      transition: isDragged() ? 'none' : 'transform 0.2s ease',
+                      'z-index': zIndex()
+                    }}
+                  >
+                    <MemoizedVoiceAgent
+                      id={agent.id}
+                      prompt={agent.prompt}
+                      generatedAudio={agent.generatedAudio}
+                      voice={agent.voice}
+                      audioSampleUrl={agent.audioSampleUrl}
+                      status={agent.status}
+                      model={agent.model}
+                      type={agent.type}
+                      size={agent.size}
+                      onRemove={removeAgent}
+                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                      onPromptChange={updateAgentPrompt}
+                    />
+                  </div>
+                );
+              }
               
               return (
                 <MemoizedImageAgent

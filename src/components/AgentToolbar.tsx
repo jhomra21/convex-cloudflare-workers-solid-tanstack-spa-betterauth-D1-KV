@@ -7,10 +7,10 @@ import { CanvasActiveUsers } from './CanvasActiveUsers';
 
 export interface AgentToolbarProps {
   /**
-   * Active agent type ('generate' or 'edit')
+   * Active agent type ('generate', 'edit', or 'voice')
    * Used for showing active button states
    */
-  activeAgentType: 'none' | 'generate' | 'edit';
+  activeAgentType: 'none' | 'generate' | 'edit' | 'voice';
   
   /**
    * The number of agents currently on the canvas
@@ -41,6 +41,7 @@ export interface AgentToolbarProps {
    */
   onAddGenerateAgent: () => void;
   onAddEditAgent: () => void;
+  onAddVoiceAgent: () => void;
   onClearCanvas: () => void;
   
 
@@ -124,6 +125,25 @@ export function AgentToolbar(props: AgentToolbarProps) {
               />
               <Icon name="edit" class="h-4 w-4 text-purple-600" />
               <span class="text-sm">Edit</span>
+            </button>
+            <div class="w-px h-full bg-border/50" />
+            <button
+              onClick={props.onAddVoiceAgent}
+              class={cn(
+                "flex items-center gap-1 h-full px-3 relative cursor-pointer",
+                "hover:bg-foreground/5 transition-colors",
+                "focus:outline-none focus-visible:bg-background/80",
+                props.activeAgentType === 'voice' ? "bg-background" : ""
+              )}
+            >
+              <div 
+                class={cn(
+                  "absolute left-0 h-4 w-0.5 bg-indigo-500 rounded-full transition-opacity",
+                  props.activeAgentType === 'voice' ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <Icon name="mic" class="h-4 w-4 text-indigo-600" />
+              <span class="text-sm">Voice</span>
             </button>
           </div>
         </div>

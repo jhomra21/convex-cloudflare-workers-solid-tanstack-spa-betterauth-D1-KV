@@ -21,9 +21,17 @@ export const getCanvasAgents = query({
       width: v.number(),
       height: v.number(),
       imageUrl: v.optional(v.string()),
+      audioUrl: v.optional(v.string()),
+      voice: v.optional(v.union(
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+      )),
+      audioSampleUrl: v.optional(v.string()),
+      requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -50,7 +58,13 @@ export const createAgent = mutation({
     width: v.number(),
     height: v.number(),
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
-    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"))),
+    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"))),
+    voice: v.optional(v.union(
+      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
+      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+      v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+    )),
+    audioSampleUrl: v.optional(v.string()),
     connectedAgentId: v.optional(v.id("agents")),
     uploadedImageUrl: v.optional(v.string()),
   },
@@ -67,6 +81,8 @@ export const createAgent = mutation({
       model: args.model || "normal",
       status: "idle",
       type: args.type || "image-generate",
+      voice: args.voice,
+      audioSampleUrl: args.audioSampleUrl,
       connectedAgentId: args.connectedAgentId,
       uploadedImageUrl: args.uploadedImageUrl,
       createdAt: Date.now(),
@@ -306,7 +322,7 @@ export const disconnectAgents = mutation({
 export const updateAgentType = mutation({
   args: {
     agentId: v.id("agents"),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
   },
   returns: v.null(),
   handler: async (ctx, { agentId, type }) => {
@@ -365,11 +381,20 @@ export const getConnectedAgent = query({
       width: v.number(),
       height: v.number(),
       imageUrl: v.optional(v.string()),
+      audioUrl: v.optional(v.string()),
+      voice: v.optional(v.union(
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+      )),
+      audioSampleUrl: v.optional(v.string()),
+      requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
+      activeImageUrl: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),
@@ -399,5 +424,81 @@ export const clearCanvasAgents = mutation({
       await ctx.db.delete(agent._id);
     }
     return null;
+  },
+});
+
+// Update agent audio URL
+export const updateAgentAudio = mutation({
+  args: {
+    agentId: v.id("agents"),
+    audioUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, audioUrl }) => {
+    await ctx.db.patch(agentId, {
+      audioUrl,
+      status: "success",
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Update agent request ID for webhook matching
+export const updateAgentRequestId = mutation({
+  args: {
+    agentId: v.id("agents"),
+    requestId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, requestId }) => {
+    await ctx.db.patch(agentId, {
+      requestId,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Get agent by request ID (for webhook processing)
+export const getAgentByRequestId = query({
+  args: { requestId: v.string() },
+  returns: v.union(
+    v.object({
+      _id: v.id("agents"),
+      _creationTime: v.number(),
+      canvasId: v.id("canvases"),
+      userId: v.string(),
+      prompt: v.string(),
+      positionX: v.number(),
+      positionY: v.number(),
+      width: v.number(),
+      height: v.number(),
+      imageUrl: v.optional(v.string()),
+      audioUrl: v.optional(v.string()),
+      voice: v.optional(v.union(
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+      )),
+      audioSampleUrl: v.optional(v.string()),
+      requestId: v.optional(v.string()),
+      model: v.union(v.literal("normal"), v.literal("pro")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+      connectedAgentId: v.optional(v.id("agents")),
+      uploadedImageUrl: v.optional(v.string()),
+      activeImageUrl: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { requestId }) => {
+    const agents = await ctx.db
+      .query("agents")
+      .collect();
+    
+    return agents.find(agent => agent.requestId === requestId) || null;
   },
 });
