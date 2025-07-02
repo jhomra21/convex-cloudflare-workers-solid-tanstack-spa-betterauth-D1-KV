@@ -57,7 +57,7 @@ voiceApi.post('/', async (c) => {
       prompt, 
       voice = "Aurora",
       audioSampleUrl,
-      exaggeration = 0.5,
+      exaggeration = 1.5,
       cfg = 0.5,
       temperature = 0.8,
       highQualityAudio = false,
