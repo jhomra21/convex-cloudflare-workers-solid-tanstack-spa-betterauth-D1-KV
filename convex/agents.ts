@@ -1,5 +1,10 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { 
+  AgentStatus, 
+  AgentModel, 
+  AgentType 
+} from "../src/types/agents";
 
 // Get all agents for a canvas
 export const getCanvasAgents = query({
@@ -127,14 +132,40 @@ export const updateAgentImage = mutation({
   },
 });
 
-// Update agent status
+// Update agent status with validation
 export const updateAgentStatus = mutation({
   args: {
     agentId: v.id("agents"),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    forceUpdate: v.optional(v.boolean()), // Allow bypassing validation in special cases
   },
   returns: v.null(),
-  handler: async (ctx, { agentId, status }) => {
+  handler: async (ctx, { agentId, status, forceUpdate = false }) => {
+    if (!forceUpdate) {
+      // Get current agent to validate transition
+      const currentAgent = await ctx.db.get(agentId);
+      if (!currentAgent) {
+        throw new Error("Agent not found");
+      }
+      
+      // Import validation function (note: this is a runtime import in Convex)
+      // For now, we'll implement basic validation inline
+      const currentStatus = currentAgent.status as AgentStatus;
+      
+      // Basic status transition validation
+      const invalidTransitions = [
+        { from: 'processing', to: 'idle' }, // Cannot go from processing to idle
+      ];
+      
+      const isInvalidTransition = invalidTransitions.some(
+        t => t.from === currentStatus && t.to === status
+      );
+      
+      if (isInvalidTransition) {
+        throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
+      }
+    }
+    
     await ctx.db.patch(agentId, {
       status,
       updatedAt: Date.now(),
@@ -169,20 +200,64 @@ export const deleteAgent = mutation({
   },
 });
 
-// Connect two agents
+// Connect two agents with validation
 export const connectAgents = mutation({
   args: {
     sourceAgentId: v.id("agents"),
     targetAgentId: v.id("agents"),
+    forceConnection: v.optional(v.boolean()), // Allow bypassing validation
   },
   returns: v.null(),
-  handler: async (ctx, { sourceAgentId, targetAgentId }) => {
+  handler: async (ctx, { sourceAgentId, targetAgentId, forceConnection = false }) => {
     // Verify both agents exist
     const sourceAgent = await ctx.db.get(sourceAgentId);
     const targetAgent = await ctx.db.get(targetAgentId);
     
     if (!sourceAgent || !targetAgent) {
       throw new Error("One or both agents not found");
+    }
+    
+    // Prevent self-connection
+    if (sourceAgentId === targetAgentId) {
+      throw new Error("Agents cannot connect to themselves");
+    }
+    
+    if (!forceConnection) {
+      // Validate connection rules
+      const sourceType = sourceAgent.type as AgentType;
+      const targetType = targetAgent.type as AgentType;
+      
+      // Valid connection rules - be explicit about what's allowed
+      const validConnections = [
+        { source: 'image-generate', target: 'image-edit' }, // Generate can connect to edit (main workflow)
+        { source: 'image-edit', target: 'image-edit' }, // Edit can connect to other edit (chaining)
+      ];
+      
+      const isValidConnection = validConnections.some(
+        rule => rule.source === sourceType && rule.target === targetType
+      );
+      
+      if (!isValidConnection) {
+        // Provide helpful error messages for common mistakes
+        if (sourceType === 'image-edit' && targetType === 'image-generate') {
+          throw new Error(`Invalid connection: Edit agents cannot connect to Generate agents. Workflow flows from Generate → Edit`);
+        } else if (sourceType === 'image-generate' && targetType === 'image-generate') {
+          throw new Error(`Invalid connection: Generate agents cannot connect to other Generate agents`);
+        } else {
+          throw new Error(`Invalid connection: ${sourceType} agents cannot connect to ${targetType} agents`);
+        }
+      }
+      
+      // Check if agents are already connected
+      if (sourceAgent.connectedAgentId === targetAgentId || 
+          targetAgent.connectedAgentId === sourceAgentId) {
+        throw new Error("Agents are already connected");
+      }
+      
+      // Check if agents already have other connections (for now, limit to one connection per agent)
+      if (sourceAgent.connectedAgentId || targetAgent.connectedAgentId) {
+        throw new Error("One or both agents are already connected to other agents");
+      }
     }
     
     // Update both agents to reference each other

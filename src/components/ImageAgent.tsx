@@ -402,7 +402,9 @@ export function ImageAgent(props: ImageAgentProps) {
                                 size="sm"
                                 class="w-full text-xs justify-start h-8"
                                 onClick={() => {
-                                  props.onConnectAgent?.(agentId, agent.id);
+                                  // Connect Generate agent (source) to Edit agent (target)
+                                  // agent.id = Generate agent with image, agentId = Edit agent that needs image
+                                  props.onConnectAgent?.(agent.id, agentId);
                                   toast.success('Agent connected successfully');
                                 }}
                               >

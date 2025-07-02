@@ -1,5 +1,5 @@
 import { createSignal, For, Show, createEffect, createMemo, onCleanup } from 'solid-js';
-import { ImageAgent } from './ImageAgent';
+import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { AgentConnection } from './AgentConnection';
 import { AgentToolbar } from './AgentToolbar';
 import { Button } from '~/components/ui/button';
@@ -17,26 +17,15 @@ import {
   type Position,
   type Size
 } from '~/lib/utils/canvas-coordinates';
+import {
+  type AgentData,
+  type Agent,
+  type AvailableAgent,
+  agentDataToAgent,
+  isAgentData,
+} from '~/types/agents';
 
-/**
- * Agent data model used for rendering on canvas
- */
-class Agent {
-  constructor(
-    public id: string,
-    public prompt: string = '',
-    public position: Position = { x: 0, y: 0 },
-    public size: Size = { width: 320, height: 384 },
-    public generatedImage: string = '',
-    public status: 'idle' | 'processing' | 'success' | 'failed' = 'idle',
-    public model: 'normal' | 'pro' = 'normal',
-    public type: 'image-generate' | 'image-edit' = 'image-generate',
-    public connectedAgentId?: string,
-    public uploadedImageUrl?: string,
-    public activeImageUrl?: string,
-    public _version: number = 0 // Track changes for reactivity
-  ) {}
-}
+// Agent class is now replaced by the Agent interface from ~/types/agents
 
 export interface ImageCanvasProps {
   class?: string;
@@ -215,34 +204,35 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   });
 
-  // Memoized agent processing to avoid unnecessary recalculations
-  const agents = createMemo(() => {
-    const agentData = dbAgents.data();
-    if (!agentData) return [];
+  // Memoized agent processing with proper typing and validation
+  const agents = createMemo((): Agent[] => {
+    const rawAgentData = dbAgents.data();
+    if (!rawAgentData) return [];
     
     const positions = optimisticPositions();
     const sizes = optimisticSizes();
     
-    return agentData.map((agent: any) => {
-      // Use optimistic position/size if available, otherwise use database values
-      const optimisticPos = positions.get(agent._id);
-      const optimisticSize = sizes.get(agent._id);
-      
-      return new Agent(
-        agent._id,
-        agent.prompt,
-        optimisticPos || { x: agent.positionX, y: agent.positionY },
-        optimisticSize || { width: agent.width, height: agent.height },
-        agent.imageUrl || '',
-        agent.status,
-        agent.model,
-        agent.type || 'image-generate',
-        agent.connectedAgentId,
-        agent.uploadedImageUrl,
-        agent.activeImageUrl,
-        0 // _version
-      );
-    });
+    // Validate and convert agent data with type safety
+    return rawAgentData
+      .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
+      .map((agentData: AgentData): Agent => {
+        // Use optimistic position/size if available, otherwise use database values
+        const optimisticPos = positions.get(agentData._id);
+        const optimisticSize = sizes.get(agentData._id);
+        
+        // Convert to frontend Agent interface with optimistic updates
+        const agent = agentDataToAgent(agentData);
+        
+        // Apply optimistic updates if they exist
+        if (optimisticPos) {
+          agent.position = optimisticPos;
+        }
+        if (optimisticSize) {
+          agent.size = optimisticSize;
+        }
+        
+        return agent;
+      });
   });
   
   // Memoized connection pairs calculation - only recalculates when agents change
@@ -298,7 +288,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     
     try {
       // Create in Convex
-      const result = await createAgentMutation.mutate(convexApi.agents.createAgent, {
+      await createAgentMutation.mutate(convexApi.agents.createAgent, {
         canvasId: canvas()!._id,
         userId: userId()!,
         prompt: prompt || '',
@@ -652,67 +642,38 @@ export function ImageCanvas(props: ImageCanvasProps) {
             )}
           </For>
 
-          {/* Agents */}
+          {/* Agents with individual memoization for better performance */}
           <For each={agents()}>
             {(agent) => {
-              // Memoize expensive calculations per agent to prevent unnecessary re-renders
-              const agentState = createMemo(() => {
-                const isDragged = dragHook.draggedAgent() === agent.id;
-                const isResizing = resizeHook.resizingAgent() === agent.id;
-                const zIndex = getAgentZIndex(agent.id, isDragged);
-                
-                return {
-                  isDragged,
-                  isResizing,
-                  zIndex,
-                  transform: isDragged ? 'scale(1.05)' : 'scale(1)',
-                  transition: isDragged ? 'none' : 'transform 0.2s ease',
-                };
-              });
+              // Calculate current interaction state
+              const isDragged = () => dragHook.draggedAgent() === agent.id;
+              const isResizing = () => resizeHook.resizingAgent() === agent.id;
+              const zIndex = () => getAgentZIndex(agent.id, isDragged());
+              
+              // Memoize available agents list to prevent recreation on every render
+              const availableAgents = createMemo((): AvailableAgent[] => 
+                agents().map((a: Agent): AvailableAgent => ({
+                  id: a.id,
+                  prompt: a.prompt,
+                  imageUrl: a.generatedImage,
+                  type: a.type
+                }))
+              );
               
               return (
-                <div
-                  class="absolute select-none"
-                  style={{
-                    left: `${agent.position.x}px`,
-                    top: `${agent.position.y}px`,
-                    transform: agentState().transform,
-                    transition: agentState().transition,
-                    'z-index': agentState().zIndex
-                  }}
-                >
-                  <ImageAgent
-                    id={agent.id}
-                    prompt={agent.prompt}
-                    onRemove={removeAgent}
-                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                    size={agent.size}
-                    onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-                    generatedImage={agent.generatedImage}
-                    onPromptChange={updateAgentPrompt}
-                    status={agent.status}
-                    model={agent.model}
-                    type={agent.type}
-                    connectedAgentId={agent.connectedAgentId}
-                    uploadedImageUrl={agent.uploadedImageUrl}
-                    activeImageUrl={agent.activeImageUrl}
-                    availableAgents={agents().map((a: any) => ({
-                      id: a.id,
-                      prompt: a.prompt,
-                      imageUrl: a.generatedImage
-                    }))}
-                    onConnectAgent={connectAgents}
-                    onDisconnectAgent={disconnectAgent}
-                    class={cn(
-                      "shadow-lg border-2 transition-all duration-200",
-                      agentState().isDragged 
-                        ? "border-primary shadow-xl" 
-                        : agentState().isResizing
-                        ? "border-secondary shadow-lg"
-                        : "border-transparent hover:border-muted-foreground/20"
-                    )}
-                  />
-                </div>
+                <MemoizedImageAgent
+                  agent={agent}
+                  isDragged={isDragged()}
+                  isResizing={isResizing()}
+                  zIndex={zIndex()}
+                  availableAgents={availableAgents()}
+                  onRemove={removeAgent}
+                  onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                  onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                  onPromptChange={updateAgentPrompt}
+                  onConnectAgent={connectAgents}
+                  onDisconnectAgent={disconnectAgent}
+                />
               );
             }}
           </For>
