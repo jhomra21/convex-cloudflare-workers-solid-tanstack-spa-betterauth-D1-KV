@@ -60,7 +60,7 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         onPromptChange={props.onPromptChange}
         status={props.agent.status}
         model={props.agent.model}
-        type={props.agent.type}
+        type={props.agent.type as 'image-generate' | 'image-edit'}
         connectedAgentId={props.agent.connectedAgentId}
         uploadedImageUrl={props.agent.uploadedImageUrl}
         activeImageUrl={props.agent.activeImageUrl}
