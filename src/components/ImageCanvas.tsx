@@ -13,7 +13,6 @@ import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
 import { 
-  calculateGridPosition, 
   getCanvasElement,
   type Position,
   type Size
@@ -66,6 +65,9 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
   const [maxZIndex, setMaxZIndex] = createSignal(1);
   const [agentZIndices, setAgentZIndices] = createSignal<Map<string, number>>(new Map());
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
+  
+  // Animation state management
+  const [exitingAgents, setExitingAgents] = createSignal<Set<string>>(new Set());
   
   // =============================================
   // Data Fetching
@@ -224,9 +226,22 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
       .map((a: any) => a._id)
       .filter((id: string) => !prevIds.has(id));
     
-    // Bring new agents to front
+    // Find removed agents (cleanup any lingering animation states)
+    const removedAgentIds = Array.from(prevIds).filter(id => !currentAgentIds.has(id));
+    
+    // Handle new agents
     newAgentIds.forEach((id: string) => {
       bringAgentToFront(id);
+    });
+    
+    // Handle removed agents (cleanup any lingering animation states)
+    removedAgentIds.forEach((id: string) => {
+      // Clean up animation states
+      setExitingAgents(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     });
     
     // Update previous agent IDs
@@ -427,13 +442,23 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     }
   };
   
-  // Remove an agent with optimistic UI
+  // Remove an agent with optimistic UI and exit animation
   const removeAgent = async (id: string) => {
     try {
-      // Optimistically hide immediately
-      batch(() => {
-        setOptimisticDeletedAgentIds(prev => new Set(prev).add(id));
-      });
+      // Start exit animation first
+      setExitingAgents(prev => new Set(prev).add(id));
+      
+      // Wait for exit animation to complete, then hide
+      setTimeout(() => {
+        batch(() => {
+          setOptimisticDeletedAgentIds(prev => new Set(prev).add(id));
+          setExitingAgents(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+        });
+      }, 200); // Exit animation duration
 
       try {
         await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
@@ -441,12 +466,17 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
         });
       } catch (error) {
         console.error('Failed to delete agent:', error);
-        // Rollback
+        // Rollback - restore the agent and clear animation state
         batch(() => {
           setOptimisticDeletedAgentIds(prev => {
             const copy = new Set(prev);
             copy.delete(id);
             return copy;
+          });
+          setExitingAgents(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
           });
         });
       }
@@ -478,13 +508,31 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     }
   };
   
-  // Clear all agents from canvas
+  // Clear all agents from canvas with exit animations
   const clearCanvas = async () => {
     if (!canvas()?._id) return;
+    
+    const currentAgents = agents();
+    if (currentAgents.length === 0) return;
+    
     try {
-      await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
-        canvasId: canvas()!._id,
-      });
+      // Start exit animations for all agents
+      const agentIds = currentAgents.map(a => a.id);
+      setExitingAgents(new Set(agentIds));
+      
+      // Wait for exit animations to complete, then clear
+      setTimeout(async () => {
+        try {
+          await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
+            canvasId: canvas()!._id,
+          });
+        } catch (error) {
+          console.error('Failed to clear canvas:', error);
+          // Rollback animation state on error
+          setExitingAgents(new Set<string>());
+        }
+      }, 200); // Match exit animation duration
+      
     } catch (error) {
       console.error('Failed to clear canvas:', error);
     }
@@ -643,6 +691,8 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     // Clear all debounced save timeouts
     debouncedSaves.forEach(timeout => clearTimeout(timeout));
     debouncedSaves.clear();
+    
+
   });
 
   // =============================================
@@ -784,6 +834,9 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
               const isResizing = () => resizeHook.resizingAgent() === agent.id;
               const zIndex = () => getAgentZIndex(agent.id, isDragged());
               
+              // Calculate animation state
+              const isExiting = () => exitingAgents().has(agent.id);
+              
               // Memoize available agents list to prevent recreation on every render
               const availableAgents = createMemo((): AvailableAgent[] => 
                 agents().map((a: Agent): AvailableAgent => ({
@@ -796,11 +849,13 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
               
               // Render different agent types
               if (agent.type === 'voice-generate') {
+                // Animation classes for voice agent
+                const voiceAnimationClass = isExiting() ? 'animate-scale-out' : '';
+                
                 return (
                   <div
-                    class="absolute select-none"
+                    class={cn("absolute select-none", voiceAnimationClass)}
                     style={{
-
                       transform: `translate3d(${agent.position.x}px, ${agent.position.y}px, 0) scale(${isDragged() ? 1.05 : 1})`,
                       transition: isDragged() ? 'none' : 'transform 0.2s ease',
                       'z-index': zIndex()
@@ -831,6 +886,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
                   isDragged={isDragged()}
                   isResizing={isResizing()}
                   zIndex={zIndex()}
+                  isExiting={isExiting()}
                   availableAgents={availableAgents()}
                   onRemove={removeAgent}
                   onMouseDown={(e) => handleMouseDown(e, agent.id)}

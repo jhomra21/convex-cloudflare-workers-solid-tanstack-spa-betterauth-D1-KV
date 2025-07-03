@@ -13,6 +13,7 @@ interface MemoizedImageAgentProps {
   isDragged: boolean;
   isResizing: boolean;
   zIndex: number;
+  isExiting?: boolean;
   availableAgents: AvailableAgent[];
   onRemove: (id: string) => void;
   onMouseDown: (e: MouseEvent) => void;
@@ -25,15 +26,21 @@ interface MemoizedImageAgentProps {
 
 export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
   // Memoize the agent state to prevent unnecessary re-renders
-  const agentState = createMemo(() => ({
-    transform: props.isDragged ? 'scale(1.05)' : 'scale(1)',
-    transition: props.isDragged ? 'none' : 'transform 0.2s ease',
-    borderClass: props.isDragged 
-      ? "border-primary shadow-xl" 
-      : props.isResizing
-      ? "border-secondary shadow-lg"
-      : "border-transparent hover:border-muted-foreground/20"
-  }));
+  const agentState = createMemo(() => {
+    // Animation classes based on state
+    const animationClass = props.isExiting ? 'animate-scale-out' : '';
+    
+    return {
+      transform: props.isDragged ? 'scale(1.05)' : 'scale(1)',
+      transition: props.isDragged ? 'none' : 'transform 0.2s ease',
+      borderClass: props.isDragged 
+        ? "border-primary shadow-xl" 
+        : props.isResizing
+        ? "border-secondary shadow-lg"
+        : "border-transparent hover:border-muted-foreground/20",
+      animationClass
+    };
+  });
 
   // Memoize the position and size to avoid object recreation
   const positionStyle = createMemo(() => ({
@@ -69,6 +76,7 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         class={cn(
           "shadow-lg border-2 transition-all duration-200",
           agentState().borderClass,
+          agentState().animationClass,
           props.class
         )}
       />

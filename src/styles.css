@@ -300,3 +300,22 @@ code {
   animation: slide-out-right 150ms ease-out forwards;
   transform-origin: left center;
 }
+
+/* Agent Exit Animations */
+@keyframes agent-scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+    filter: blur(1px);
+  }
+}
+
+.animate-scale-out {
+  animation: agent-scale-out 200ms ease-in forwards;
+  transform-origin: center center;
+}
