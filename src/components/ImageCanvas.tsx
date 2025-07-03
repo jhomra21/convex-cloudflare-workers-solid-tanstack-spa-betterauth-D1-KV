@@ -849,35 +849,19 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
               
               // Render different agent types
               if (agent.type === 'voice-generate') {
-                // Animation classes for voice agent
-                const voiceAnimationClass = isExiting() ? 'animate-scale-out' : '';
-                
-                return (
-                  <div
-                    class={cn("absolute select-none", voiceAnimationClass)}
-                    style={{
-                      transform: `translate3d(${agent.position.x}px, ${agent.position.y}px, 0) scale(${isDragged() ? 1.05 : 1})`,
-                      transition: isDragged() ? 'none' : 'transform 0.2s ease',
-                      'z-index': zIndex()
-                    }}
-                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                  >
-                    <MemoizedVoiceAgent
-                      id={agent.id}
-                      prompt={agent.prompt}
-                      generatedAudio={agent.generatedAudio}
-                      voice={agent.voice}
-                      audioSampleUrl={agent.audioSampleUrl}
-                      status={agent.status}
-                      model={agent.model}
-                      type={agent.type}
-                      size={agent.size}
-                      onRemove={removeAgent}
-                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-                      onPromptChange={updateAgentPrompt}
-                    />
-                  </div>
-                );
+              return (
+              <MemoizedVoiceAgent
+              agent={agent}
+              isDragged={isDragged()}
+              isResizing={isResizing()}
+              zIndex={zIndex()}
+              isExiting={isExiting()}
+              onRemove={removeAgent}
+              onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+              onPromptChange={updateAgentPrompt}
+              />
+              );
               }
               
               return (

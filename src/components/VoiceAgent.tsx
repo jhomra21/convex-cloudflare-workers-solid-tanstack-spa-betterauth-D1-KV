@@ -170,7 +170,20 @@ export function VoiceAgent(props: VoiceAgentProps) {
           </div>
         </div>
         
-        <CardContent class="p-4 flex flex-col h-full">
+        <CardContent class="p-4 flex flex-col h-full relative">
+          {/* Action Buttons Overlay - always visible like ImageAgent */}
+          <Show when={!isLoading() && props.onRemove}>
+            <div class="absolute top-2 right-2 flex gap-1 z-10">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => props.onRemove?.(agentId)}
+              >
+                <Icon name="x" class="h-3 w-3" />
+              </Button>
+            </div>
+          </Show>
+          
           {/* Prompt Section */}
           <div class="flex-shrink-0 mb-4">
             <Show when={showPromptInput() || !hasAudio()}>
@@ -226,7 +239,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
 
           {/* Generated Audio Display */}
           <Show when={hasAudio() && isSuccess()}>
-            <div class="flex-1 flex flex-col">
+            <div class="flex-1 flex flex-col relative">
               {/* Audio Info */}
               <div class="mb-3">
                 <p class="text-xs text-muted-foreground mb-1">Generated Audio:</p>
@@ -239,7 +252,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
               </div>
 
               {/* Audio Player */}
-              <div class="bg-muted/30 rounded-lg p-3 mb-3">
+              <div class="bg-muted/30 rounded-lg p-3 mb-3 relative">
                 <audio 
                   controls
                   class="w-full"
@@ -248,6 +261,20 @@ export function VoiceAgent(props: VoiceAgentProps) {
                   <source src={props.generatedAudio} type="audio/wav" />
                   Your browser does not support the audio element.
                 </audio>
+                
+                {/* Action Buttons Overlay - following ImageAgent pattern */}
+                <Show when={!isLoading()}>
+                  <div class="absolute top-2 right-2 flex gap-1 z-10">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleEditPrompt}
+                      disabled={isLoading()}
+                    >
+                      <Icon name="refresh-cw" class="h-3 w-3" />
+                    </Button>
+                  </div>
+                </Show>
               </div>
 
               {/* Action Buttons */}
