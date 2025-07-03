@@ -248,7 +248,6 @@ export function ImageAgent(props: ImageAgentProps) {
       {/* Drag Handle - Larger clickable area */}
       <div 
         class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-between px-3 border-b border-muted/40"
-        onMouseDown={props.onMouseDown}
         title="Drag to move agent"
       >
         <div class="flex items-center gap-2">

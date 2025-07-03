@@ -51,7 +51,16 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
     <div
       class="absolute select-none"
       style={positionStyle()}
-      onMouseDown={props.onMouseDown}
+      onMouseDown={(e) => {
+        // Prevent drag if clicking on interactive elements
+        const target = e.target as HTMLElement;
+        const isInteractiveElement = target.matches('input, textarea, button, select, [contenteditable="true"]') ||
+                                   target.closest('input, textarea, button, select, [contenteditable="true"]');
+        
+        if (!isInteractiveElement) {
+          props.onMouseDown(e);
+        }
+      }}
     >
       <VoiceAgent
         id={props.agent.id}
