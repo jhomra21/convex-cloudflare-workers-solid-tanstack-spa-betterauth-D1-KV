@@ -54,8 +54,8 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
       onMouseDown={(e) => {
         // Prevent drag if clicking on interactive elements
         const target = e.target as HTMLElement;
-        const isInteractiveElement = target.matches('input, textarea, button, select, [contenteditable="true"]') ||
-                                   target.closest('input, textarea, button, select, [contenteditable="true"]');
+        const isInteractiveElement = target.matches('input, textarea, button, select, input[type="range"], [contenteditable="true"]') ||
+                                   target.closest('input, textarea, button, select, input[type="range"], [contenteditable="true"]');
         
         if (!isInteractiveElement) {
           props.onMouseDown(e);

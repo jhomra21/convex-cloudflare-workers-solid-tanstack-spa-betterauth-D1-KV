@@ -58,6 +58,7 @@ voiceApi.post('/', async (c) => {
       voice = "Aurora",
       audioSampleUrl,
       exaggeration = 1.5,
+      model = 'normal',
       cfg = 0.5,
       temperature = 0.8,
       highQualityAudio = false,
@@ -108,7 +109,7 @@ voiceApi.post('/', async (c) => {
           exaggeration,
           cfg,
           temperature,
-          high_quality_audio: highQualityAudio,
+          high_quality_audio: model === 'pro' ? true : highQualityAudio,
           seed: seed || undefined,
         }),
       }
