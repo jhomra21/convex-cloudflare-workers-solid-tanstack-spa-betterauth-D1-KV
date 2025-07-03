@@ -17,7 +17,7 @@ export interface DragState {
 export interface UseDragOptions {
   onDragStart?: (agentId: string) => void;
   onDragMove?: (agentId: string, position: Position) => void;
-  onDragEnd?: (agentId: string) => void;
+  onDragEnd?: (agentId: string, finalPosition: Position) => void;
   constrainToBounds?: boolean;
   agentSize?: Size;
   zoomLevel?: () => number;
@@ -40,10 +40,22 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
   // Track active event listeners for cleanup
   let isListening = false;
 
+  // Cached geometry during a drag session
+  let cachedCanvasRect: DOMRect | null = null;
+  let cachedContainerSize: Size | null = null;
+  let cachedTransformer: ReturnType<typeof createCoordinateTransformer> | null = null;
+
+  // Track latest drag position; commit once on mouseup
+  let scheduledPosition: Position | null = null;
+
+  // Element being dragged (for direct DOM updates)
+  let draggedEl: HTMLElement | null = null;
+
   const handleMouseDown = (
     e: MouseEvent,
     agentId: string,
-    agentPosition: Position
+    agentPosition: Position,
+    el: HTMLElement | null = null
   ) => {
     e.preventDefault();
     
@@ -53,14 +65,17 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     setDraggedAgent(agentId);
     setIsDragging(true);
     onDragStart?.(agentId);
+
+    // cache element reference
+    draggedEl = el ?? (e.currentTarget as HTMLElement | null);
     
     // Calculate offset using shared coordinate utilities
-    const canvasRect = canvasEl.getBoundingClientRect();
     const currentZoom = zoomLevel?.() || 1.0;
-    const containerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
-    
-    const transformer = createCoordinateTransformer(canvasRect, containerSize, currentZoom);
-    const agentScreenPos = transformer.toScreen(agentPosition);
+
+    cachedCanvasRect = canvasEl.getBoundingClientRect();
+    cachedContainerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
+    cachedTransformer = createCoordinateTransformer(cachedCanvasRect, cachedContainerSize, currentZoom);
+    const agentScreenPos = cachedTransformer.toScreen(agentPosition);
     
     const offsetX = e.clientX - agentScreenPos.x;
     const offsetY = e.clientY - agentScreenPos.y;
@@ -86,9 +101,6 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
 
     const offset = dragOffset();
     const currentZoom = zoomLevel?.() || 1.0;
-    const canvasRect = canvasEl.getBoundingClientRect();
-    const containerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
-    
     // Calculate mouse position adjusting for drag offset
     const mouseScreenPos = {
       x: e.clientX - offset.x,
@@ -101,42 +113,60 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     };
     
     // Convert to content coordinates using shared utilities
-    const transformer = createCoordinateTransformer(canvasRect, containerSize, currentZoom);
-    let newPosition = transformer.toContent(mouseScreenPos, scrollOffset);
+    if (!cachedTransformer) {
+      // Fallback (should not happen) – compute on the fly
+      cachedCanvasRect = canvasEl.getBoundingClientRect();
+      cachedContainerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
+      cachedTransformer = createCoordinateTransformer(cachedCanvasRect, cachedContainerSize, currentZoom);
+    }
+    let newPosition = cachedTransformer.toContent(mouseScreenPos, scrollOffset);
 
     // Constrain to canvas boundaries if enabled
     if (constrainToBounds) {
-      newPosition = transformer.constrainBounds(newPosition, agentSize);
+      if (cachedTransformer) {
+        newPosition = cachedTransformer.constrainBounds(newPosition, agentSize);
+      }
     }
 
-    onDragMove?.(agentId, newPosition);
+    // Apply transform directly for smooth 60 fps, avoiding Solid reactive writes
+    if (draggedEl) {
+      draggedEl.style.transform = `translate3d(${newPosition.x}px, ${newPosition.y}px, 0)`;
+    }
+
+    // Stash latest position for commit on mouseup
+    scheduledPosition = newPosition;
   };
 
   const handleMouseUp = () => {
     const draggedId = draggedAgent();
-    
+
+    // Preserve the last calculated position before cleanup
+    const finalPos = scheduledPosition;
+
     setDraggedAgent(null);
     setIsDragging(false);
-    
-    removeEventListeners();
-    
-    if (draggedId) {
-      onDragEnd?.(draggedId);
+
+    if (draggedId && finalPos) {
+      onDragEnd?.(draggedId, finalPos);
     }
+
+    removeEventListeners();
   };
 
   const handleInterruption = () => {
     // Clean up if drag is interrupted (page visibility change, beforeunload, etc.)
     if (isDragging()) {
       const draggedId = draggedAgent();
+      const finalPos = scheduledPosition;
+
       setDraggedAgent(null);
       setIsDragging(false);
-      
-      removeEventListeners();
-      
-      if (draggedId) {
-        onDragEnd?.(draggedId);
+
+      if (draggedId && finalPos) {
+        onDragEnd?.(draggedId, finalPos);
       }
+
+      removeEventListeners();
     }
   };
 
@@ -147,6 +177,13 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
       document.removeEventListener('visibilitychange', handleInterruption);
       window.removeEventListener('beforeunload', handleInterruption);
       isListening = false;
+    }
+    scheduledPosition = null;
+    cachedCanvasRect = null;
+    cachedContainerSize = null;
+    cachedTransformer = null;
+    if (draggedEl) {
+      draggedEl = null;
     }
   };
 

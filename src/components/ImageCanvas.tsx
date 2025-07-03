@@ -502,13 +502,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
   
   // Use custom hooks for drag and resize
   const dragHook = useCanvasDrag({
-    onDragStart: bringAgentToFront, 
-    onDragMove: updateAgentPosition,
-    onDragEnd: (agentId) => {
-      const agent = agents().find(a => a.id === agentId);
-      if (agent) {
-        saveAgentTransform(agentId, agent.position, agent.size);
-      }
+    onDragStart: bringAgentToFront,
+    onDragEnd: (agentId, finalPosition) => {
+      updateAgentPosition(agentId, finalPosition);
     },
     constrainToBounds: true,
     agentSize: { width: 320, height: 384 },
@@ -703,12 +699,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   <div
                     class="absolute select-none"
                     style={{
-                      left: `${agent.position.x}px`,
-                      top: `${agent.position.y}px`,
-                      transform: isDragged() ? 'scale(1.05)' : 'scale(1)',
+
+                      transform: `translate3d(${agent.position.x}px, ${agent.position.y}px, 0) scale(${isDragged() ? 1.05 : 1})`,
                       transition: isDragged() ? 'none' : 'transform 0.2s ease',
                       'z-index': zIndex()
                     }}
+                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
                   >
                     <MemoizedVoiceAgent
                       id={agent.id}
@@ -721,7 +717,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
                       type={agent.type}
                       size={agent.size}
                       onRemove={removeAgent}
-                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
                       onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                       onPromptChange={updateAgentPrompt}
                     />

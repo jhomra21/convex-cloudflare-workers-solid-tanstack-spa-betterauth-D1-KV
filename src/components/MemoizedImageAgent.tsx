@@ -37,23 +37,22 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
 
   // Memoize the position and size to avoid object recreation
   const positionStyle = createMemo(() => ({
-    left: `${props.agent.position.x}px`,
-    top: `${props.agent.position.y}px`,
-    transform: agentState().transform,
+    transform: `translate3d(${props.agent.position.x}px, ${props.agent.position.y}px, 0) ${agentState().transform}`,
     transition: agentState().transition,
-    'z-index': props.zIndex
+    'z-index': props.zIndex,
+    'will-change': 'transform',
   }));
 
   return (
     <div
       class="absolute select-none"
       style={positionStyle()}
+      onMouseDown={props.onMouseDown}
     >
       <ImageAgent
         id={props.agent.id}
         prompt={props.agent.prompt}
         onRemove={props.onRemove}
-        onMouseDown={props.onMouseDown}
         size={props.agent.size}
         onResizeStart={props.onResizeStart}
         generatedImage={props.agent.generatedImage}
