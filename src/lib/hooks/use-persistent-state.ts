@@ -7,13 +7,16 @@ const persistentStateMap = new WeakMap<object, Map<string, any>>();
 // Stable context objects for agent prompts - prevents recreation on re-renders
 const agentContexts = new Map<string, object>();
 
+// Default context object to avoid circular references
+const defaultContext = {};
+
 export function usePersistentState<T>(
   key: string,
   initialValue: T,
   contextObject?: object
 ): [() => T, (value: T) => void] {
   // Use provided context object or create a default one
-  const context = contextObject || usePersistentState;
+  const context = contextObject || defaultContext;
   
   // Get or create state map for this context
   if (!persistentStateMap.has(context)) {

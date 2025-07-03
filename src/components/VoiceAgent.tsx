@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, For, createMemo } from 'solid-js';
+import { createSignal, createUniqueId, Show, For } from 'solid-js';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -130,8 +130,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
         }
     };
 
-    // Memoize agent size to prevent unnecessary recalculations
-    const agentSize = createMemo(() => props.size || { width: 320, height: 384 });
+    // Agent size - use props.size directly to avoid circular dependency
+    const agentSize = () => props.size || { width: 320, height: 384 };
 
     return (
         <ErrorBoundary>

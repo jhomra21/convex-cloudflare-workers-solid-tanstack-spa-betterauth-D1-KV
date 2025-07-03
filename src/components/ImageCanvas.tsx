@@ -213,39 +213,48 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     }
   });
 
-  // Bring newly created agents to front
+  // Bring newly created agents to front - rewritten to avoid circular dependency
   createEffect(() => {
     const currentAgents = dbAgents.data();
     if (!currentAgents) return;
     
+    // Create a stable set of current agent IDs
     const currentAgentIds = new Set(currentAgents.map((a: any) => a._id));
     const prevIds = previousAgentIds();
     
+    // Only proceed if agent IDs actually changed (not just agent data)
+    const prevIdsArray = Array.from(prevIds).sort();
+    const currentIdsArray = Array.from(currentAgentIds).sort();
+    const idsChanged = prevIdsArray.length !== currentIdsArray.length || 
+                       prevIdsArray.some((id, i) => id !== currentIdsArray[i]);
+    
+    if (!idsChanged) return;
+    
     // Find new agents (ids that are in current but not in previous)
-    const newAgentIds = currentAgents
-      .map((a: any) => a._id)
-      .filter((id: string) => !prevIds.has(id));
+    const newAgentIds = currentIdsArray.filter((id: string) => !prevIds.has(id));
     
-    // Find removed agents (cleanup any lingering animation states)
-    const removedAgentIds = Array.from(prevIds).filter(id => !currentAgentIds.has(id));
+    // Find removed agents (cleanup any lingering animation states)  
+    const removedAgentIds = prevIdsArray.filter(id => !currentAgentIds.has(id));
     
-    // Handle new agents
-    newAgentIds.forEach((id: string) => {
-      bringAgentToFront(id);
-    });
-    
-    // Handle removed agents (cleanup any lingering animation states)
-    removedAgentIds.forEach((id: string) => {
-      // Clean up animation states
-      setExitingAgents(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
+    // Use batch to group all state updates and prevent intermediate renders
+    batch(() => {
+      // Handle new agents - bring to front
+      newAgentIds.forEach((id: string) => {
+        bringAgentToFront(id);
       });
+      
+      // Handle removed agents - cleanup animation states
+      if (removedAgentIds.length > 0) {
+        setExitingAgents(prev => {
+          const newSet = new Set(prev);
+          removedAgentIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+      }
+      
+      // Update previous agent IDs last
+      setPreviousAgentIds(currentAgentIds);
     });
-    
-    // Update previous agent IDs
-    setPreviousAgentIds(currentAgentIds);
   });
 
   // Memoized agent processing with proper typing and validation
@@ -266,41 +275,30 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
       .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
       .filter((a) => !optimisticRemoved.has(a._id));
 
-    const combined = [...baseAgents, ...optimisticAdds.map(agent => ({
-      // cast temporary agent into AgentData shape just for mapping
-      _id: agent.id as any,
-      canvasId: canvas()?._id as any,
-      userId: userId()! as any,
-      prompt: agent.prompt,
-      type: agent.type as any,
-      positionX: agent.position.x,
-      positionY: agent.position.y,
-      width: agent.size.width,
-      height: agent.size.height,
-      voice: (agent as any).voice ?? null,
-      connectedAgentId: (agent as any).connectedAgentId ?? null,
-    }))];
+    // Convert base agents with optimistic updates
+    const processedBaseAgents = baseAgents.map((agentData: AgentData): Agent => {
+      // Use optimistic position/size if available, otherwise use database values
+      const optimisticPos = positions.get(agentData._id);
+      const optimisticSize = sizes.get(agentData._id);
+      
+      // Convert to frontend Agent interface with optimistic updates
+      const agent = agentDataToAgent(agentData);
+      
+      // Apply optimistic updates if they exist
+      if (optimisticPos) {
+        agent.position = optimisticPos;
+      }
+      if (optimisticSize) {
+        agent.size = optimisticSize;
+      }
+      
+      return agent;
+    });
 
-    return combined
-      .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
-      .map((agentData: AgentData): Agent => {
-        // Use optimistic position/size if available, otherwise use database values
-        const optimisticPos = positions.get(agentData._id);
-        const optimisticSize = sizes.get(agentData._id);
-        
-        // Convert to frontend Agent interface with optimistic updates
-        const agent = agentDataToAgent(agentData);
-        
-        // Apply optimistic updates if they exist
-        if (optimisticPos) {
-          agent.position = optimisticPos;
-        }
-        if (optimisticSize) {
-          agent.size = optimisticSize;
-        }
-        
-        return agent;
-      });
+    // Convert optimistic agents directly (they're already in Agent format)
+    const processedOptimisticAgents = optimisticAdds;
+
+    return [...processedBaseAgents, ...processedOptimisticAgents];
   });
   
   // Memoized connection pairs calculation - only recalculates when agents change
@@ -325,6 +323,16 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     
     return result;
   });
+
+  // Memoize available agents list to prevent recreation on every render
+  const availableAgents = createMemo((): AvailableAgent[] => 
+    agents().map((a: Agent): AvailableAgent => ({
+      id: a.id,
+      prompt: a.prompt,
+      imageUrl: a.generatedImage,
+      type: a.type
+    }))
+  );
 
   // =============================================
   // Agent Interaction Handlers
@@ -837,15 +845,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
               // Calculate animation state
               const isExiting = () => exitingAgents().has(agent.id);
               
-              // Memoize available agents list to prevent recreation on every render
-              const availableAgents = createMemo((): AvailableAgent[] => 
-                agents().map((a: Agent): AvailableAgent => ({
-                  id: a.id,
-                  prompt: a.prompt,
-                  imageUrl: a.generatedImage,
-                  type: a.type
-                }))
-              );
+
               
               // Render different agent types
               if (agent.type === 'voice-generate') {

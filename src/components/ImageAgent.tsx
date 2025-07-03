@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, createMemo, For } from 'solid-js';
+import { createSignal, createUniqueId, Show, For } from 'solid-js';
 import { useGenerateImage, useEditImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -229,8 +229,8 @@ export function ImageAgent(props: ImageAgentProps) {
     }
   };
 
-  // Memoize agent size to prevent unnecessary recalculations
-  const agentSize = createMemo(() => props.size || { width: 320, height: 384 });
+  // Agent size - use props.size directly to avoid circular dependency
+  const agentSize = () => props.size || { width: 320, height: 384 };
 
   return (
     <ErrorBoundary>
