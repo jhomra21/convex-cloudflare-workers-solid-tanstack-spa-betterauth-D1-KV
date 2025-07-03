@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, createMemo, onCleanup } from 'solid-js';
+import { createSignal, For, Show, createEffect, createMemo, onCleanup, batch } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { AgentConnection } from './AgentConnection';
@@ -54,8 +54,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice'>('none');
   
   // Agent transform state (position and size during drag/resize operations)
-  const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, Position>>(new Map());
-  const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, Size>>(new Map());
+  // Optimistic transforms (drag/resize)
+const [optimisticPositions, setOptimisticPositions] = createSignal<Map<string, Position>>(new Map());
+const [optimisticSizes, setOptimisticSizes] = createSignal<Map<string, Size>>(new Map());
+// Optimistic create / delete
+const [optimisticNewAgents, setOptimisticNewAgents] = createSignal<Agent[]>([]);
+const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<Set<string>>(new Set());
+  
   
   // Z-index management for proper agent stacking
   const [maxZIndex, setMaxZIndex] = createSignal(1);
@@ -229,6 +234,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   });
 
   // Memoized agent processing with proper typing and validation
+  // Pre-compute once per render – keeps reference stable for child memoisation
   const agents = createMemo((): Agent[] => {
     const rawAgentData = dbAgents.data();
     if (!rawAgentData) return [];
@@ -237,7 +243,30 @@ export function ImageCanvas(props: ImageCanvasProps) {
     const sizes = optimisticSizes();
     
     // Validate and convert agent data with type safety
-    return rawAgentData
+    // Merge DB agents with optimistic creations and filter out optimistic deletions
+    const optimisticRemoved = optimisticDeletedAgentIds();
+    const optimisticAdds = optimisticNewAgents();
+
+    const baseAgents = rawAgentData
+      .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
+      .filter((a) => !optimisticRemoved.has(a._id));
+
+    const combined = [...baseAgents, ...optimisticAdds.map(agent => ({
+      // cast temporary agent into AgentData shape just for mapping
+      _id: agent.id as any,
+      canvasId: canvas()?._id as any,
+      userId: userId()! as any,
+      prompt: agent.prompt,
+      type: agent.type as any,
+      positionX: agent.position.x,
+      positionY: agent.position.y,
+      width: agent.size.width,
+      height: agent.size.height,
+      voice: (agent as any).voice ?? null,
+      connectedAgentId: (agent as any).connectedAgentId ?? null,
+    }))];
+
+    return combined
       .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
       .map((agentData: AgentData): Agent => {
         // Use optimistic position/size if available, otherwise use database values
@@ -301,6 +330,28 @@ export function ImageCanvas(props: ImageCanvasProps) {
     const canvasEl = getCanvasElement();
     const agentSize: Size = { width: 320, height: 384 };
     const padding = 20;
+
+    // Utility to find first free grid slot
+    function findNextAvailableGridPosition(container: Size, elemSize: Size, occupied: Set<string>, pad: number, startingIndex: number): Position {
+      const agentsPerRow = Math.floor((container.width - pad * 2) / (elemSize.width + pad));
+      const agentsPerCol = Math.floor((container.height - pad * 2) / (elemSize.height + pad));
+      const totalSlots = agentsPerRow * agentsPerCol;
+
+      for (let idx = startingIndex; idx < startingIndex + totalSlots * 5; idx++) { // arbitrary safety cap
+        const col = idx % agentsPerRow;
+        const row = Math.floor(idx / agentsPerRow);
+        const pos: Position = {
+          x: pad + col * (elemSize.width + pad),
+          y: pad + row * (elemSize.height + pad),
+        };
+        const key = `${pos.x},${pos.y}`;
+        if (!occupied.has(key)) {
+          return pos;
+        }
+      }
+      // fallback top-left
+      return { x: pad, y: pad };
+    }
     
     let newPosition: Position = { x: padding, y: padding };
     
@@ -310,8 +361,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
         height: canvasEl.clientHeight 
       };
       
-      const existingAgents = agents().length;
-      newPosition = calculateGridPosition(containerSize, agentSize, existingAgents, padding);
+      const existingProcessed = agents();
+      const occupied = new Set(existingProcessed.map(a => `${Math.round(a.position.x)},${Math.round(a.position.y)}`));
+      const existingAgents = existingProcessed.length;
+      // Use helper to find the first vacant slot considering occupied set
+      newPosition = findNextAvailableGridPosition(containerSize, agentSize, occupied, padding, existingAgents);
+
     }
     
     try {
@@ -332,7 +387,32 @@ export function ImageCanvas(props: ImageCanvasProps) {
         createParams.voice = 'Aurora'; // Default voice
       }
 
-      await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
+      // ---------------------------------------------
+      // Optimistic insert
+      // ---------------------------------------------
+      const tempId = crypto.randomUUID();
+      const tempAgent: Agent = {
+        id: tempId,
+        prompt: createParams.prompt,
+        type,
+        position: newPosition,
+        size: agentSize,
+      } as any;
+
+      batch(() => {
+        setOptimisticNewAgents(prev => [...prev, tempAgent]);
+      });
+
+      try {
+        await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
+      } finally {
+        // Remove temp once Convex snapshot arrives (~after mutation). Delay slightly to avoid flicker.
+        setTimeout(() => {
+          batch(() => {
+            setOptimisticNewAgents(prev => prev.filter(a => a.id !== tempId));
+          });
+        }, 250);
+      }
       
       // Note: Convex queries update automatically via real-time subscriptions
       // Small delay helps ensure the agent is available for dragging
@@ -347,12 +427,29 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   };
   
-  // Remove an agent
+  // Remove an agent with optimistic UI
   const removeAgent = async (id: string) => {
     try {
-      await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
-        agentId: id as any,
+      // Optimistically hide immediately
+      batch(() => {
+        setOptimisticDeletedAgentIds(prev => new Set(prev).add(id));
       });
+
+      try {
+        await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
+          agentId: id as any,
+        });
+      } catch (error) {
+        console.error('Failed to delete agent:', error);
+        // Rollback
+        batch(() => {
+          setOptimisticDeletedAgentIds(prev => {
+            const copy = new Set(prev);
+            copy.delete(id);
+            return copy;
+          });
+        });
+      }
     } catch (error) {
       console.error('Failed to delete agent:', error);
     }
@@ -466,16 +563,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   };
   
-  // Update agent prompt text
-  const updateAgentPrompt = async (id: string, prompt: string) => {
-    try {
-      await updateAgentPromptMutation.mutate(convexApi.agents.updateAgentPrompt, {
-        agentId: id as any,
-        prompt,
-      });
-    } catch (error) {
-      console.error('Failed to update agent prompt:', error);
-    }
+  // Debounced prompt update to minimise writes
+  let promptDebounceHandle: any;
+  const updateAgentPrompt = (id: string, prompt: string) => {
+    if (promptDebounceHandle) clearTimeout(promptDebounceHandle);
+    promptDebounceHandle = setTimeout(async () => {
+      try {
+        await updateAgentPromptMutation.mutate(convexApi.agents.updateAgentPrompt, {
+          agentId: id as any,
+          prompt,
+        });
+      } catch (error) {
+        console.error('Failed to update agent prompt:', error);
+      }
+    }, 200);
   };
 
   // =============================================
