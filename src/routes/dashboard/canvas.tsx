@@ -99,17 +99,17 @@ function ImagesPage() {
         <div class="h-full flex flex-col">
             {/* Header */}
             <div class="flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div class="container mx-auto max-w-7xl px-4 py-4">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div>
-                                <h1 class="text-2xl font-semibold mb-1">AI Image Studio</h1>
+                <div class="container py-4">
+                    <div class="flex flex-col lg:flex-row lg:justify-between gap-4">
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <div class="flex-1 min-w-0">
+                                <h1 class="text-xl sm:text-2xl font-semibold mb-1">Gen-AI Canvas</h1>
                                 <p class="text-muted-foreground text-sm">
-                                    Create and organize AI-generated images with intelligent agents
+                                    Create and organize AI-generated media with intelligent agents
                                 </p>
                             </div>
 
-                            <div class="border-l pl-4 ml-4">
+                            <div class="flex-shrink-0 sm:border-l sm:pl-4 sm:ml-4">
                                 <div class="text-xs text-muted-foreground mb-1">Canvas</div>
                                 <CanvasSelector
                                     activeCanvasId={activeCanvasId()}
@@ -118,18 +118,20 @@ function ImagesPage() {
                             </div>
                         </div>
 
-                        <Tabs value={activeTab()} onChange={setActiveTab}>
-                            <TabsList class="grid w-full grid-cols-2">
-                                <TabsTrigger value="canvas" class="flex items-center gap-2">
-                                    <Icon name="layout-grid" class="h-4 w-4" />
-                                    Canvas
-                                </TabsTrigger>
-                                <TabsTrigger value="history" class="flex items-center gap-2">
-                                    <Icon name="clock" class="h-4 w-4" />
-                                    History
-                                </TabsTrigger>
-                            </TabsList>
-                        </Tabs>
+                        <div class="flex-shrink-0">
+                            <Tabs value={activeTab()} onChange={setActiveTab}>
+                                <TabsList class="grid w-full grid-cols-2">
+                                    <TabsTrigger value="canvas" class="flex items-center gap-2">
+                                        <Icon name="layout-grid" class="h-4 w-4" />
+                                        <span class="hidden sm:inline">Canvas</span>
+                                    </TabsTrigger>
+                                    <TabsTrigger value="history" class="flex items-center gap-2">
+                                        <Icon name="clock" class="h-4 w-4" />
+                                        <span class="hidden sm:inline">History</span>
+                                    </TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        </div>
                     </div>
                 </div>
             </div>

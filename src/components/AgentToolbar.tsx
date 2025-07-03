@@ -53,9 +53,9 @@ export interface AgentToolbarProps {
  */
 export function AgentToolbar(props: AgentToolbarProps) {
   return (
-    <div class="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold text-muted-foreground">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 gap-3 sm:gap-0">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">
           {props.agentCount} <span class="!font-normal text-muted-foreground/70">agent{props.agentCount !== 1 ? 's' : ''}</span>
         </span>
         
@@ -84,15 +84,15 @@ export function AgentToolbar(props: AgentToolbarProps) {
 
       </div>
       
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         {/* Agent Selection Section with improved UI */}
-        <div class="bg-muted/30 border rounded-md flex items-center mr-2 h-9 overflow-hidden">
-          <div class="text-xs text-muted-foreground px-3 border-r h-full flex items-center">Add Agent:</div>
-          <div class="flex h-full">
+        <div class="bg-muted/30 border rounded-md flex items-center h-9 overflow-hidden min-w-0">
+          <div class="text-xs text-muted-foreground px-2 sm:px-3 border-r h-full items-center whitespace-nowrap hidden sm:flex">Add Agent:</div>
+          <div class="flex h-full min-w-0">
             <button
               onClick={props.onAddGenerateAgent}
               class={cn(
-                "flex items-center gap-1 h-full px-3 relative cursor-pointer",
+                "flex items-center gap-1 h-full px-2 sm:px-3 relative cursor-pointer",
                 "hover:bg-foreground/5 transition-colors",
                 "focus:outline-none focus-visible:bg-background/80",
                 props.activeAgentType === 'generate' ? "bg-background" : ""
@@ -105,13 +105,16 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 )}
               />
               <Icon name="image" class="h-4 w-4 text-blue-600" />
-              <span class="text-sm">Generate</span>
+              <span class="text-sm">
+                <span class="hidden sm:inline">Generate</span>
+                <span class="sm:hidden">Gen</span>
+              </span>
             </button>
             <div class="w-px h-full bg-border/50" />
             <button
               onClick={props.onAddEditAgent}
               class={cn(
-                "flex items-center gap-1 h-full px-3 relative cursor-pointer",
+                "flex items-center gap-1 h-full px-2 sm:px-3 relative cursor-pointer",
                 "hover:bg-foreground/5 transition-colors",
                 "focus:outline-none focus-visible:bg-background/80",
                 props.activeAgentType === 'edit' ? "bg-background" : ""
@@ -130,7 +133,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
             <button
               onClick={props.onAddVoiceAgent}
               class={cn(
-                "flex items-center gap-1 h-full px-3 relative cursor-pointer",
+                "flex items-center gap-1 h-full px-2 sm:px-3 relative cursor-pointer",
                 "hover:bg-foreground/5 transition-colors",
                 "focus:outline-none focus-visible:bg-background/80",
                 props.activeAgentType === 'voice' ? "bg-background" : ""
@@ -143,7 +146,10 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 )}
               />
               <Icon name="mic" class="h-4 w-4 text-indigo-600" />
-              <span class="text-sm">Voice</span>
+              <span class="text-sm">
+                <span class="hidden sm:inline">Voice</span>
+                <span class="sm:hidden">Mic</span>
+              </span>
             </button>
           </div>
         </div>

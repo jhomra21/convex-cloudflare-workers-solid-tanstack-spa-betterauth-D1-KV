@@ -88,9 +88,16 @@ voiceApi.post('/', async (c) => {
 
     console.log(`🎤 Starting TTS generation with webhook: ${webhookUrl}`);
 
-    // Set agent status to 'processing' immediately
+    // Update agent status to 'processing' and voice settings in one atomic call
     if (agentId && c.env.CONVEX_URL) {
-      await updateAgentStatus(c.env.CONVEX_URL, agentId, 'processing');
+      const convex = new ConvexHttpClient(c.env.CONVEX_URL);
+      
+      await convex.mutation(api.agents.startVoiceGeneration, {
+        agentId: agentId as any,
+        status: "processing",
+        voice: audioSampleUrl ? undefined : voice, // Only save voice if not using custom audio
+        audioSampleUrl: audioSampleUrl || undefined,
+      });
     }
 
     // Submit to fal.ai queue with webhook

@@ -115,6 +115,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
         props.onPromptChange?.(agentId, localPrompt());
     };
 
+
+
     // Voice change is now handled directly in VoiceSelector
 
     const handleEditPrompt = () => {
@@ -430,7 +432,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
 
                     {/* Loading State */}
                     <Show when={isLoading() && !hasAudio()}>
-                        <div class="flex-1 flex flex-col items-center justify-center">
+                        <div class="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20">
                             <Icon name="loader" class="w-8 h-8 animate-spin text-muted-foreground mb-2" />
                             <p class="text-sm text-muted-foreground">
                                 Generating voice...

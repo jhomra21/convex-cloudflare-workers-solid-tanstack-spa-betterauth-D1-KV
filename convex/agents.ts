@@ -444,6 +444,30 @@ export const updateAgentAudio = mutation({
   },
 });
 
+// Update agent for voice generation start - status and voice settings in one call
+export const startVoiceGeneration = mutation({
+  args: {
+    agentId: v.id("agents"),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    voice: v.optional(v.union(
+      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
+      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+      v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+    )),
+    audioSampleUrl: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, status, voice, audioSampleUrl }) => {
+    await ctx.db.patch(agentId, {
+      status,
+      voice,
+      audioSampleUrl,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 // Update agent request ID for webhook matching
 export const updateAgentRequestId = mutation({
   args: {
