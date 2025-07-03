@@ -11,7 +11,7 @@ import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
 import { storeShareIntent, getAndClearShareIntent } from '~/lib/share-intent';
 
-export const Route = createFileRoute('/dashboard/images')({
+export const Route = createFileRoute('/dashboard/canvas')({
     component: ImagesPage,
     validateSearch: (search: Record<string, unknown>) => {
         return {
@@ -29,7 +29,7 @@ function ImagesPage() {
     );
 
     const [activeTab, setActiveTab] = createSignal("canvas");
-    const search = useSearch({ from: '/dashboard/images' });
+    const search = useSearch({ from: '/dashboard/canvas' });
 
     // Mutation hooks
     const joinSharedCanvasMutation = useMutation();
@@ -64,7 +64,7 @@ function ImagesPage() {
                 setProcessedShareIds(prev => new Set([...prev, pendingShareId]));
                 handleJoinSharedCanvas(pendingShareId);
                 // Update URL to show the share (this will trigger effect again, but we'll skip it)
-                window.history.replaceState({}, '', '/dashboard/images?share=' + pendingShareId);
+                window.history.replaceState({}, '', '/dashboard/canvas?share=' + pendingShareId);
             }
         }
     });
@@ -85,7 +85,7 @@ function ImagesPage() {
       setActiveCanvasId(canvasId);
     toast.success('Successfully joined shared canvas!');
       // Remove share parameter from URL
-        window.history.replaceState({}, '', '/dashboard/images');
+        window.history.replaceState({}, '', '/dashboard/canvas');
     } else {
       toast.error('Canvas not found or no longer shareable');
       }

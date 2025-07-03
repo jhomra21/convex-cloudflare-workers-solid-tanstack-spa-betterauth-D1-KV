@@ -19,7 +19,7 @@ import { Route as IndexImport } from './routes/index'
 import { Route as DashboardIndexImport } from './routes/dashboard/index'
 import { Route as DashboardTasksImport } from './routes/dashboard/tasks'
 import { Route as DashboardNotesImport } from './routes/dashboard/notes'
-import { Route as DashboardImagesImport } from './routes/dashboard/images'
+import { Route as DashboardCanvasImport } from './routes/dashboard/canvas'
 import { Route as DashboardAccountImport } from './routes/dashboard/account'
 
 // Create Virtual Routes
@@ -69,9 +69,9 @@ const DashboardNotesRoute = DashboardNotesImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const DashboardImagesRoute = DashboardImagesImport.update({
-  id: '/images',
-  path: '/images',
+const DashboardCanvasRoute = DashboardCanvasImport.update({
+  id: '/canvas',
+  path: '/canvas',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -129,11 +129,11 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof DashboardAccountImport
       parentRoute: typeof DashboardImport
     }
-    '/dashboard/images': {
-      id: '/dashboard/images'
-      path: '/images'
-      fullPath: '/dashboard/images'
-      preLoaderRoute: typeof DashboardImagesImport
+    '/dashboard/canvas': {
+      id: '/dashboard/canvas'
+      path: '/canvas'
+      fullPath: '/dashboard/canvas'
+      preLoaderRoute: typeof DashboardCanvasImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/notes': {
@@ -178,7 +178,7 @@ declare module '@tanstack/solid-router' {
 
 interface DashboardRouteChildren {
   DashboardAccountRoute: typeof DashboardAccountRoute
-  DashboardImagesRoute: typeof DashboardImagesRoute
+  DashboardCanvasRoute: typeof DashboardCanvasRoute
   DashboardNotesRoute: typeof DashboardNotesRoute
   DashboardTasksRoute: typeof DashboardTasksRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -186,7 +186,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAccountRoute: DashboardAccountRoute,
-  DashboardImagesRoute: DashboardImagesRoute,
+  DashboardCanvasRoute: DashboardCanvasRoute,
   DashboardNotesRoute: DashboardNotesRoute,
   DashboardTasksRoute: DashboardTasksRoute,
   DashboardIndexRoute: DashboardIndexRoute,
@@ -201,7 +201,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
-  '/dashboard/images': typeof DashboardImagesRoute
+  '/dashboard/canvas': typeof DashboardCanvasRoute
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -213,7 +213,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard/account': typeof DashboardAccountRoute
-  '/dashboard/images': typeof DashboardImagesRoute
+  '/dashboard/canvas': typeof DashboardCanvasRoute
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -227,7 +227,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
-  '/dashboard/images': typeof DashboardImagesRoute
+  '/dashboard/canvas': typeof DashboardCanvasRoute
   '/dashboard/notes': typeof DashboardNotesRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -242,7 +242,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/dashboard/account'
-    | '/dashboard/images'
+    | '/dashboard/canvas'
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard/'
@@ -253,7 +253,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard/account'
-    | '/dashboard/images'
+    | '/dashboard/canvas'
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard'
@@ -265,7 +265,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/dashboard/account'
-    | '/dashboard/images'
+    | '/dashboard/canvas'
     | '/dashboard/notes'
     | '/dashboard/tasks'
     | '/dashboard/'
@@ -317,7 +317,7 @@ export const routeTree = rootRoute
       "filePath": "dashboard.tsx",
       "children": [
         "/dashboard/account",
-        "/dashboard/images",
+        "/dashboard/canvas",
         "/dashboard/notes",
         "/dashboard/tasks",
         "/dashboard/"
@@ -327,8 +327,8 @@ export const routeTree = rootRoute
       "filePath": "dashboard/account.tsx",
       "parent": "/dashboard"
     },
-    "/dashboard/images": {
-      "filePath": "dashboard/images.tsx",
+    "/dashboard/canvas": {
+      "filePath": "dashboard/canvas.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/notes": {

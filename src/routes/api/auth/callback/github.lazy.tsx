@@ -23,7 +23,7 @@ function GitHubCallbackComponent() {
 
         if (response.ok) {
           if (hasShareIntent()) {
-            navigate({ to: '/dashboard/images', replace: true });
+            navigate({ to: '/dashboard/canvas', replace: true });
           } else {
             navigate({ to: '/dashboard', replace: true });
           }

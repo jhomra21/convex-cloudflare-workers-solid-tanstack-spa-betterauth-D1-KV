@@ -45,10 +45,10 @@ export function DashboardIndex() {
       color: 'border-blue-200 dark:border-blue-800'
     },
     {
-      title: 'Images',
-      description: 'Interactive canvas for image generation and editing backed by Fal.ai and Convex',
+      title: 'Gen-AI Canvas',
+      description: 'Interactive canvas for media generation and editing backed by Fal.ai and Convex',
       icon: '🖼️',
-      path: '/dashboard/images',
+      path: '/dashboard/canvas',
       color: 'border-red-200 dark:border-red-800'
     }
     // to add more items here, follow the format below

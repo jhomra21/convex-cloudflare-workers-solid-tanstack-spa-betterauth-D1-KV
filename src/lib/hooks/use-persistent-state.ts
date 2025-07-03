@@ -44,3 +44,33 @@ export function useAgentPromptState(agentId: string, initialPrompt: string = '')
   
   return usePersistentState(`prompt-${agentId}`, initialPrompt, agentContext);
 }
+
+// Specific hook for agent voice state
+export function useAgentVoiceState(agentId: string, initialVoice: any = 'Aurora') {
+  if (!agentContexts.has(agentId)) {
+    agentContexts.set(agentId, { agentId });
+  }
+  const agentContext = agentContexts.get(agentId)!;
+  
+  return usePersistentState(`voice-${agentId}`, initialVoice, agentContext);
+}
+
+// Specific hook for agent exaggeration state
+export function useAgentExaggerationState(agentId: string, initialExaggeration: number = 1.5) {
+  if (!agentContexts.has(agentId)) {
+    agentContexts.set(agentId, { agentId });
+  }
+  const agentContext = agentContexts.get(agentId)!;
+  
+  return usePersistentState(`exaggeration-${agentId}`, initialExaggeration, agentContext);
+}
+
+// Specific hook for agent custom audio URL state
+export function useAgentCustomAudioState(agentId: string, initialUrl: string = '') {
+  if (!agentContexts.has(agentId)) {
+    agentContexts.set(agentId, { agentId });
+  }
+  const agentContext = agentContexts.get(agentId)!;
+  
+  return usePersistentState(`customAudio-${agentId}`, initialUrl, agentContext);
+}

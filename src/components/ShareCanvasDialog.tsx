@@ -29,7 +29,7 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
   
   const shareUrl = createMemo(() => {
     if (!shareId()) return '';
-    return `${window.location.origin}/dashboard/images?share=${shareId()}`;
+    return `${window.location.origin}/dashboard/canvas?share=${shareId()}`;
   });
   
   const isOwner = createMemo(() => 

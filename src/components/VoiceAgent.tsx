@@ -6,7 +6,7 @@ import { Input } from '~/components/ui/input';
 import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
-import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
+import { useAgentPromptState, useAgentVoiceState, useAgentExaggerationState, useAgentCustomAudioState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { VoiceSelector } from '~/components/VoiceSelector';
@@ -37,12 +37,12 @@ export interface VoiceAgentProps {
 export function VoiceAgent(props: VoiceAgentProps) {
     const agentId = props.id || createUniqueId();
 
-    // Use persistent state hook for prompt
+    // Use persistent state hooks for prompt, voice, exaggeration, and custom audio
     const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
+    const [selectedVoice, setSelectedVoice] = useAgentVoiceState(agentId, props.voice || 'Aurora');
+    const [exaggeration, setExaggeration] = useAgentExaggerationState(agentId, 1.5);
+    const [customAudioUrl, setCustomAudioUrl] = useAgentCustomAudioState(agentId, props.audioSampleUrl || '');
     const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
-    const [selectedVoice, setSelectedVoice] = createSignal<VoiceOption>(props.voice || 'Aurora');
-    const [customAudioUrl, setCustomAudioUrl] = createSignal(props.audioSampleUrl || '');
-    const [exaggeration, setExaggeration] = createSignal(1.5); // Default to 1.5 (matches API default)
     const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
 
     // Use stable status to prevent flicker
@@ -267,7 +267,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                 <div class="flex items-center gap-2">
                                     <div class="text-xs text-muted-foreground">Voice:</div>
                                     <VoiceSelector
-                                        selectedVoice={selectedVoice()}
+                                        selectedVoice={selectedVoice() as VoiceOption}
                                         onVoiceChange={(voice) => setSelectedVoice(voice)}
                                         customAudioUrl={customAudioUrl()}
                                         disabled={isLoading()}
