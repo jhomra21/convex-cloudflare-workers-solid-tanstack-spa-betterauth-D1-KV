@@ -147,8 +147,8 @@ function ImagesPage() {
                         />
                     </TabsContent>
 
-                    <TabsContent value="history" class="h-full m-0 p-4">
-                        <div class="container mx-auto max-w-6xl h-full">
+                    <TabsContent value="history" class="h-full m-0 px-1 py-4">
+                        <div class="container mx-auto h-full">
                             <div class="h-full overflow-auto">
                                 <div class="mb-6">
                                     <h2 class="text-xl font-semibold mb-2">Your Generated Images</h2>

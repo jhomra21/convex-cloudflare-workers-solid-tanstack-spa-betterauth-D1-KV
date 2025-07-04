@@ -97,7 +97,7 @@ import {
                     </div>
                   </header>
                   {/* Opacity gradient overlay positioned right under header for fade effect */}
-                  <div class={`absolute top-16 left-0 right-0 h-6 bg-gradient-to-b from-background/90 to-transparent pointer-events-none z-30 transform transition-transform duration-200 will-change-transform ${isScrolled() ? 'translate-y-0' : 'translate-y-[-100%]'}`}></div>
+                  <div class={`absolute top-16 left-0 right-0 h-6 bg-gradient-to-b from-background/50 to-transparent pointer-events-none z-30 transform transition-transform duration-200 will-change-transform ${isScrolled() ? 'translate-y-0' : 'translate-y-[-100%]'}`}></div>
                   <div onScroll={handleScroll} class="flex-grow overflow-y-auto p-4 relative min-h-0">
                     <Suspense fallback={
                       <div class="w-full h-full flex items-center justify-center">

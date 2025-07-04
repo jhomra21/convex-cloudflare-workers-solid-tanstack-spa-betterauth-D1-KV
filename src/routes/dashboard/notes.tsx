@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/solid-router';
+import { createFileRoute, useLoaderData } from '@tanstack/solid-router';
 import { createSignal, For, Show } from 'solid-js';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 
 export function NotesPage() {
   // Query and mutations
-  const notesQuery = useNotes();
+  const loaderData = useLoaderData({ from: '/dashboard/notes' });
+  const preloadedNotes = loaderData().notes;
+  const notesQuery = useNotes({ initialData: preloadedNotes });
   const createMutation = useCreateNoteMutation();
   const updateMutation = useUpdateNoteMutation();
   const deleteMutation = useDeleteNoteMutation();
@@ -114,7 +116,7 @@ export function NotesPage() {
   };
 
   return (
-    <div class="container mx-auto max-w-5xl px-4 py-8 min-h-screen">
+    <div class="container mx-auto min-h-screen">
       <div class="flex flex-col space-y-8">
         {/* Header */}
         <div class="flex justify-between items-center">
@@ -243,4 +245,18 @@ export function NotesPage() {
 
 export const Route = createFileRoute('/dashboard/notes')({
   component: NotesPage,
+  loader: async ({ context }) => {
+    // Check cache first
+    const cached = context.queryClient.getQueryData(['notes']);
+    if (cached) {
+      return { notes: cached };
+    }
+    // Otherwise, fetch from API
+    const res = await fetch('/api/notes/', { credentials: 'include' });
+    if (!res.ok) throw new Error('Failed to load notes');
+    const data = await res.json();
+    // Prime the cache
+    context.queryClient.setQueryData(['notes'], data.notes);
+    return { notes: data.notes };
+  },
 }); 

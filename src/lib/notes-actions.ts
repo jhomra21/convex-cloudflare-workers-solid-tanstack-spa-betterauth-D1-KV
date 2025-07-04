@@ -105,11 +105,12 @@ const notesApi = {
 };
 
 // Query hooks for notes
-export function useNotes() {
+export function useNotes(options?: { initialData?: Note[] }) {
   return useQuery(() => ({
     queryKey: ['notes'],
     queryFn: notesApi.getAllNotes,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    initialData: options?.initialData,
   }));
 }
 
