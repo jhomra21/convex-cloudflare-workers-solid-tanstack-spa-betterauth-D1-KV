@@ -240,6 +240,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                             Voice
                         </span>
                     </div>
+                    
                     <div class="flex gap-1">
                         <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
                         <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
@@ -248,8 +249,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
                 </div>
 
                 <CardContent class="p-4 flex flex-col h-full relative">
-                    {/* Action Buttons Overlay - always visible like ImageAgent */}
-                    <Show when={!isLoading() && props.onRemove}>
+                    {/* Action Buttons Overlay - Only show when there's no audio or we're in prompt input mode */}
+                    <Show when={!isLoading() && props.onRemove && (!hasAudio() || showPromptInput())}>
                         <div class="absolute top-2 right-2 flex gap-1 z-10">
                             <Button
                                 variant="destructive"
@@ -366,19 +367,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     Your browser does not support the audio element.
                                 </audio>
 
-                                {/* Action Buttons Overlay - following ImageAgent pattern */}
-                                <Show when={!isLoading()}>
-                                    <div class="absolute top-2 right-2 flex gap-1 z-10">
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={handleEditPrompt}
-                                            disabled={isLoading()}
-                                        >
-                                            <Icon name="refresh-cw" class="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                </Show>
+                                {/* Action Buttons Overlay - removed to prevent overlap */}
                             </div>
 
                             {/* Action Buttons */}
@@ -405,9 +394,19 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                         }
                                     }}
                                 >
-                                    <Icon name="upload" class="w-3 h-3 mr-2" />
+                                    <Icon name="download" class="w-3 h-3 mr-2" />
                                     Download
                                 </Button>
+                                {/* Add delete button here when audio is shown */}
+                                <Show when={props.onRemove}>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => props.onRemove?.(agentId)}
+                                    >
+                                        <Icon name="x" class="w-3 h-3" />
+                                    </Button>
+                                </Show>
                             </div>
                         </div>
                     </Show>

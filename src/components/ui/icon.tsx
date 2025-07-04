@@ -4,7 +4,8 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
-| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" | "circle-x" | "upload" | "share" | "copy" | "users" | "chevron-down";
+| "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" |
+ "circle-x" | "upload" | "share" | "copy" | "users" | "chevron-down" | "download";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -13,6 +14,9 @@ type IconProps = {
 } & ComponentProps<"svg">; // Allows passing standard SVG props like class, width, height, etc.
 
 // Individual SVG components (or direct JSX)
+const DownloadIcon = (props: ComponentProps<"svg">) => (
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download-icon lucide-download" {...props}><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>);
+
 const LoaderIcon = (props: ComponentProps<"svg">) => (
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader" {...props}><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>)
 
@@ -356,6 +360,9 @@ export const Icon = (props: IconProps) => {
 
   return (
     <Switch fallback={<Show when={import.meta.env.DEV}><p>Icon not found: {local.name}</p></Show>}>
+      <Match when={local.name === "download"}>
+        <DownloadIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
       <Match when={local.name === "loader"}>
         <LoaderIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>

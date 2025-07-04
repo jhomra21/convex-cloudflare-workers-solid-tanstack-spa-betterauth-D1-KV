@@ -16,6 +16,7 @@ export interface UseResizeOptions {
   maxWidth?: number;
   minHeight?: number;
   maxHeight?: number;
+  zoomLevel?: () => number;
 }
 
 export function useCanvasResize(options: UseResizeOptions = {}) {
@@ -27,6 +28,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     maxWidth = 600,
     minHeight = 250,
     maxHeight = 800,
+    zoomLevel,
   } = options;
 
   const [resizingAgent, setResizingAgent] = createSignal<string | null>(null);
@@ -36,6 +38,20 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
   
   // Track active event listeners for cleanup
   let isListening = false;
+
+  // Cache the element being resized (the agent card) and its wrapper (absolute positioned container)
+  let resizedEl: HTMLElement | null = null;
+  let wrapperEl: HTMLElement | null = null;
+
+  // Cache the current scale suffix from transform (e.g., "scale(1)") so we can preserve it when updating position
+  let transformSuffix = "";
+
+  // Store the latest calculated size/position to commit once on mouseup
+  let scheduledSize: Size | null = null;
+  let scheduledPositionAdjustment: Position | undefined = undefined;
+
+  let originalResizeTransition = "";
+  let originalWrapperTransition = "";
 
   const handleResizeStart = (
     e: MouseEvent,
@@ -51,6 +67,27 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     setResizeStartSize(currentSize);
     setResizeStartPos({ x: e.clientX, y: e.clientY });
     
+    // Capture DOM elements for direct style updates
+    resizedEl = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+    // The wrapper is the absolute positioned container one level up (Memoized*Agent wrapper)
+    wrapperEl = resizedEl?.parentElement as HTMLElement | null;
+
+    if (wrapperEl) {
+      // Extract any existing transform suffix (e.g., scale) so we can preserve it
+      const fullTransform = wrapperEl.style.transform || "";
+      const match = fullTransform.match(/translate3d\([^)]*\)\s*(.*)/);
+      transformSuffix = match ? ` ${match[1]}` : "";
+
+      // Temporarily disable transitions for snappy resize
+      originalWrapperTransition = wrapperEl.style.transition;
+      wrapperEl.style.transition = "none";
+    }
+
+    if (resizedEl) {
+      originalResizeTransition = resizedEl.style.transition;
+      resizedEl.style.transition = "none";
+    }
+
     onResizeStart?.(agentId, handle);
 
     // Add global mouse move listener for resize with tracking
@@ -72,8 +109,14 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     const startSize = resizeStartSize();
     const startPos = resizeStartPos();
     
-    const deltaX = e.clientX - startPos.x;
-    const deltaY = e.clientY - startPos.y;
+    const deltaXScreen = e.clientX - startPos.x;
+    const deltaYScreen = e.clientY - startPos.y;
+
+    const currentZoom = zoomLevel?.() || 1.0;
+
+    // Convert screen delta to content-space delta by dividing by zoom
+    const deltaX = deltaXScreen / currentZoom;
+    const deltaY = deltaYScreen / currentZoom;
 
     let newWidth = startSize.width;
     let newHeight = startSize.height;
@@ -107,15 +150,43 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     if (handle.includes('w') || handle.includes('n')) {
       positionAdjustment = { x: 0, y: 0 };
       
-      if (handle.includes('w')) { // Left side
+      if (handle.includes('w')) {
+        // Left side – move container left by width delta so the visual "west" edge follows cursor
         positionAdjustment.x = startSize.width - newWidth;
       }
-      if (handle.includes('n')) { // Top side
+      if (handle.includes('n')) {
+        // Top side – move container up by height delta
         positionAdjustment.y = startSize.height - newHeight;
       }
     }
 
-    onResizeMove?.(agentId, { width: newWidth, height: newHeight }, positionAdjustment);
+    // ----------------------------------------------
+    // DOM updates for buttery-smooth resizing (no Solid writes)
+    // ----------------------------------------------
+    if (resizedEl) {
+      resizedEl.style.width = `${newWidth}px`;
+      resizedEl.style.height = `${newHeight}px`;
+    }
+
+    if (wrapperEl && positionAdjustment) {
+      // Parse current translate3d values
+      const currentTransform = wrapperEl.style.transform || "translate3d(0px, 0px, 0)";
+      const match = currentTransform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
+      let currentX = 0;
+      let currentY = 0;
+      if (match) {
+        currentX = parseFloat(match[1]);
+        currentY = parseFloat(match[2]);
+      }
+
+      const newX = currentX + positionAdjustment.x;
+      const newY = currentY + positionAdjustment.y;
+      wrapperEl.style.transform = `translate3d(${newX}px, ${newY}px, 0)${transformSuffix}`;
+    }
+
+    // Stash latest calculated values for commit on mouseup
+    scheduledSize = { width: newWidth, height: newHeight };
+    scheduledPositionAdjustment = positionAdjustment;
   };
 
   const handleResizeEnd = () => {
@@ -124,8 +195,21 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     setResizingAgent(null);
     setResizeHandle(null);
     
+    // Commit final size/position once – avoid spamming reactive writes during move
+    if (resizingId && scheduledSize) {
+      onResizeMove?.(resizingId, scheduledSize, scheduledPositionAdjustment);
+    }
+
+    // Restore transitions BEFORE cleanup
+    if (resizedEl) {
+      resizedEl.style.transition = originalResizeTransition;
+    }
+    if (wrapperEl) {
+      wrapperEl.style.transition = originalWrapperTransition;
+    }
+
     removeEventListeners();
-    
+
     if (resizingId) {
       onResizeEnd?.(resizingId);
     }
@@ -154,6 +238,12 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
       window.removeEventListener('beforeunload', handleInterruption);
       isListening = false;
     }
+    resizedEl = null;
+    wrapperEl = null;
+    originalResizeTransition = "";
+    originalWrapperTransition = "";
+    scheduledSize = null;
+    scheduledPositionAdjustment = undefined;
   };
 
   // Cleanup on component unmount

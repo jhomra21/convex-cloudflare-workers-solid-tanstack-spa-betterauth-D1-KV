@@ -688,6 +688,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
         saveAgentTransform(agentId, agent.position, agent.size);
       }
     },
+    zoomLevel: () => viewport().zoom,
   });
 
   // Cleanup timeouts on unmount
