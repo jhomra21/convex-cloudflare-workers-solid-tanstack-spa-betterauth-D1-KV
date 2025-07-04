@@ -53,7 +53,7 @@ export interface AgentToolbarProps {
  */
 export function AgentToolbar(props: AgentToolbarProps) {
   return (
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 gap-3 sm:gap-0">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-1 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 gap-3 sm:gap-0">
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">
           {props.agentCount} <span class="!font-normal text-muted-foreground/70">agent{props.agentCount !== 1 ? 's' : ''}</span>

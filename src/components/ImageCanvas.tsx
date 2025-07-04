@@ -774,7 +774,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
 
         {/* Canvas */}
         <div 
-          class="canvas-container flex-1 relative overflow-auto bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0"
+          class="canvas-container flex-1 relative overflow-auto bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl"
           style={{ 
             "background-image": "radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)",
             "background-size": `${20 * viewport().zoom}px ${20 * viewport().zoom}px`
@@ -887,7 +887,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
         </div>
 
         {/* Status Bar */}
-        <div class="flex items-center justify-between px-4 py-2 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
+        <div class="flex items-center justify-between px-1 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
           <span>Drag agents around the canvas to organize your workspace</span>
           <div class="flex items-center gap-4">
             {/* Zoom Controls */}
