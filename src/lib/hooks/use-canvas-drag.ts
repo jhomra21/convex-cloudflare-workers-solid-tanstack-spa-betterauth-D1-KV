@@ -21,6 +21,7 @@ export interface UseDragOptions {
   constrainToBounds?: boolean;
   agentSize?: Size;
   zoomLevel?: () => number;
+  viewportGetter?: () => { tx: number; ty: number; zoom: number };
 }
 
 export function useCanvasDrag(options: UseDragOptions = {}) {
@@ -31,6 +32,7 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     constrainToBounds = true,
     agentSize = { width: 320, height: 384 },
     zoomLevel,
+    viewportGetter,
   } = options;
 
   const [draggedAgent, setDraggedAgent] = createSignal<string | null>(null);
@@ -70,12 +72,22 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     draggedEl = el ?? (e.currentTarget as HTMLElement | null);
     
     // Calculate offset using shared coordinate utilities
-    const currentZoom = zoomLevel?.() || 1.0;
+    const vp = viewportGetter?.();
+    const currentZoom = vp ? vp.zoom : (zoomLevel?.() || 1.0);
 
     cachedCanvasRect = canvasEl.getBoundingClientRect();
     cachedContainerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
     cachedTransformer = createCoordinateTransformer(cachedCanvasRect, cachedContainerSize, currentZoom);
-    const agentScreenPos = cachedTransformer.toScreen(agentPosition);
+
+    let agentScreenPos;
+    if (vp) {
+      agentScreenPos = {
+        x: cachedCanvasRect.left + vp.tx + agentPosition.x * vp.zoom,
+        y: cachedCanvasRect.top + vp.ty + agentPosition.y * vp.zoom,
+      };
+    } else {
+      agentScreenPos = cachedTransformer.toScreen(agentPosition);
+    }
     
     const offsetX = e.clientX - agentScreenPos.x;
     const offsetY = e.clientY - agentScreenPos.y;
@@ -100,26 +112,36 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     if (!canvasEl) return;
 
     const offset = dragOffset();
-    const currentZoom = zoomLevel?.() || 1.0;
+    const vp = viewportGetter?.();
+    const currentZoom = vp ? vp.zoom : zoomLevel?.() || 1.0;
     // Calculate mouse position adjusting for drag offset
     const mouseScreenPos = {
       x: e.clientX - offset.x,
       y: e.clientY - offset.y,
     };
     
-    const scrollOffset = {
-      x: canvasEl.scrollLeft,
-      y: canvasEl.scrollTop,
-    };
-    
-    // Convert to content coordinates using shared utilities
-    if (!cachedTransformer) {
-      // Fallback (should not happen) – compute on the fly
-      cachedCanvasRect = canvasEl.getBoundingClientRect();
-      cachedContainerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
-      cachedTransformer = createCoordinateTransformer(cachedCanvasRect, cachedContainerSize, currentZoom);
+    let newPosition;
+    if (vp) {
+      newPosition = {
+        x: (e.clientX - (cachedCanvasRect?.left ?? 0) - vp.tx - offset.x) / vp.zoom,
+        y: (e.clientY - (cachedCanvasRect?.top ?? 0) - vp.ty - offset.y) / vp.zoom,
+      };
+    } else {
+      const scrollOffset = {
+        x: canvasEl.scrollLeft,
+        y: canvasEl.scrollTop,
+      };
+      if (!cachedTransformer) {
+        cachedCanvasRect = canvasEl.getBoundingClientRect();
+        cachedContainerSize = { width: canvasEl.clientWidth, height: canvasEl.clientHeight };
+        cachedTransformer = createCoordinateTransformer(cachedCanvasRect, cachedContainerSize, currentZoom);
+      }
+      if (cachedTransformer) {
+        newPosition = cachedTransformer.toContent(mouseScreenPos, scrollOffset);
+      } else {
+        newPosition = { x: 0, y: 0 };
+      }
     }
-    let newPosition = cachedTransformer.toContent(mouseScreenPos, scrollOffset);
 
     // Constrain to canvas boundaries if enabled
     if (constrainToBounds) {

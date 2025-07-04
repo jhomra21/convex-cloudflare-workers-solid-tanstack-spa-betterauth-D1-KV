@@ -24,6 +24,13 @@ export interface CanvasElement extends HTMLElement {
     clientHeight: number;
 }
 
+// New viewport model: translation + zoom
+export interface Viewport {
+    tx: number; // translate X in screen px
+    ty: number; // translate Y in screen px
+    zoom: number; // scale factor
+}
+
 /**
  * Calculate center-based scaling offset for zoom transformations
  */
@@ -213,5 +220,44 @@ export function createCoordinateTransformer(
 
         constrainBounds: (position: Position, elementSize: Size) =>
             constrainToCanvasBounds(position, containerSize, elementSize, zoom),
+    };
+}
+
+// Convert screen coordinates to content coordinates with translation
+export function screenToContentWithViewport(
+    screen: Position,
+    canvasRect: DOMRect,
+    viewport: Viewport,
+): Position {
+    const { tx, ty, zoom } = viewport;
+    return {
+        x: (screen.x - canvasRect.left - tx) / zoom,
+        y: (screen.y - canvasRect.top - ty) / zoom,
+    };
+}
+
+// Convert content coordinates to screen coordinates with translation
+export function contentToScreenWithViewport(
+    content: Position,
+    canvasRect: DOMRect,
+    viewport: Viewport,
+): Position {
+    const { tx, ty, zoom } = viewport;
+    return {
+        x: canvasRect.left + tx + content.x * zoom,
+        y: canvasRect.top + ty + content.y * zoom,
+    };
+}
+
+// Create transformer using viewport
+export function createCoordinateTransformerWithViewport(
+    canvasRect: DOMRect,
+    viewport: Viewport,
+) {
+    return {
+        toContent: (screen: Position): Position =>
+            screenToContentWithViewport(screen, canvasRect, viewport),
+        toScreen: (content: Position): Position =>
+            contentToScreenWithViewport(content, canvasRect, viewport),
     };
 }

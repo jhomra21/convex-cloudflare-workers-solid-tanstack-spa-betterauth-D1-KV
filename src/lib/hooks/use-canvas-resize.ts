@@ -17,6 +17,7 @@ export interface UseResizeOptions {
   minHeight?: number;
   maxHeight?: number;
   zoomLevel?: () => number;
+  viewportGetter?: () => { tx: number; ty: number; zoom: number };
 }
 
 export function useCanvasResize(options: UseResizeOptions = {}) {
@@ -29,6 +30,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     minHeight = 250,
     maxHeight = 800,
     zoomLevel,
+    viewportGetter,
   } = options;
 
   const [resizingAgent, setResizingAgent] = createSignal<string | null>(null);
@@ -112,7 +114,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     const deltaXScreen = e.clientX - startPos.x;
     const deltaYScreen = e.clientY - startPos.y;
 
-    const currentZoom = zoomLevel?.() || 1.0;
+    const currentZoom = viewportGetter ? viewportGetter().zoom : (zoomLevel?.() || 1.0);
 
     // Convert screen delta to content-space delta by dividing by zoom
     const deltaX = deltaXScreen / currentZoom;

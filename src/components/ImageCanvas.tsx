@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, createMemo, onCleanup, batch } from 'solid-js';
+import { createSignal, For, Show, createEffect, createMemo, onCleanup, onMount, batch } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { AgentConnection } from './AgentConnection';
@@ -14,6 +14,8 @@ import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
 import { 
   getCanvasElement,
+  screenToContent,
+  calculateScalingOffset,
   type Position,
   type Size
 } from '~/lib/utils/canvas-coordinates';
@@ -44,9 +46,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
   
   // Viewport state management
   const [viewport, setViewport] = createSignal({
-    x: 0,    // Pan X position (pixels)
-    y: 0,    // Pan Y position (pixels)
-    zoom: 1.0 // Zoom level (0.5 to 2.0)
+    tx: 0,
+    ty: 0,
+    zoom: 1.0,
   });
   
   // UI state
@@ -119,14 +121,15 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
   // Zoom constraints
   const MIN_ZOOM = 0.5; // 50%
   const MAX_ZOOM = 2.0; // 200%
-  const ZOOM_STEP = 0.25; // 25% increments
+  const ZOOM_STEP = 0.1; // 10% increments for button clicks
+  const ZOOM_WHEEL_FACTOR = 1.1; // ~10% per wheel notch
   
   // Constrain zoom level to safe bounds
   const constrainZoom = (zoom: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
   
   // Debounced viewport save to prevent excessive API calls
   let viewportSaveTimeout: any;
-  const saveViewportState = (newViewport: { x: number; y: number; zoom: number }) => {
+  const saveViewportState = (newViewport: { tx: number; ty: number; zoom: number }) => {
     const userCanvas = userOwnCanvas.data();
     if (!userCanvas?._id || !userId()) return;
     
@@ -138,7 +141,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
       try {
         await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
           canvasId: userCanvas._id,
-          viewport: newViewport,
+          viewport: { x: newViewport.tx, y: newViewport.ty, zoom: newViewport.zoom },
         });
       } catch (error) {
         console.error('Failed to save viewport state:', error);
@@ -147,31 +150,100 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
   };
   
   // Zoom functions
-  const zoomIn = () => {
-    const currentViewport = viewport();
-    const newViewport = {
-      ...currentViewport,
-      zoom: constrainZoom(currentViewport.zoom + ZOOM_STEP)
-    };
-    setViewport(newViewport);
-    saveViewportState(newViewport);
+  const zoomButton = (direction: 'in' | 'out') => {
+    const factor = direction === 'in' ? (1 + ZOOM_STEP) : (1 / (1 + ZOOM_STEP));
+    const container = canvasContainerEl;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    // Pivot at centre of viewport
+    const pivot = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    zoomBy(factor, pivot);
   };
-  
-  const zoomOut = () => {
-    const currentViewport = viewport();
-    const newViewport = {
-      ...currentViewport,
-      zoom: constrainZoom(currentViewport.zoom - ZOOM_STEP)
-    };
-    setViewport(newViewport);
-    saveViewportState(newViewport);
-  };
+
+  const zoomIn = () => zoomButton('in');
+  const zoomOut = () => zoomButton('out');
   
   const resetZoom = () => {
-    const newViewport = { x: 0, y: 0, zoom: 1.0 };
+    const newViewport = { tx: 0, ty: 0, zoom: 1.0 };
     setViewport(newViewport);
     saveViewportState(newViewport);
   };
+  
+  // ---------------------------------------------
+  // Pointer-based panning (middle mouse button)
+  // ---------------------------------------------
+
+  let isPanning = false;
+  let panStart = { x: 0, y: 0 };
+  let panViewportStart = { tx: 0, ty: 0, zoom: 1 };
+
+  const panMove = (e: PointerEvent) => {
+    if (!isPanning) return;
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    setViewport((prev) => ({ ...prev, tx: panViewportStart.tx + dx, ty: panViewportStart.ty + dy }));
+  };
+
+  const panUp = (e: PointerEvent) => {
+    if (!isPanning) return;
+    isPanning = false;
+    window.removeEventListener('pointermove', panMove);
+    window.removeEventListener('pointerup', panUp);
+    saveViewportState(viewport());
+  };
+
+  const handlePanPointerDown = (e: PointerEvent) => {
+    if (e.button !== 1) return; // middle mouse only
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    panViewportStart = { ...viewport() };
+    window.addEventListener('pointermove', panMove);
+    window.addEventListener('pointerup', panUp);
+  };
+
+  // ---------------------------------------------
+  // Mouse-wheel / pinch zoom utility
+  // ---------------------------------------------
+
+  let canvasContainerEl: HTMLDivElement | null = null;
+
+  const zoomBy = (factor: number, pivotScreen: { x: number; y: number }) => {
+    // Clamp new zoom first
+    const current = viewport();
+    const newZoom = constrainZoom(current.zoom * factor);
+    if (newZoom === current.zoom || !canvasContainerEl) return;
+
+    const container = canvasContainerEl;
+    const canvasRect = container.getBoundingClientRect();
+
+    // Calculate pivot in content coords using viewport translation
+    const vp = current;
+    const pivotContent = {
+      x: (pivotScreen.x - canvasRect.left - vp.tx) / vp.zoom,
+      y: (pivotScreen.y - canvasRect.top - vp.ty) / vp.zoom,
+    };
+
+    // New translation so pivot remains under cursor after zoom
+    const newTx = pivotScreen.x - canvasRect.left - pivotContent.x * newZoom;
+    const newTy = pivotScreen.y - canvasRect.top - pivotContent.y * newZoom;
+
+    const newViewport = { tx: newTx, ty: newTy, zoom: newZoom };
+    setViewport(newViewport);
+    saveViewportState(newViewport);
+  };
+
+  // Attach wheel listener once container ref is available
+  onMount(() => {
+    if (!canvasContainerEl) return;
+    const handler = (e: WheelEvent) => {
+      if (!e.ctrlKey) return; // Require ctrl to avoid hijacking scroll
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1 / ZOOM_WHEEL_FACTOR : ZOOM_WHEEL_FACTOR;
+      zoomBy(factor, { x: e.clientX, y: e.clientY });
+    };
+    canvasContainerEl.addEventListener('wheel', handler, { passive: false });
+    onCleanup(() => canvasContainerEl?.removeEventListener('wheel', handler));
+  });
   
   // =============================================
   // Effects and Derived State
@@ -181,7 +253,9 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
   createEffect(() => {
     const userCanvasData = userOwnCanvas.data();
     if (userCanvasData) {
-      setViewport(userCanvasData.viewport || { x: 0, y: 0, zoom: 1.0 });
+      const storedAny = (userCanvasData.viewport ?? {}) as any;
+      const converted = 'tx' in storedAny ? storedAny : { tx: storedAny.x ?? 0, ty: storedAny.y ?? 0, zoom: storedAny.zoom ?? 1 };
+      setViewport(converted);
     }
   });
   
@@ -354,42 +428,59 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     const agentSize: Size = { width: 320, height: 384 };
     const padding = 20;
 
-    // Utility to find first free grid slot
-    function findNextAvailableGridPosition(container: Size, elemSize: Size, occupied: Set<string>, pad: number, startingIndex: number): Position {
-      const agentsPerRow = Math.floor((container.width - pad * 2) / (elemSize.width + pad));
-      const agentsPerCol = Math.floor((container.height - pad * 2) / (elemSize.height + pad));
-      const totalSlots = agentsPerRow * agentsPerCol;
+    let newPosition: Position = { x: padding, y: padding };
 
-      for (let idx = startingIndex; idx < startingIndex + totalSlots * 5; idx++) { // arbitrary safety cap
-        const col = idx % agentsPerRow;
-        const row = Math.floor(idx / agentsPerRow);
-        const pos: Position = {
-          x: pad + col * (elemSize.width + pad),
-          y: pad + row * (elemSize.height + pad),
-        };
-        const key = `${pos.x},${pos.y}`;
-        if (!occupied.has(key)) {
-          return pos;
+    if (canvasEl) {
+      const vp = viewport();
+      const safeLeft = (-vp.tx) / vp.zoom;
+      const safeTop = (-vp.ty) / vp.zoom;
+      const safeWidth = canvasEl.clientWidth / vp.zoom;
+      const safeHeight = canvasEl.clientHeight / vp.zoom;
+
+      const stepX = agentSize.width + padding;
+      const stepY = agentSize.height + padding;
+
+      const existing = agents();
+
+      let placed = false;
+      outer: for (let row = 0; row < 100; row++) {
+        for (let col = 0; col < 100; col++) {
+          const x = safeLeft + col * stepX;
+          const y = safeTop + row * stepY;
+
+          if (x + agentSize.width > safeLeft + safeWidth) break; // next row
+          if (y + agentSize.height > safeTop + safeHeight) break; // out of visible bounds
+
+          // collision check
+          let collide = false;
+          for (const ag of existing) {
+            if (
+              x + agentSize.width + padding <= ag.position.x ||
+              x >= ag.position.x + ag.size.width + padding ||
+              y + agentSize.height + padding <= ag.position.y ||
+              y >= ag.position.y + ag.size.height + padding
+            ) {
+              continue; // no overlap with this agent
+            }
+            collide = true;
+            break;
+          }
+
+          if (!collide) {
+            newPosition = { x, y };
+            placed = true;
+            break outer;
+          }
         }
       }
-      // fallback top-left
-      return { x: pad, y: pad };
-    }
-    
-    let newPosition: Position = { x: padding, y: padding };
-    
-    if (canvasEl) {
-      const containerSize: Size = { 
-        width: canvasEl.clientWidth, 
-        height: canvasEl.clientHeight 
-      };
-      
-      const existingProcessed = agents();
-      const occupied = new Set(existingProcessed.map(a => `${Math.round(a.position.x)},${Math.round(a.position.y)}`));
-      const existingAgents = existingProcessed.length;
-      // Use helper to find the first vacant slot considering occupied set
-      newPosition = findNextAvailableGridPosition(containerSize, agentSize, occupied, padding, existingAgents);
 
+      if (!placed) {
+        // fallback centre of viewport
+        newPosition = {
+          x: safeLeft + safeWidth / 2 - agentSize.width / 2,
+          y: safeTop + safeHeight / 2 - agentSize.height / 2,
+        };
+      }
     }
     
     try {
@@ -663,9 +754,9 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
     onDragEnd: (agentId, finalPosition) => {
       updateAgentPosition(agentId, finalPosition);
     },
-    constrainToBounds: true,
+    constrainToBounds: false,
     agentSize: { width: 320, height: 384 },
-    zoomLevel: () => viewport().zoom,
+    viewportGetter: () => viewport(),
   });
 
   const resizeHook = useCanvasResize({
@@ -688,7 +779,7 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
         saveAgentTransform(agentId, agent.position, agent.size);
       }
     },
-    zoomLevel: () => viewport().zoom,
+    viewportGetter: () => viewport(),
   });
 
   // Cleanup timeouts on unmount
@@ -774,18 +865,22 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
 
         {/* Canvas */}
         <div 
-          class="canvas-container flex-1 relative overflow-auto bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl"
-          style={{ 
+          class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl"
+          ref={(el) => (canvasContainerEl = el)}
+          onPointerDown={handlePanPointerDown}
+          style={{
             "background-image": "radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)",
-            "background-size": `${20 * viewport().zoom}px ${20 * viewport().zoom}px`
+            "background-size": `20px 20px`
           }}
         >
           <div 
-            class="canvas-content w-full h-full"
+            class="canvas-content"
             style={{
-              transform: `scale(${viewport().zoom})`,
-              "transform-origin": "center center", // Center scaling for better UX
-              transition: "transform 0.2s ease-out"
+              'min-width': '100%',
+              'min-height': '100%',
+              transform: `translate(${viewport().tx}px, ${viewport().ty}px) scale(${viewport().zoom})`,
+              'transform-origin': 'top left',
+              transition: 'transform 0.2s ease-out'
             }}
           >
           {/* Loading State */}
@@ -794,27 +889,6 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
               <div class="text-center">
                 <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
                 <p class="text-sm text-muted-foreground">Loading canvas...</p>
-              </div>
-            </div>
-          </Show>
-
-          {/* Empty State */}
-          <Show when={canvas() && dbAgents.data() && agents().length === 0}>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="text-center">
-                <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
-                  <Icon name="image" class="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <h3 class="text-lg font-medium text-muted-foreground mb-2">
-                  Empty Canvas
-                </h3>
-                <p class="text-sm text-muted-foreground/80 mb-4">
-                  Add your first image agent to get started
-                </p>
-                <Button onClick={handleAddGenerateAgent} size="sm">
-                  <Icon name="plus" class="h-4 w-4 mr-2" />
-                  Add Agent
-                </Button>
               </div>
             </div>
           </Show>
@@ -934,6 +1008,27 @@ const [optimisticDeletedAgentIds, setOptimisticDeletedAgentIds] = createSignal<S
           </div>
         </div>
       </div>
+
+      {/* Empty State Overlay */}
+      <Show when={canvas() && dbAgents.data() && agents().length === 0}>
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div class="text-center pointer-events-auto">
+            <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
+              <Icon name="image" class="h-8 w-8 text-muted-foreground/50" />
+            </div>
+            <h3 class="text-lg font-medium text-muted-foreground mb-2">
+              Empty Canvas
+            </h3>
+            <p class="text-sm text-muted-foreground/80 mb-4">
+              Add your first image agent to get started
+            </p>
+            <Button onClick={handleAddGenerateAgent} size="sm">
+              <Icon name="plus" class="h-4 w-4 mr-2" />
+              Add Agent
+            </Button>
+          </div>
+        </div>
+      </Show>
     </ErrorBoundary>
   );
 }
