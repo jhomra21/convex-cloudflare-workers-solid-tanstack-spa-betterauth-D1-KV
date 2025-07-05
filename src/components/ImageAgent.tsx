@@ -529,7 +529,7 @@ export function ImageAgent(props: ImageAgentProps) {
           
           {/* Image Selection for Edit Agents */}
           <Show when={props.type === 'image-edit' && (props.uploadedImageUrl || props.connectedAgentId) && props.generatedImage && !isLoading()}>
-            <div class="absolute bottom-2 left-2 right-2 z-10">
+            <div class="mt-4">
               <div class="bg-background/95 backdrop-blur-sm border rounded-md p-2">
                 <div class="text-xs font-medium mb-2 text-center">Choose input for next edit:</div>
                 <div class="flex gap-2">
