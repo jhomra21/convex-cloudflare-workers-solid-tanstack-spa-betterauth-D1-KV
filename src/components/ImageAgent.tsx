@@ -526,49 +526,49 @@ export function ImageAgent(props: ImageAgentProps) {
               </div>
             </Show>
           </div>
-          
-          {/* Image Selection for Edit Agents */}
-          <Show when={props.type === 'image-edit' && (props.uploadedImageUrl || props.connectedAgentId) && props.generatedImage && !isLoading()}>
-            <div class="mt-4">
-              <div class="bg-background/95 backdrop-blur-sm border rounded-md p-2">
-                <div class="text-xs font-medium mb-2 text-center">Choose input for next edit:</div>
-                <div class="flex gap-2">
-                  <Button
-                    variant={getInputImage() === props.uploadedImageUrl ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSelectImage(props.uploadedImageUrl!)}
-                    class="flex-1 text-xs"
-                  >
-                    <Icon name="upload" class="h-3 w-3 mr-1" />
-                    Original
-                  </Button>
-                  <Button
-                    variant={getInputImage() === props.generatedImage ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSelectImage(props.generatedImage!)}
-                    class="flex-1 text-xs"
-                  >
-                    <Icon name="sparkles" class="h-3 w-3 mr-1" />
-                    Generated
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Show>
-          
-          {/* Loading state - completely independent overlay component */}
-          <Show when={isLoading()}>
-            <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
-              <div class="flex flex-col items-center gap-3">
-                <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
-                <div class="text-xs text-muted-foreground">
-                  {isLocallyGenerating() ? "Starting..." : 
-                   stableStatus().isProcessing ? "Generating..." : "Loading..."}
-                </div>
-              </div>
-            </div>
-          </Show>
         </div>
+
+        {/* Image Selection for Edit Agents */}
+        <Show when={props.type === 'image-edit' && (props.uploadedImageUrl || props.connectedAgentId) && props.generatedImage && !isLoading()}>
+          <div class="mt-3">
+            <div class="bg-background/95 backdrop-blur-sm border rounded-md p-2">
+              <div class="text-xs font-medium mb-2 text-center">Choose input for next edit:</div>
+              <div class="flex gap-2">
+                <Button
+                  variant={getInputImage() === props.uploadedImageUrl ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSelectImage(props.uploadedImageUrl!)}
+                  class="flex-1 text-xs"
+                >
+                  <Icon name="upload" class="h-3 w-3 mr-1" />
+                  Original
+                </Button>
+                <Button
+                  variant={getInputImage() === props.generatedImage ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSelectImage(props.generatedImage!)}
+                  class="flex-1 text-xs"
+                >
+                  <Icon name="sparkles" class="h-3 w-3 mr-1" />
+                  Generated
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Show>
+
+        {/* Loading state - completely independent overlay component */}
+        <Show when={isLoading()}>
+          <div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
+            <div class="flex flex-col items-center gap-3">
+              <Icon name="loader" class="h-6 w-6 animate-spin text-muted-foreground" />
+              <div class="text-xs text-muted-foreground">
+                {isLocallyGenerating() ? "Starting..." : 
+                 stableStatus().isProcessing ? "Generating..." : "Loading..."}
+              </div>
+            </div>
+          </div>
+        </Show>
       </CardContent>
 
       {/* Resize Handles */}
