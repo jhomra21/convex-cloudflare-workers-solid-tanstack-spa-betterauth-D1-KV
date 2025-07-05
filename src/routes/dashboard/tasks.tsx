@@ -179,7 +179,7 @@ function TasksPage() {
   });
 
   return (
-    <div class="container mx-auto p-4 min-h-screen">
+    <div class="container mx-auto min-h-screen">
       <div class="flex flex-col space-y-8">
         {/* Header */}
         <div class="flex justify-between items-center">

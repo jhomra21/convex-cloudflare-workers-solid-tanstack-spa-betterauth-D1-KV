@@ -99,7 +99,7 @@ export function DashboardIndex() {
   };
 
   return (
-    <div class="container p-4 mx-auto flex flex-col min-h-screen">
+    <div class="container mx-auto flex flex-col min-h-screen">
       <div class="flex-grow">
         <div class="mb-10">
           <h1 class="text-2xl font-semibold mb-2">Welcome, {user()?.name || 'User'}</h1>
