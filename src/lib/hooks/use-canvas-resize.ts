@@ -47,6 +47,10 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
 
   // Cache the current scale suffix from transform (e.g., "scale(1)") so we can preserve it when updating position
   let transformSuffix = "";
+  
+  // Store original transform values to calculate relative adjustments
+  let originalTransformX = 0;
+  let originalTransformY = 0;
 
   // Store the latest calculated size/position to commit once on mouseup
   let scheduledSize: Size | null = null;
@@ -79,6 +83,16 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
       const fullTransform = wrapperEl.style.transform || "";
       const match = fullTransform.match(/translate3d\([^)]*\)\s*(.*)/);
       transformSuffix = match ? ` ${match[1]}` : "";
+
+      // Store original transform values for relative calculations
+      const transformMatch = fullTransform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
+      if (transformMatch) {
+        originalTransformX = parseFloat(transformMatch[1]);
+        originalTransformY = parseFloat(transformMatch[2]);
+      } else {
+        originalTransformX = 0;
+        originalTransformY = 0;
+      }
 
       // Temporarily disable transitions for snappy resize
       originalWrapperTransition = wrapperEl.style.transition;
@@ -171,18 +185,9 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     }
 
     if (wrapperEl && positionAdjustment) {
-      // Parse current translate3d values
-      const currentTransform = wrapperEl.style.transform || "translate3d(0px, 0px, 0)";
-      const match = currentTransform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
-      let currentX = 0;
-      let currentY = 0;
-      if (match) {
-        currentX = parseFloat(match[1]);
-        currentY = parseFloat(match[2]);
-      }
-
-      const newX = currentX + positionAdjustment.x;
-      const newY = currentY + positionAdjustment.y;
+      // Calculate new position based on original position + total adjustment
+      const newX = originalTransformX + positionAdjustment.x;
+      const newY = originalTransformY + positionAdjustment.y;
       wrapperEl.style.transform = `translate3d(${newX}px, ${newY}px, 0)${transformSuffix}`;
     }
 
@@ -244,6 +249,8 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     wrapperEl = null;
     originalResizeTransition = "";
     originalWrapperTransition = "";
+    originalTransformX = 0;
+    originalTransformY = 0;
     scheduledSize = null;
     scheduledPositionAdjustment = undefined;
   };
