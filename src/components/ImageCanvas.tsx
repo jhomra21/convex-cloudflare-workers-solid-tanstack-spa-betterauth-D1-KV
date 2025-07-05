@@ -277,9 +277,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
             style={{
               'min-width': '100%',
               'min-height': '100%',
-              transform: `translate(${viewport.viewport().tx}px, ${viewport.viewport().ty}px) scale(${viewport.viewport().zoom})`,
+              transform: `translate(${Math.round(viewport.viewport().tx)}px, ${Math.round(viewport.viewport().ty)}px) scale(${viewport.viewport().zoom})`,
               'transform-origin': 'top left',
-              transition: 'transform 0.2s ease-out'
+              'image-rendering': 'crisp-edges',
+              'backface-visibility': 'hidden',
+              'transform-style': 'preserve-3d',
+              transition: 'transform 0.1s ease-out'
             }}
           >
           {/* Loading State */}
