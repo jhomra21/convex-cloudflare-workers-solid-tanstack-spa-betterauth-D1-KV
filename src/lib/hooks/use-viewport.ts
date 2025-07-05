@@ -17,11 +17,11 @@ export function useViewport(props: UseViewportProps) {
   const [viewport, setViewport] = createSignal<ViewportState>({
     tx: 0,
     ty: 0,
-    zoom: 1.0,
+    zoom: 0.8,
   });
 
   // Zoom constraints
-  const MIN_ZOOM = 0.5; // 50%
+  const MIN_ZOOM = 0.2; // 50%
   const MAX_ZOOM = 2.0; // 200%
   const ZOOM_STEP = 0.1; // 10% increments for button clicks
   const ZOOM_WHEEL_FACTOR = 1.1; // ~10% per wheel notch
