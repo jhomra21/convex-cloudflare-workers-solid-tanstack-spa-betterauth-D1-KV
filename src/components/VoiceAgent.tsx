@@ -361,7 +361,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                 <audio
                                     controls
                                     class="w-full"
-                                    preload="metadata"
+                                    preload="none"
                                 >
                                     <source src={props.generatedAudio} type="audio/wav" />
                                     Your browser does not support the audio element.
