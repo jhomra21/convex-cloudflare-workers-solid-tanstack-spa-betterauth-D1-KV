@@ -1,6 +1,7 @@
 import { createSignal, For, Show, createEffect, onCleanup, onMount } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
+import { MemoizedVideoAgent } from './MemoizedVideoAgent';
 import { AgentConnection } from './AgentConnection';
 import { AgentToolbar } from './AgentToolbar';
 import { Button } from '~/components/ui/button';
@@ -237,6 +238,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleAddGenerateAgent = () => addAgent('', 'image-generate');
   const handleAddEditAgent = () => addAgent('', 'image-edit');
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
+  const handleAddVideoAgent = () => addAgent('', 'video-generate');
 
   // =============================================
   // Render
@@ -259,6 +261,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           onAddGenerateAgent={handleAddGenerateAgent}
           onAddEditAgent={handleAddEditAgent}
           onAddVoiceAgent={handleAddVoiceAgent}
+          onAddVideoAgent={handleAddVideoAgent}
           onClearCanvas={clearCanvas}
         />
 
@@ -339,6 +342,24 @@ export function ImageCanvas(props: ImageCanvasProps) {
               onPromptChange={updateAgentPrompt}
               />
               );
+              } else if (agent.type === 'video-generate') {
+                return (
+                  <MemoizedVideoAgent
+                    agent={agent}
+                    isDragged={isDragged()}
+                    isResizing={isResizing()}
+                    zIndex={zIndex()}
+                    isExiting={isExiting()}
+                    onRemove={removeAgent}
+                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                    onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                    onPromptChange={updateAgentPrompt}
+                    class={cn(
+                      "shadow-lg border-2 transition-all duration-200",
+                      isDragged() ? "border-primary/50 shadow-xl" : "border-border/50"
+                    )}
+                  />
+                );
               }
               
               return (

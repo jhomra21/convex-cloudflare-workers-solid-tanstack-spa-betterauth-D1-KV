@@ -2,7 +2,7 @@ import { Show, Switch, Match, splitProps, type ComponentProps } from "solid-js";
 
 export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "history" | "x" | "database" 
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
-"logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' |
+"logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' | 'video' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
 | "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" |
  "circle-x" | "upload" | "share" | "copy" | "users" | "chevron-down" | "download";
@@ -233,6 +233,10 @@ const MicIcon = (props: ComponentProps<"svg">) => (
 
 const MicOffIcon = (props: ComponentProps<"svg">) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M12 19v3"/><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 .84 2.15"/><path d="M8.63 8.61A3 3 0 0 1 9 5V2"/></svg>
+);
+
+const VideoIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}><path d="M2 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M18 9l4-2v8l-4-2v-4z"/></svg>
 );
 
 const Volume2Icon = (props: ComponentProps<"svg">) => (
@@ -470,6 +474,9 @@ export const Icon = (props: IconProps) => {
       </Match>
       <Match when={local.name === "volume2"}>
         <Volume2Icon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "video"}>
+        <VideoIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
       <Match when={local.name === "edit"}>
         <EditIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />

@@ -22,6 +22,7 @@ export const getCanvasAgents = query({
       height: v.number(),
       imageUrl: v.optional(v.string()),
       audioUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
         v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
         v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
@@ -31,7 +32,7 @@ export const getCanvasAgents = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -58,7 +59,7 @@ export const createAgent = mutation({
     width: v.number(),
     height: v.number(),
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
-    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"))),
+    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"))),
     voice: v.optional(v.union(
       v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
       v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
@@ -322,7 +323,7 @@ export const disconnectAgents = mutation({
 export const updateAgentType = mutation({
   args: {
     agentId: v.id("agents"),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
   },
   returns: v.null(),
   handler: async (ctx, { agentId, type }) => {
@@ -382,6 +383,7 @@ export const getConnectedAgent = query({
       height: v.number(),
       imageUrl: v.optional(v.string()),
       audioUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
         v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
         v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
@@ -391,7 +393,7 @@ export const getConnectedAgent = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -500,6 +502,7 @@ export const getAgentByRequestId = query({
       height: v.number(),
       imageUrl: v.optional(v.string()),
       audioUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
         v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
         v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
@@ -509,7 +512,7 @@ export const getAgentByRequestId = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -519,10 +522,26 @@ export const getAgentByRequestId = query({
     v.null()
   ),
   handler: async (ctx, { requestId }) => {
-    const agents = await ctx.db
+    return await ctx.db
       .query("agents")
-      .collect();
-    
-    return agents.find(agent => agent.requestId === requestId) || null;
+      .withIndex("by_request_id", (q) => q.eq("requestId", requestId))
+      .unique();
+  },
+});
+
+// Update agent video URL
+export const updateAgentVideo = mutation({
+  args: {
+    agentId: v.id("agents"),
+    videoUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentId, videoUrl }) => {
+    await ctx.db.patch(agentId, {
+      videoUrl,
+      status: "success",
+      updatedAt: Date.now(),
+    });
+    return null;
   },
 });

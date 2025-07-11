@@ -41,6 +41,7 @@ export default defineSchema({
     height: v.number(),
     imageUrl: v.optional(v.string()),
     audioUrl: v.optional(v.string()),
+    videoUrl: v.optional(v.string()),
     voice: v.optional(v.union(
       v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
       v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
@@ -50,7 +51,7 @@ export default defineSchema({
     requestId: v.optional(v.string()),
     model: v.union(v.literal("normal"), v.literal("pro")),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
     connectedAgentId: v.optional(v.id("agents")),
     uploadedImageUrl: v.optional(v.string()),
     activeImageUrl: v.optional(v.string()), // For edit agents: which image to use as input (original or generated)
@@ -59,7 +60,8 @@ export default defineSchema({
   })
     .index("by_canvas", ["canvasId"])
     .index("by_user", ["userId"])
-    .index("by_connected_agent", ["connectedAgentId"]),
+    .index("by_connected_agent", ["connectedAgentId"])
+    .index("by_request_id", ["requestId"]),
   sharedCanvases: defineTable({
     originalCanvasId: v.id("canvases"),
     sharedWithUserId: v.string(),

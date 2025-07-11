@@ -5,6 +5,7 @@ import type { Env, HonoVariables } from './types'
 import notesApi from './notes'
 import imagesApi from './images'
 import voiceApi from './voice'
+import videoApi from './video'
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -64,5 +65,8 @@ app.route('/api/images', imagesApi);
 
 // Mount the voice API routes
 app.route('/api/voice', voiceApi);
+
+// Mount the video API routes
+app.route('/api/video', videoApi);
 
 export default app;

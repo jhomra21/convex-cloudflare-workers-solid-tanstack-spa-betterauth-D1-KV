@@ -8,5 +8,5 @@
     "allowSyntheticDefaultImports": true,
     "composite": true
     },
-  "include": ["./index.ts", "../auth.ts", "./notes.ts", "./types.ts", "./images.ts", "./voice.ts"]
+  "include": ["./index.ts", "../auth.ts", "./notes.ts", "./types.ts", "./images.ts", "./voice.ts", "./video.ts"]
   }

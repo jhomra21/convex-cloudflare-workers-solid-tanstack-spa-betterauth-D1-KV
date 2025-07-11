@@ -7,10 +7,10 @@ import { CanvasActiveUsers } from './CanvasActiveUsers';
 
 export interface AgentToolbarProps {
   /**
-   * Active agent type ('generate', 'edit', or 'voice')
+   * Active agent type ('generate', 'edit', 'voice', or 'video')
    * Used for showing active button states
    */
-  activeAgentType: 'none' | 'generate' | 'edit' | 'voice';
+  activeAgentType: 'none' | 'generate' | 'edit' | 'voice' | 'video';
   
   /**
    * The number of agents currently on the canvas
@@ -42,6 +42,7 @@ export interface AgentToolbarProps {
   onAddGenerateAgent: () => void;
   onAddEditAgent: () => void;
   onAddVoiceAgent: () => void;
+  onAddVideoAgent: () => void;
   onClearCanvas: () => void;
   
 
@@ -149,6 +150,28 @@ export function AgentToolbar(props: AgentToolbarProps) {
               <span class="text-sm">
                 <span class="hidden sm:inline">Voice</span>
                 <span class="sm:hidden">Mic</span>
+              </span>
+            </button>
+            <div class="w-px h-full bg-border/50" />
+            <button
+              onClick={props.onAddVideoAgent}
+              class={cn(
+                "flex items-center gap-1 h-full px-2 sm:px-3 relative cursor-pointer",
+                "hover:bg-foreground/5 transition-colors",
+                "focus:outline-none focus-visible:bg-background/80",
+                props.activeAgentType === 'video' ? "bg-background" : ""
+              )}
+            >
+              <div 
+                class={cn(
+                  "absolute left-0 h-4 w-0.5 bg-red-500 rounded-full transition-opacity",
+                  props.activeAgentType === 'video' ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <Icon name="video" class="h-4 w-4 text-red-600" />
+              <span class="text-sm">
+                <span class="hidden sm:inline">Video</span>
+                <span class="sm:hidden">Vid</span>
               </span>
             </button>
           </div>

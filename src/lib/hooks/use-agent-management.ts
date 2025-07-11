@@ -40,7 +40,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   } = useOptimisticUpdates();
 
   // UI state
-  const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice'>('none');
+  const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice' | 'video'>('none');
   
   // Animation state management
   const [exitingAgents, setExitingAgents] = createSignal<Set<string>>(new Set());
@@ -74,8 +74,8 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     const optimisticAdds = optimisticNewAgents();
 
     const baseAgents = rawAgentData
-      .filter((rawAgent): rawAgent is AgentData => isAgentData(rawAgent))
-      .filter((a) => !optimisticRemoved.has(a._id));
+      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent))
+      .filter((a: AgentData) => !optimisticRemoved.has(a._id));
 
     // Convert base agents with optimistic updates
     const processedBaseAgents = baseAgents.map((agentData: AgentData): Agent => {
@@ -210,19 +210,22 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   };
 
   // Create a new agent
-  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' = 'image-generate') => {
+  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' = 'image-generate') => {
     if (!props.canvas()?._id || !props.userId()) return;
     
     // Set the active agent type for UI cues only
     setActiveAgentType(
       type === 'image-generate' ? 'generate' : 
       type === 'image-edit' ? 'edit' : 
-      type === 'voice-generate' ? 'voice' : 'none'
+      type === 'voice-generate' ? 'voice' : 
+      type === 'video-generate' ? 'video' : 'none'
     );
     
     // Smart positioning using shared utilities
     const canvasEl = getCanvasElement();
-    const agentSize: Size = { width: 320, height: 384 };
+    const agentSize: Size = type === 'video-generate' 
+      ? { width: 320, height: 450 } // Video agents need more height for controls
+      : { width: 320, height: 384 }; // Default size for other agents
     const padding = 20;
 
     let newPosition: Position = { x: padding, y: padding };
@@ -426,7 +429,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     if (!currentAgents) return;
     
     // Create a stable set of current agent IDs
-    const currentAgentIds = new Set(currentAgents.map((a: any) => a._id));
+    const currentAgentIds = new Set(currentAgents.map((a: AgentData) => a._id));
     const prevIds = previousAgentIds();
     
     // Only proceed if agent IDs actually changed (not just agent data)
@@ -452,7 +455,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       }
       
       // Update previous agent IDs last
-      setPreviousAgentIds(currentAgentIds);
+      setPreviousAgentIds(currentAgentIds as Set<string>);
     });
   });
 
