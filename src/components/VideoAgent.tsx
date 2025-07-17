@@ -290,13 +290,13 @@ export function VideoAgent(props: VideoAgentProps) {
                             {/* Video Player */}
                             <div class="bg-muted/30 rounded-lg p-3 mb-3 relative flex-1">
                                 <video
-                                    controls
-                                    class="w-full h-auto max-h-full rounded"
-                                    preload="metadata"
-                                    style={{
-                                        "aspect-ratio": aspectRatio() === '16:9' ? '16/9' : 
-                                                       aspectRatio() === '9:16' ? '9/16' : '1/1'
-                                    }}
+                                controls
+                                class="w-full h-auto max-h-full rounded"
+                                preload="none"
+                                style={{
+                                "aspect-ratio": aspectRatio() === '16:9' ? '16/9' : 
+                                aspectRatio() === '9:16' ? '9/16' : '1/1'
+                                }}
                                 >
                                     <source src={props.generatedVideo} type="video/mp4" />
                                     Your browser does not support the video element.
