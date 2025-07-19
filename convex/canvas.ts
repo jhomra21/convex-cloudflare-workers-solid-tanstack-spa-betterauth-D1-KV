@@ -135,7 +135,7 @@ export const updateCanvasViewport = mutation({
     const constrainedViewport = {
       x: viewport.x, // Allow any pan position for now
       y: viewport.y, // Allow any pan position for now
-      zoom: Math.max(0.2, Math.min(2.0, viewport.zoom)), // Constrain zoom
+      zoom: Math.max(0.01, Math.min(2.0, viewport.zoom)), // Constrain zoom (1% to 200%)
     };
     
     await ctx.db.patch(canvasId, {
