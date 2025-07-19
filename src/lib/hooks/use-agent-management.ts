@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, batch, onCleanup } from 'solid-js';
 import { convexApi, useMutation } from '~/lib/convex';
 import { toast } from 'solid-sonner';
-import { 
+import {
   getCanvasElement,
   type Position,
   type Size
@@ -42,10 +42,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
 
   // UI state
   const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice' | 'video'>('none');
-  
+
   // Animation state management
   const [exitingAgents, setExitingAgents] = createSignal<Set<string>>(new Set());
-  
+
   // Agent tracking for new agent z-index management
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
 
@@ -65,10 +65,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   const agents = createMemo((): Agent[] => {
     const rawAgentData = props.dbAgents.data();
     if (!rawAgentData) return [];
-    
+
     const positions = optimisticPositions();
     const sizes = optimisticSizes();
-    
+
     // Validate and convert agent data with type safety
     // Merge DB agents with optimistic creations and filter out optimistic deletions
     const optimisticRemoved = optimisticDeletedAgentIds();
@@ -83,10 +83,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       // Use optimistic position/size if available, otherwise use database values
       const optimisticPos = positions.get(agentData._id);
       const optimisticSize = sizes.get(agentData._id);
-      
+
       // Convert to frontend Agent interface with optimistic updates
       const agent = agentDataToAgent(agentData);
-      
+
       // Apply optimistic updates if they exist
       if (optimisticPos) {
         agent.position = optimisticPos;
@@ -94,7 +94,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       if (optimisticSize) {
         agent.size = optimisticSize;
       }
-      
+
       return agent;
     });
 
@@ -108,10 +108,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   const connectedAgentPairs = createMemo(() => {
     const agentsList = agents();
     const result = [];
-    
+
     // Create a map for faster lookups
     const agentMap = new Map(agentsList.map(agent => [agent.id, agent]));
-    
+
     for (const agent of agentsList) {
       if (agent.type === 'image-edit' && agent.connectedAgentId) {
         const sourceAgent = agentMap.get(agent.connectedAgentId);
@@ -123,12 +123,12 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         }
       }
     }
-    
+
     return result;
   });
 
   // Memoize available agents list to prevent recreation on every render
-  const availableAgents = createMemo((): AvailableAgent[] => 
+  const availableAgents = createMemo((): AvailableAgent[] =>
     agents().map((a: Agent): AvailableAgent => ({
       id: a.id,
       prompt: a.prompt,
@@ -137,20 +137,44 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }))
   );
 
-  // Save transform (position and size) to database with debounce
-  const saveAgentTransform = (
-    agentId: string, 
-    position: Position, 
+  // Save transform immediately (for drag end)
+  const saveAgentTransformImmediate = async (
+    agentId: string,
+    position: Position,
     size: Size
   ) => {
     if (!props.canvas()?._id) return;
-    
+
+    try {
+      await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
+        agentId: agentId as any,
+        positionX: position.x,
+        positionY: position.y,
+        width: size.width,
+        height: size.height,
+      });
+
+      // Clear optimistic updates once saved to Convex
+      clearOptimisticTransform(agentId);
+    } catch (error) {
+      console.error('Failed to save agent transform:', error);
+    }
+  };
+
+  // Save transform with debounce (for resize operations)
+  const saveAgentTransformDebounced = (
+    agentId: string,
+    position: Position,
+    size: Size
+  ) => {
+    if (!props.canvas()?._id) return;
+
     // Clear existing timeout
     const existingTimeout = debouncedSaves.get(agentId);
     if (existingTimeout) {
       window.clearTimeout(existingTimeout);
     }
-    
+
     // Set new timeout
     const timeout = window.setTimeout(async () => {
       try {
@@ -161,36 +185,36 @@ export function useAgentManagement(props: UseAgentManagementProps) {
           width: size.width,
           height: size.height,
         });
-        
+
         // Clear optimistic updates once saved to Convex
         clearOptimisticTransform(agentId);
       } catch (error) {
         console.error('Failed to save agent transform:', error);
       }
-      
+
       debouncedSaves.delete(agentId);
-    }, 150);
-    
+    }, 200); // Debounce for resize operations
+
     debouncedSaves.set(agentId, timeout);
   };
 
-  // Update agent position with optimistic update
+  // Update agent position with optimistic update (immediate save for drag end)
   const updateAgentPosition = (id: string, position: Position) => {
     updateOptimisticPosition(id, position);
-    
+
     const agent = agents().find(a => a.id === id);
     if (agent) {
-      saveAgentTransform(id, position, agent.size);
+      saveAgentTransformImmediate(id, position, agent.size);
     }
   };
 
-  // Update agent size with optimistic update
+  // Update agent size with optimistic update (debounced save for resize operations)
   const updateAgentSize = (id: string, size: Size) => {
     updateOptimisticSize(id, size);
-    
+
     const agent = agents().find(a => a.id === id);
     if (agent) {
-      saveAgentTransform(id, agent.position, size);
+      saveAgentTransformDebounced(id, agent.position, size);
     }
   };
 
@@ -213,18 +237,18 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Create a new agent
   const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' = 'image-generate') => {
     if (!props.canvas()?._id || !props.userId()) return;
-    
+
     // Set the active agent type for UI cues only
     setActiveAgentType(
-      type === 'image-generate' ? 'generate' : 
-      type === 'image-edit' ? 'edit' : 
-      type === 'voice-generate' ? 'voice' : 
-      type === 'video-generate' ? 'video' : 'none'
+      type === 'image-generate' ? 'generate' :
+        type === 'image-edit' ? 'edit' :
+          type === 'voice-generate' ? 'voice' :
+            type === 'video-generate' ? 'video' : 'none'
     );
-    
+
     // Smart positioning using shared utilities
     const canvasEl = getCanvasElement();
-    const agentSize: Size = type === 'video-generate' 
+    const agentSize: Size = type === 'video-generate'
       ? { width: 320, height: 450 } // Video agents need more height for controls
       : { width: 320, height: 384 }; // Default size for other agents
     const padding = 20;
@@ -283,7 +307,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         };
       }
     }
-    
+
     try {
       // Create in Convex
       const createParams: any = {
@@ -317,10 +341,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       addOptimisticAgent(tempAgent);
 
       await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
-      
+
       // Remove optimistic agent immediately after mutation completes
       removeOptimisticAgent(tempId);
-      
+
     } catch (error) {
       console.error('Failed to create agent:', error);
       toast.error('Failed to create agent');
@@ -335,7 +359,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     try {
       // Start exit animation first
       setExitingAgents(prev => new Set(prev).add(id));
-      
+
       // Wait for exit animation to complete, then hide
       setTimeout(() => {
         batch(() => {
@@ -395,15 +419,15 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Clear all agents from canvas with exit animations
   const clearCanvas = async () => {
     if (!props.canvas()?._id) return;
-    
+
     const currentAgents = agents();
     if (currentAgents.length === 0) return;
-    
+
     try {
       // Start exit animations for all agents
       const agentIds = currentAgents.map(a => a.id);
       setExitingAgents(new Set(agentIds));
-      
+
       // Wait for exit animations to complete, then clear
       setTimeout(async () => {
         try {
@@ -416,7 +440,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
           setExitingAgents(new Set<string>());
         }
       }, 200); // Match exit animation duration
-      
+
     } catch (error) {
       console.error('Failed to clear canvas:', error);
     }
@@ -426,22 +450,22 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   createEffect(() => {
     const currentAgents = props.dbAgents.data();
     if (!currentAgents) return;
-    
+
     // Create a stable set of current agent IDs
     const currentAgentIds = new Set(currentAgents.map((a: AgentData) => a._id));
     const prevIds = previousAgentIds();
-    
+
     // Only proceed if agent IDs actually changed (not just agent data)
     const prevIdsArray = Array.from(prevIds).sort();
     const currentIdsArray = Array.from(currentAgentIds).sort();
-    const idsChanged = prevIdsArray.length !== currentIdsArray.length || 
-                       prevIdsArray.some((id, i) => id !== currentIdsArray[i]);
-    
+    const idsChanged = prevIdsArray.length !== currentIdsArray.length ||
+      prevIdsArray.some((id, i) => id !== currentIdsArray[i]);
+
     if (!idsChanged) return;
-    
+
     // Find removed agents (cleanup any lingering animation states)  
     const removedAgentIds = prevIdsArray.filter(id => !currentAgentIds.has(id));
-    
+
     // Use batch to group all state updates and prevent intermediate renders
     batch(() => {
       // Handle removed agents - cleanup animation states
@@ -452,7 +476,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
           return newSet;
         });
       }
-      
+
       // Update previous agent IDs last
       setPreviousAgentIds(currentAgentIds as Set<string>);
     });
@@ -463,7 +487,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     // Clear all debounced save timeouts
     debouncedSaves.forEach(timeout => clearTimeout(timeout));
     debouncedSaves.clear();
-    
+
     if (promptDebounceHandle) {
       clearTimeout(promptDebounceHandle);
     }

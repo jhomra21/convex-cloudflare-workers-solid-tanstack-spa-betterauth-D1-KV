@@ -49,11 +49,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
     () => canvas()?._id ? { canvasId: canvas()!._id } : null
   );
 
-  // Agent count (separate query to avoid optimistic update issues)
-  const agentCount = useQuery(
-    convexApi.agents.getCanvasAgentCount,
-    () => canvas()?._id ? { canvasId: canvas()!._id } : null
-  );
+  // Agent count derived from the agents query (no separate query needed)
+  const agentCount = () => dbAgents.data()?.length || 0;
 
   // User's own canvas for viewport preferences (works for both own and shared canvases)
   const userOwnCanvas = useQuery(
@@ -224,7 +221,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         {/* Toolbar */}
         <AgentToolbar
           activeAgentType={activeAgentType()}
-          agentCount={agentCount.data() || 0}
+          agentCount={agentCount()}
           isSharedCanvas={!!props.activeCanvasId}
           isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
           canvasId={canvas()?._id}
@@ -415,7 +412,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       </div>
 
       {/* Empty State Overlay */}
-      <Show when={canvas() && dbAgents.data() && agentCount.data() === 0}>
+      <Show when={canvas() && dbAgents.data() && agentCount() === 0}>
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div class="text-center pointer-events-auto">
             <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">

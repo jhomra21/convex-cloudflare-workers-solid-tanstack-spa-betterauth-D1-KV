@@ -50,6 +50,7 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
   return (
     <div
       class="absolute select-none"
+      data-agent-id={props.agent.id}
       style={positionStyle()}
       onMouseDown={(e) => {
         // Prevent drag if clicking on interactive elements

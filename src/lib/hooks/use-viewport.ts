@@ -90,7 +90,7 @@ export function useViewport(props: UseViewportProps) {
         } else {
           // Animation complete
           setViewport(targetViewport);
-          saveViewportState(targetViewport);
+          saveViewportStateImmediate(targetViewport);
           animationId = null;
           targetViewport = null;
           startViewport = null;
@@ -101,7 +101,22 @@ export function useViewport(props: UseViewportProps) {
     animationId = requestAnimationFrame(animate);
   };
 
-  // Debounced viewport save to prevent excessive API calls
+  // Immediate viewport save (for pan/zoom end)
+  const saveViewportStateImmediate = async (newViewport: ViewportState) => {
+    const userCanvas = props.userCanvas();
+    if (!userCanvas?._id || !props.userId()) return;
+
+    try {
+      await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
+        canvasId: userCanvas._id,
+        viewport: { x: newViewport.tx, y: newViewport.ty, zoom: newViewport.zoom },
+      });
+    } catch (error) {
+      console.error('Failed to save viewport state:', error);
+    }
+  };
+
+  // Debounced viewport save to prevent excessive API calls (for continuous operations)
   let viewportSaveTimeout: any;
   const saveViewportState = (newViewport: ViewportState) => {
     const userCanvas = props.userCanvas();
@@ -237,17 +252,23 @@ export function useViewport(props: UseViewportProps) {
     window.removeEventListener('pointermove', panMove);
     window.removeEventListener('pointerup', panUp);
 
-    // Final position update and save
+    // Calculate final position but don't double-update viewport
     const dx = currentPanPosition.x - panStart.x;
     const dy = currentPanPosition.y - panStart.y;
     const finalViewport = {
-      ...viewport(),
+      ...panViewportStart, // Use the original viewport state as base
       tx: panViewportStart.tx + dx,
       ty: panViewportStart.ty + dy
     };
 
-    setViewport(finalViewport);
-    saveViewportState(finalViewport);
+    // Only update if the position actually changed
+    const currentVp = viewport();
+    if (Math.abs(finalViewport.tx - currentVp.tx) > 0.1 || Math.abs(finalViewport.ty - currentVp.ty) > 0.1) {
+      setViewport(finalViewport);
+    }
+    
+    // Save immediately after panning ends (no debounce for pan end)
+    saveViewportStateImmediate(finalViewport);
   };
 
   const handlePanPointerDown = (e: PointerEvent) => {
@@ -268,15 +289,24 @@ export function useViewport(props: UseViewportProps) {
     if (animationId) {
       cancelAnimationFrame(animationId);
       animationId = null;
-      // Reset animation state completely
-      targetViewport = null;
-      startViewport = null;
+      // If zoom animation was running, ensure we use the target zoom value
+      if (targetViewport) {
+        setViewport(targetViewport);
+        targetViewport = null;
+        startViewport = null;
+      }
+    }
+
+    // Cancel any pending viewport saves to prevent conflicts
+    if (viewportSaveTimeout) {
+      clearTimeout(viewportSaveTimeout);
+      viewportSaveTimeout = null;
     }
 
     isPanning = true;
     panStart = { x: e.clientX, y: e.clientY };
     currentPanPosition = { x: e.clientX, y: e.clientY };
-    // Capture the current viewport state, not any intermediate animation state
+    // Capture the current viewport state after ensuring zoom animation is complete
     panViewportStart = { ...viewport() };
 
     window.addEventListener('pointermove', panMove);
@@ -300,12 +330,15 @@ export function useViewport(props: UseViewportProps) {
   onCleanup(() => {
     if (viewportSaveTimeout) {
       clearTimeout(viewportSaveTimeout);
+      viewportSaveTimeout = null;
     }
     if (animationId) {
       cancelAnimationFrame(animationId);
+      animationId = null;
     }
     if (panAnimationId) {
       cancelAnimationFrame(panAnimationId);
+      panAnimationId = null;
     }
   });
 

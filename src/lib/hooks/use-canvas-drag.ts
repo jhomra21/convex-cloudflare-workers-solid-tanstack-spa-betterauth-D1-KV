@@ -68,8 +68,14 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     setIsDragging(true);
     onDragStart?.(agentId);
 
-    // cache element reference
+    // cache element reference - use the target that initiated the drag
     draggedEl = el ?? (e.currentTarget as HTMLElement | null);
+    
+    // If we don't have a direct element reference, try to find the agent container
+    if (!draggedEl) {
+      const target = e.target as HTMLElement;
+      draggedEl = target.closest('[data-agent-id]') || target.closest('.absolute.select-none') as HTMLElement;
+    }
     
     // Calculate offset using shared coordinate utilities
     const vp = viewportGetter?.();
@@ -165,6 +171,12 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     // Preserve the last calculated position before cleanup
     const finalPos = scheduledPosition;
 
+    // Clear the direct DOM transform to let reactive state take over
+    if (draggedEl) {
+      draggedEl.style.transform = '';
+      draggedEl = null;
+    }
+
     setDraggedAgent(null);
     setIsDragging(false);
 
@@ -180,6 +192,12 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     if (isDragging()) {
       const draggedId = draggedAgent();
       const finalPos = scheduledPosition;
+
+      // Clear the direct DOM transform to let reactive state take over
+      if (draggedEl) {
+        draggedEl.style.transform = '';
+        draggedEl = null;
+      }
 
       setDraggedAgent(null);
       setIsDragging(false);

@@ -6,18 +6,6 @@ import type {
   AgentType
 } from "../src/types/agents";
 
-// Get agent count for a canvas
-export const getCanvasAgentCount = query({
-  args: { canvasId: v.id("canvases") },
-  returns: v.number(),
-  handler: async (ctx, { canvasId }) => {
-    const agents = await ctx.db
-      .query("agents")
-      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
-      .collect();
-    return agents.length;
-  },
-});
 
 // Get all agents for a canvas
 export const getCanvasAgents = query({
