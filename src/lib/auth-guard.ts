@@ -2,11 +2,18 @@ import { redirect } from '@tanstack/solid-router';
 import { authClient } from './auth-client';
 import type { QueryClient } from '@tanstack/solid-query';
 import { storeShareIntent } from './share-intent';
+import type { User, Session } from 'better-auth';
+
+// Type for the session data returned by authClient.getSession()
+export type SessionData = {
+  user: User;
+  session: Session;
+} | null;
 
 // Centralized session query options that can be reused across the app.
 export const sessionQueryOptions = () => ({
   queryKey: ['session'],
-  queryFn: async () => {
+  queryFn: async (): Promise<SessionData> => {
     const { data, error } = await authClient.getSession();
     if (error) {
       // Log the error but return null to signify no session. This is handled by callers.
@@ -15,7 +22,8 @@ export const sessionQueryOptions = () => ({
     }
     return data;
   },
-  staleTime: 1000 * 60 * 5, // 5 minutes, matches global config.
+  staleTime: 1000 * 60 * 5,
+  gcTime: 1000 * 60 * 30,
 });
 
 /**
@@ -39,14 +47,14 @@ export const protectedLoader = async ({ context }: { context: { queryClient: Que
 
   if (!session) {
     const redirectUrl = window.location.pathname + window.location.search;
-    
+
     // Check if this is a share link and store the intent before redirecting
     const urlParams = new URLSearchParams(window.location.search);
     const shareId = urlParams.get('share');
     if (shareId) {
       storeShareIntent(shareId);
     }
-    
+
     throw redirect({
       to: '/auth',
       search: {
@@ -64,7 +72,7 @@ export const protectedLoader = async ({ context }: { context: { queryClient: Que
  * This is useful for UI that changes based on whether a user is logged in or not.
  */
 export const publicLoader = async ({ context }: { context: { queryClient: QueryClient } }) => {
-    const { queryClient } = context;
-    const session = await getSessionWithCache(queryClient);
-    return { session };
+  const { queryClient } = context;
+  const session = await getSessionWithCache(queryClient);
+  return { session };
 } 

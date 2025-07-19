@@ -47,7 +47,65 @@ Always look at [package.json](mdc:package.json) before recommending installing a
 - Ispiration: Apple, Linear, shadcn/ui
 
 
-## Development Notes
+# Development Notes
+
+## SolidJS Reactivity Guidelines ⚠️
+
+**AVOID CIRCULAR DEPENDENCIES** - These cause "too much recursion" errors:
+
+### ❌ Dangerous Patterns:
+```javascript
+// DON'T: Effect that reads query data and updates state affecting same query
+createEffect(() => {
+  const data = someQuery.data(); 
+  setSomeState(data.map(...)); // Can trigger infinite re-renders
+});
+
+// DON'T: Memos for simple calculations
+const size = createMemo(() => props.size || { width: 320, height: 384 });
+
+// DON'T: Creating memos inside render loops
+<For each={items}>
+  {(item) => {
+    const computed = createMemo(() => item.data); // Created on every render!
+    return <div>{computed()}</div>;
+  }}
+</For>
+
+// DON'T: Using function as its own default context
+const context = contextObject || myFunction; // Self-reference
+```
+
+### ✅ Safe Patterns:
+```javascript
+// DO: Guard effects with change detection
+createEffect(() => {
+  const data = someQuery.data();
+  if (!data || !hasActuallyChanged(data)) return;
+  
+  batch(() => { // Group state updates
+    setSomeState(newValue);
+    setOtherState(otherValue);
+  });
+});
+
+// DO: Simple functions for basic calculations  
+const size = () => props.size || { width: 320, height: 384 };
+
+// DO: Create memos outside render loops
+const computed = createMemo(() => items().map(item => transform(item)));
+
+// DO: Use stable default contexts
+const defaultContext = {};
+const context = contextObject || defaultContext;
+```
+
+### Key Rules:
+1. **Effects should not update state that affects their own dependencies**
+2. **Use `batch()` to group related state updates**  
+3. **Add guards to prevent unnecessary effect runs**
+4. **Create memos at component level, not inside loops**
+5. **Avoid self-referential contexts/defaults**
 
 ### Client-Side Authentication & State Management
 

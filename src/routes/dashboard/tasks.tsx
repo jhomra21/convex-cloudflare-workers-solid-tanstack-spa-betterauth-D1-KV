@@ -1,29 +1,42 @@
 import { For, createSignal, Show, onMount, onCleanup } from "solid-js";
-import { createFileRoute } from "@tanstack/solid-router";
+import { createFileRoute, useLoaderData } from "@tanstack/solid-router";
 import { toast } from "solid-sonner";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { convexApi, useQuery, useMutation } from "~/lib/convex";
+import { convexApi, useQuery, useMutation, convexClient } from "~/lib/convex";
 import { useCurrentUserId } from "~/lib/auth-actions";
 import { Icon } from "~/components/ui/icon";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import * as TextFieldPrimitive from "@kobalte/core/text-field";
+import type { SessionData } from "~/lib/auth-guard";
 
 function TasksPage() {
   const userId = useCurrentUserId();
+  const loaderData = useLoaderData({ from: '/dashboard/tasks' });
+
   const tasksQuery = useQuery(
-    convexApi.tasks.getTasks, 
+    convexApi.tasks.getTasks,
     () => userId() ? { userId: userId()! } : null
   );
-  
+
+  // Use prefetched data initially, then transition to live data
+  const tasksData = () => {
+    // If we have live data from the subscription, use that (for real-time updates)
+    if (tasksQuery.data() !== undefined) {
+      return tasksQuery.data();
+    }
+    // Otherwise, use prefetched data for instant initial render
+    return loaderData().prefetchedTasks;
+  };
+
   // Mutation hooks
   const createTaskMutation = useMutation();
   const updateStatusMutation = useMutation();
   const updateTextMutation = useMutation();
   const deleteTaskMutation = useMutation();
-  
+
   const [newTaskText, setNewTaskText] = createSignal("");
   const [filter, setFilter] = createSignal<"all" | "completed" | "active">("all");
   const [editingTaskId, setEditingTaskId] = createSignal<string | null>(null);
@@ -34,9 +47,9 @@ function TasksPage() {
   const [showDeleteButtons, setShowDeleteButtons] = createSignal<string | null>(null);
 
   const filteredTasks = () => {
-    const tasks = tasksQuery.data();
+    const tasks = tasksData();
     if (!tasks || !userId()) return [];
-    
+
     switch (filter()) {
       case "completed":
         return tasks.filter(task => task.isCompleted);
@@ -54,13 +67,13 @@ function TasksPage() {
       toast.error("User not authenticated");
       return;
     }
-    
+
     try {
-      await createTaskMutation.mutate(convexApi.tasks.createTask, { 
+      await createTaskMutation.mutate(convexApi.tasks.createTask, {
         text: newTaskText(),
         userId: userId()!
       });
-      
+
       toast.success("Task created");
       setNewTaskText("");
     } catch (error) {
@@ -70,11 +83,11 @@ function TasksPage() {
 
   const setCompleted = async (taskId: Doc<"tasks">["_id"], isCompleted: boolean) => {
     try {
-      await updateStatusMutation.mutate(convexApi.tasks.updateTaskStatus, { 
-        taskId, 
-        isCompleted 
+      await updateStatusMutation.mutate(convexApi.tasks.updateTaskStatus, {
+        taskId,
+        isCompleted
       });
-      
+
       toast.success(`Task ${isCompleted ? "completed" : "marked active"}`);
     } catch (error) {
       toast.error("Failed to update task");
@@ -104,7 +117,7 @@ function TasksPage() {
   const deleteTask = async (taskId: Doc<"tasks">["_id"]) => {
     try {
       await deleteTaskMutation.mutate(convexApi.tasks.deleteTask, { taskId });
-      
+
       toast.success("Task deleted");
       // Use the same animation pattern for consistency
       cancelDelete();
@@ -162,16 +175,16 @@ function TasksPage() {
         const isClickOnDeleteConfirm = target.closest('[data-delete-confirm]');
         // Also check if this is the delete button that opens the confirmation
         const isClickOnDeleteButton = target.closest('[data-delete-button]');
-        
+
         if (!isClickOnDeleteConfirm && !isClickOnDeleteButton) {
           cancelDelete();
         }
       }
     };
-    
+
     // Add event listener
     document.addEventListener('click', handleClickOutside);
-    
+
     // Cleanup on component unmount
     onCleanup(() => {
       document.removeEventListener('click', handleClickOutside);
@@ -190,7 +203,7 @@ function TasksPage() {
             </p>
           </div>
         </div>
-        
+
         {/* Filters */}
         <div class="flex items-center space-x-4">
           <Button
@@ -233,8 +246,8 @@ function TasksPage() {
                   class="flex-grow"
                   disabled={createTaskMutation.isLoading()}
                 />
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   variant="sf-compute"
                   disabled={createTaskMutation.isLoading() || !newTaskText().trim()}
                 >
@@ -254,16 +267,16 @@ function TasksPage() {
         {/* Tasks List */}
         <Card class="!border-none !shadow-none">
           <CardContent class="!px-0">
-            {/* Loading State */}
-            <Show when={tasksQuery.isLoading()}>
+            {/* Loading State - only show if no data available at all */}
+            <Show when={!tasksData() && tasksQuery.isLoading()}>
               <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 duration-300">
                 <Icon name="clock" class="mx-auto h-12 w-12 opacity-20 mb-2" />
                 <p>Loading tasks...</p>
               </div>
             </Show>
 
-            {/* Error State */}
-            <Show when={tasksQuery.error()}>
+            {/* Error State - only show if no prefetched data and query has error */}
+            <Show when={!loaderData().prefetchedTasks && tasksQuery.error()}>
               <div class="text-center py-8 text-red-500 animate-in fade-in-0 duration-300">
                 <Icon name="x" class="mx-auto h-12 w-12 opacity-20 mb-2" />
                 <p class="mb-4">Failed to load tasks: {tasksQuery.error()?.message}</p>
@@ -274,8 +287,8 @@ function TasksPage() {
               </div>
             </Show>
 
-            {/* Tasks Content */}
-            <Show when={!tasksQuery.isLoading() && !tasksQuery.error()}>
+            {/* Tasks Content - show if we have any data */}
+            <Show when={tasksData()}>
               <div class="space-y-2">
                 <For each={filteredTasks()} fallback={
                   <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
@@ -283,132 +296,130 @@ function TasksPage() {
                     <p>No tasks found. Add a task to get started.</p>
                   </div>
                 }>
-                {(task) => (
-                  <div 
-                    class="flex items-center justify-between rounded-md border p-3 hover:bg-muted/40 transition-all duration-200 animate-in fade-in-0 slide-in-from-top-1 duration-300 ease-out"
-                    onClick={(e) => {
-                      // Close delete confirmation if clicking outside of delete buttons
-                      if (deleteConfirmId() === task._id && 
+                  {(task: Doc<"tasks">) => (
+                    <div
+                      class="flex items-center justify-between rounded-md border p-3 hover:bg-muted/40 transition-all duration-200 animate-in fade-in-0 slide-in-from-top-1 duration-300 ease-out"
+                      onClick={(e: MouseEvent) => {
+                        // Close delete confirmation if clicking outside of delete buttons
+                        if (deleteConfirmId() === task._id &&
                           showDeleteButtons() === task._id &&
-                          !e.target.closest('[data-delete-confirm]') && 
-                          !e.target.closest('[data-delete-button]')) {
-                        cancelDelete();
-                      }
-                    }}
-                  >
-                    <div class="flex items-center gap-3 flex-grow">
-                      <div class="transition-opacity duration-200 hover:opacity-80">
-                        <Checkbox
-                          checked={task.isCompleted}
-                          onChange={(checked: boolean) => setCompleted(task._id, checked)}
-                        />
-                      </div>
-                      <Show
-                        when={editingTaskId() !== task._id}
-                        fallback={
-                          <div class="flex-grow flex gap-2 task-edit-enter">
-                            <TextFieldPrimitive.Root value={editText()} onChange={setEditText} class="flex-grow">
-                              <TextFieldPrimitive.Input
-                                class="flex h-full py-2 w-full rounded-md border border-input bg-transparent text-base shadow-sm transition-colors duration-200 file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                                onKeyDown={(e) => handleKeyDown(e, task._id)}
-                                // Focus the input when it appears
-                                ref={(el) => setTimeout(() => el.focus(), 0)}
-                              />
-                            </TextFieldPrimitive.Root>
-                            <Button size="sm" variant="ghost" onClick={() => saveTaskText(task._id)} class="transition-[opacity,transform] duration-200 hover:opacity-80 hover:scale-105">
-                              <Icon name="check" class="h-4 w-4 text-green-500" />
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={cancelEditing} class="transition-[opacity,transform] duration-200 hover:opacity-80 hover:scale-105">
-                              <Icon name="x" class="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
+                          !(e.target as HTMLElement).closest('[data-delete-confirm]') &&
+                          !(e.target as HTMLElement).closest('[data-delete-button]')) {
+                          cancelDelete();
                         }
-                      >
-                        <span 
-                          class={task.isCompleted ? "text-muted-foreground line-through transition-all duration-300" : "cursor-pointer transition-colors duration-200 hover:text-foreground/80"}
-                          onClick={() => !task.isCompleted && startEditing(task)}
-                          title={!task.isCompleted ? "Click to edit" : ""}
-                        >
-                          {task.text}
-                        </span>
-                      </Show>
-                    </div>
-                    <Show when={editingTaskId() !== task._id}>
-                      <div class="flex items-center gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          class={`text-muted-foreground hover:text-amber-500 transition-all duration-100 ${
-                            deleteConfirmId() === task._id ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                          }`}
-                          onClick={() => startEditing(task)}
-                          disabled={task.isCompleted}
-                        >
-                          <Icon name="edit" class="h-4 w-4" />
-                        </Button>
+                      }}
+                    >
+                      <div class="flex items-center gap-3 flex-grow">
+                        <div class="transition-opacity duration-200 hover:opacity-80">
+                          <Checkbox
+                            checked={task.isCompleted}
+                            onChange={(checked: boolean) => setCompleted(task._id, checked)}
+                          />
+                        </div>
                         <Show
-                          when={deleteConfirmId() === task._id && showDeleteButtons() === task._id}
+                          when={editingTaskId() !== task._id}
                           fallback={
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => {
-                                e.stopPropagation(); // Stop propagation to prevent document click handling
-                                confirmDelete(task._id);
-                              }}
-                              class="text-muted-foreground hover:text-destructive transition-colors duration-200"
-                              title="Delete task"
-                              data-delete-button
-                            >
-                              <Icon name="x" class="h-4 w-4" />
-                            </Button>
+                            <div class="flex-grow flex gap-2 task-edit-enter">
+                              <TextFieldPrimitive.Root value={editText()} onChange={setEditText} class="flex-grow">
+                                <TextFieldPrimitive.Input
+                                  class="flex h-full py-2 w-full rounded-md border border-input bg-transparent text-base shadow-sm transition-colors duration-200 file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                                  onKeyDown={(e: KeyboardEvent) => handleKeyDown(e, task._id)}
+                                  // Focus the input when it appears
+                                  ref={(el: HTMLInputElement) => setTimeout(() => el.focus(), 0)}
+                                />
+                              </TextFieldPrimitive.Root>
+                              <Button size="sm" variant="ghost" onClick={() => saveTaskText(task._id)} class="transition-[opacity,transform] duration-200 hover:opacity-80 hover:scale-105">
+                                <Icon name="check" class="h-4 w-4 text-green-500" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={cancelEditing} class="transition-[opacity,transform] duration-200 hover:opacity-80 hover:scale-105">
+                                <Icon name="x" class="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
                           }
                         >
-                          <div 
-                            data-delete-confirm
-                            class={`flex items-center gap-1 ${
-                              exitingDeleteId() === task._id 
-                                ? 'task-delete-confirm-exit' 
-                                : 'task-delete-confirm-enter'
-                            }`}
+                          <span
+                            class={task.isCompleted ? "text-muted-foreground line-through transition-all duration-300" : "cursor-pointer transition-colors duration-200 hover:text-foreground/80"}
+                            onClick={() => !task.isCompleted && startEditing(task)}
+                            title={!task.isCompleted ? "Click to edit" : ""}
                           >
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => {
-                                e.stopPropagation(); // Stop propagation to prevent document click handling
-                                deleteTask(task._id);
-                              }}
-                              class="text-destructive hover:bg-destructive/10 transition-colors duration-200"
-                              title="Confirm delete"
-                            >
-                              <Icon name="check" class="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => {
-                                e.stopPropagation(); // Stop propagation to prevent document click handling
-                                cancelDelete();
-                              }}
-                              class="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                              title="Cancel delete"
-                            >
-                              <Icon name="x" class="h-4 w-4" />
-                            </Button>
-                          </div>
+                            {task.text}
+                          </span>
                         </Show>
                       </div>
-                    </Show>
-                  </div>
-                )}
+                      <Show when={editingTaskId() !== task._id}>
+                        <div class="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class={`text-muted-foreground hover:text-amber-500 transition-all duration-100 ${deleteConfirmId() === task._id ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                              }`}
+                            onClick={() => startEditing(task)}
+                            disabled={task.isCompleted}
+                          >
+                            <Icon name="edit" class="h-4 w-4" />
+                          </Button>
+                          <Show
+                            when={deleteConfirmId() === task._id && showDeleteButtons() === task._id}
+                            fallback={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e: MouseEvent) => {
+                                  e.stopPropagation(); // Stop propagation to prevent document click handling
+                                  confirmDelete(task._id);
+                                }}
+                                class="text-muted-foreground hover:text-destructive transition-colors duration-200"
+                                title="Delete task"
+                                data-delete-button
+                              >
+                                <Icon name="x" class="h-4 w-4" />
+                              </Button>
+                            }
+                          >
+                            <div
+                              data-delete-confirm
+                              class={`flex items-center gap-1 ${exitingDeleteId() === task._id
+                                ? 'task-delete-confirm-exit'
+                                : 'task-delete-confirm-enter'
+                                }`}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e: MouseEvent) => {
+                                  e.stopPropagation(); // Stop propagation to prevent document click handling
+                                  deleteTask(task._id);
+                                }}
+                                class="text-destructive hover:bg-destructive/10 transition-colors duration-200"
+                                title="Confirm delete"
+                              >
+                                <Icon name="check" class="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e: MouseEvent) => {
+                                  e.stopPropagation(); // Stop propagation to prevent document click handling
+                                  cancelDelete();
+                                }}
+                                class="text-muted-foreground hover:bg-muted transition-colors duration-200"
+                                title="Cancel delete"
+                              >
+                                <Icon name="x" class="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+                    </div>
+                  )}
                 </For>
               </div>
             </Show>
           </CardContent>
           <CardFooter class="text-sm text-muted-foreground">
-            <Show when={!tasksQuery.isLoading() && !tasksQuery.error()}>
-              {filteredTasks().length} {filteredTasks().length === 1 ? "task" : "tasks"} ({tasksQuery.data()?.filter((t: Doc<"tasks">) => t.isCompleted).length || 0} completed)
+            <Show when={tasksData()}>
+              {filteredTasks().length} {filteredTasks().length === 1 ? "task" : "tasks"} ({tasksData()?.filter((t) => t.isCompleted).length || 0} completed)
             </Show>
           </CardFooter>
         </Card>
@@ -419,4 +430,25 @@ function TasksPage() {
 
 export const Route = createFileRoute('/dashboard/tasks')({
   component: TasksPage,
+  loader: async ({ context }) => {
+    const { queryClient } = context;
+    try {
+      const session = queryClient.getQueryData(['session']) as SessionData;
+      if (session?.user?.id) {
+        // Prefetch tasks data using Convex client for instant initial render
+        const prefetchedTasks = await convexClient.query(convexApi.tasks.getTasks, { userId: session.user.id });
+
+        return { prefetchedTasks };
+      }
+
+      return {
+        prefetchedTasks: null
+      };
+    } catch (error) {
+      console.warn('Failed to prefetch tasks:', error);
+      return {
+        prefetchedTasks: null
+      };
+    }
+  },
 });
