@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { convexApi, useMutation } from '~/lib/convex';
 
 export interface ViewportState {
@@ -21,27 +21,96 @@ export function useViewport(props: UseViewportProps) {
   });
 
   // Zoom constraints
-  const MIN_ZOOM = 0.2; // 50%
+  const MIN_ZOOM = 0.01; // 1%
   const MAX_ZOOM = 2.0; // 200%
   const ZOOM_STEP = 0.1; // 10% increments for button clicks
-  const ZOOM_WHEEL_FACTOR = 1.1; // ~10% per wheel notch
+
 
   // Mutations
   const updateCanvasViewportMutation = useMutation();
 
+  // Smooth zoom animation state
+  let animationId: number | null = null;
+  let targetViewport: ViewportState | null = null;
+  const ZOOM_ANIMATION_DURATION = 150; // ms
+  let animationStartTime = 0;
+  let startViewport: ViewportState | null = null;
+
   // Constrain zoom level to safe bounds
-  const constrainZoom = (zoom: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+  const constrainZoom = (zoom: number) => {
+    const constrained = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+    // Add small epsilon to prevent floating point precision issues
+    return Math.round(constrained * 10000) / 10000;
+  };
+
+  // Smooth animation function
+  const animateToViewport = (target: ViewportState) => {
+    // Cancel any ongoing zoom animation
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+    }
+
+    // Don't start zoom animation if panning is active
+    if (isPanning) {
+      setViewport(target);
+      saveViewportState(target);
+      return;
+    }
+
+    startViewport = { ...viewport() };
+    targetViewport = target;
+    animationStartTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      // Check if panning started during animation
+      if (isPanning) {
+        animationId = null;
+        targetViewport = null;
+        startViewport = null;
+        return;
+      }
+
+      const elapsed = currentTime - animationStartTime;
+      const progress = Math.min(elapsed / ZOOM_ANIMATION_DURATION, 1);
+
+      // Use easeOutCubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      if (startViewport && targetViewport) {
+        const current = {
+          tx: startViewport.tx + (targetViewport.tx - startViewport.tx) * easeProgress,
+          ty: startViewport.ty + (targetViewport.ty - startViewport.ty) * easeProgress,
+          zoom: startViewport.zoom + (targetViewport.zoom - startViewport.zoom) * easeProgress,
+        };
+
+        setViewport(current);
+
+        if (progress < 1) {
+          animationId = requestAnimationFrame(animate);
+        } else {
+          // Animation complete
+          setViewport(targetViewport);
+          saveViewportState(targetViewport);
+          animationId = null;
+          targetViewport = null;
+          startViewport = null;
+        }
+      }
+    };
+
+    animationId = requestAnimationFrame(animate);
+  };
 
   // Debounced viewport save to prevent excessive API calls
   let viewportSaveTimeout: any;
   const saveViewportState = (newViewport: ViewportState) => {
     const userCanvas = props.userCanvas();
     if (!userCanvas?._id || !props.userId()) return;
-    
+
     if (viewportSaveTimeout) {
       clearTimeout(viewportSaveTimeout);
     }
-    
+
     viewportSaveTimeout = setTimeout(async () => {
       try {
         await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
@@ -56,48 +125,57 @@ export function useViewport(props: UseViewportProps) {
 
   // Zoom functions
   const zoomButton = (direction: 'in' | 'out', canvasContainerEl: HTMLDivElement | null) => {
+    if (!canvasContainerEl) return;
+
     const factor = direction === 'in' ? (1 + ZOOM_STEP) : (1 / (1 + ZOOM_STEP));
-    const container = canvasContainerEl;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    // Pivot at centre of viewport
-    const pivot = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const rect = canvasContainerEl.getBoundingClientRect();
+
+    // Pivot at center of the visible canvas area
+    const pivot = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+
     zoomBy(factor, pivot, canvasContainerEl);
   };
 
   const zoomIn = (canvasContainerEl: HTMLDivElement | null) => zoomButton('in', canvasContainerEl);
   const zoomOut = (canvasContainerEl: HTMLDivElement | null) => zoomButton('out', canvasContainerEl);
-  
+
   const resetZoom = () => {
     const newViewport = { tx: 0, ty: 0, zoom: 1.0 };
-    setViewport(newViewport);
-    saveViewportState(newViewport);
+    animateToViewport(newViewport);
   };
 
   // Zoom by factor at specific pivot point
   const zoomBy = (factor: number, pivotScreen: { x: number; y: number }, canvasContainerEl: HTMLDivElement | null) => {
-    // Clamp new zoom first
+    if (!canvasContainerEl) return;
+
     const current = viewport();
     const newZoom = constrainZoom(current.zoom * factor);
-    if (newZoom === current.zoom || !canvasContainerEl) return;
+
+    // If zoom didn't actually change, don't update anything
+    if (Math.abs(newZoom - current.zoom) < 0.001) return;
 
     const container = canvasContainerEl;
     const canvasRect = container.getBoundingClientRect();
 
-    // Calculate pivot in content coords using viewport translation
-    const vp = current;
-    const pivotContent = {
-      x: (pivotScreen.x - canvasRect.left - vp.tx) / vp.zoom,
-      y: (pivotScreen.y - canvasRect.top - vp.ty) / vp.zoom,
-    };
+    // Convert screen coordinates to canvas-relative coordinates
+    const canvasX = pivotScreen.x - canvasRect.left;
+    const canvasY = pivotScreen.y - canvasRect.top;
 
-    // New translation so pivot remains under cursor after zoom
-    const newTx = pivotScreen.x - canvasRect.left - pivotContent.x * newZoom;
-    const newTy = pivotScreen.y - canvasRect.top - pivotContent.y * newZoom;
+    // Calculate the point in world coordinates (before zoom)
+    const worldX = (canvasX - current.tx) / current.zoom;
+    const worldY = (canvasY - current.ty) / current.zoom;
+
+    // Calculate new translation to keep the world point under the cursor
+    const newTx = canvasX - worldX * newZoom;
+    const newTy = canvasY - worldY * newZoom;
 
     const newViewport = { tx: newTx, ty: newTy, zoom: newZoom };
-    setViewport(newViewport);
-    saveViewportState(newViewport);
+
+    // Use smooth animation for wheel zoom
+    animateToViewport(newViewport);
   };
 
   // Create wheel event handler
@@ -105,7 +183,13 @@ export function useViewport(props: UseViewportProps) {
     return (e: WheelEvent) => {
       if (!e.ctrlKey) return; // Require ctrl to avoid hijacking scroll
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 1 / ZOOM_WHEEL_FACTOR : ZOOM_WHEEL_FACTOR;
+
+      // Use a more granular zoom factor based on wheel delta
+      // This makes zooming feel more natural and responsive
+      const normalizedDelta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 100);
+      const zoomIntensity = 0.002; // Adjust this to control zoom sensitivity
+      const factor = Math.pow(1 + zoomIntensity, -normalizedDelta);
+
       zoomBy(factor, { x: e.clientX, y: e.clientY }, canvasContainerEl);
     };
   };
@@ -114,29 +198,92 @@ export function useViewport(props: UseViewportProps) {
   let isPanning = false;
   let panStart = { x: 0, y: 0 };
   let panViewportStart = { tx: 0, ty: 0, zoom: 1 };
+  let currentPanPosition = { x: 0, y: 0 };
+  let panAnimationId: number | null = null;
+
+  // Smooth panning update using requestAnimationFrame
+  const updatePanPosition = () => {
+    if (!isPanning) return;
+
+    const dx = currentPanPosition.x - panStart.x;
+    const dy = currentPanPosition.y - panStart.y;
+
+    setViewport((prev) => ({
+      ...prev,
+      tx: panViewportStart.tx + dx,
+      ty: panViewportStart.ty + dy
+    }));
+
+    if (isPanning) {
+      panAnimationId = requestAnimationFrame(updatePanPosition);
+    }
+  };
 
   const panMove = (e: PointerEvent) => {
     if (!isPanning) return;
-    const dx = e.clientX - panStart.x;
-    const dy = e.clientY - panStart.y;
-    setViewport((prev) => ({ ...prev, tx: panViewportStart.tx + dx, ty: panViewportStart.ty + dy }));
+    // Just update the current position, let RAF handle the viewport update
+    currentPanPosition = { x: e.clientX, y: e.clientY };
   };
 
-  const panUp = (e: PointerEvent) => {
+  const panUp = () => {
     if (!isPanning) return;
     isPanning = false;
+
+    if (panAnimationId) {
+      cancelAnimationFrame(panAnimationId);
+      panAnimationId = null;
+    }
+
     window.removeEventListener('pointermove', panMove);
     window.removeEventListener('pointerup', panUp);
-    saveViewportState(viewport());
+
+    // Final position update and save
+    const dx = currentPanPosition.x - panStart.x;
+    const dy = currentPanPosition.y - panStart.y;
+    const finalViewport = {
+      ...viewport(),
+      tx: panViewportStart.tx + dx,
+      ty: panViewportStart.ty + dy
+    };
+
+    setViewport(finalViewport);
+    saveViewportState(finalViewport);
   };
 
   const handlePanPointerDown = (e: PointerEvent) => {
-    if (e.button !== 1) return; // middle mouse only
+    // Allow both left mouse (0) and middle mouse (1) for panning
+    // Left mouse will be used when clicking on empty canvas space
+    if (e.button !== 0 && e.button !== 1) return;
+
+    // For middle mouse, always start panning
+    // For left mouse, we'll let the canvas component decide based on target
+    if (e.button === 1) {
+      e.preventDefault();
+      startPanning(e);
+    }
+  };
+
+  const startPanning = (e: PointerEvent) => {
+    // Cancel any ongoing zoom animation to prevent conflicts
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+      // Reset animation state completely
+      targetViewport = null;
+      startViewport = null;
+    }
+
     isPanning = true;
     panStart = { x: e.clientX, y: e.clientY };
+    currentPanPosition = { x: e.clientX, y: e.clientY };
+    // Capture the current viewport state, not any intermediate animation state
     panViewportStart = { ...viewport() };
+
     window.addEventListener('pointermove', panMove);
     window.addEventListener('pointerup', panUp);
+
+    // Start the smooth panning animation loop
+    panAnimationId = requestAnimationFrame(updatePanPosition);
   };
 
   // Restore viewport state when canvas loads
@@ -154,6 +301,12 @@ export function useViewport(props: UseViewportProps) {
     if (viewportSaveTimeout) {
       clearTimeout(viewportSaveTimeout);
     }
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+    }
+    if (panAnimationId) {
+      cancelAnimationFrame(panAnimationId);
+    }
   });
 
   return {
@@ -164,6 +317,7 @@ export function useViewport(props: UseViewportProps) {
     resetZoom,
     zoomBy,
     handlePanPointerDown,
+    startPanning,
     createWheelHandler,
     restoreViewport,
     saveViewportState,

@@ -267,9 +267,18 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
         {/* Canvas */}
         <div 
-          class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl"
+          class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
           ref={(el) => (canvasContainerEl = el)}
-          onPointerDown={viewport.handlePanPointerDown}
+          onPointerDown={(e) => {
+            // Handle middle mouse button panning
+            viewport.handlePanPointerDown(e);
+            
+            // Handle left mouse button panning on empty space
+            if (e.button === 0 && e.target === e.currentTarget) {
+              e.preventDefault();
+              viewport.startPanning(e);
+            }
+          }}
           style={{
             "background-image": "radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)",
             "background-size": `20px 20px`
@@ -280,12 +289,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
             style={{
               'min-width': '100%',
               'min-height': '100%',
-              transform: `translate(${Math.round(viewport.viewport().tx)}px, ${Math.round(viewport.viewport().ty)}px) scale(${viewport.viewport().zoom})`,
+              transform: `translate(${viewport.viewport().tx}px, ${viewport.viewport().ty}px) scale(${viewport.viewport().zoom})`,
               'transform-origin': 'top left',
               'image-rendering': 'crisp-edges',
               'backface-visibility': 'hidden',
-              'transform-style': 'preserve-3d',
-              transition: 'transform 0.1s ease-out'
+              'transform-style': 'preserve-3d'
             }}
           >
           {/* Loading State */}
@@ -385,7 +393,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
         {/* Status Bar */}
         <div class="flex items-center justify-between px-1 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
-          <span>Drag agents around the canvas to organize your workspace</span>
+          <span>Drag agents to move • Click and drag empty space to pan • Ctrl+scroll to zoom</span>
           <div class="flex items-center gap-4">
             {/* Zoom Controls */}
             <div class="flex items-center gap-1">
@@ -425,8 +433,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
             </div>
             <span>•</span>
             <span class="flex items-center gap-1">
-              <Icon name="mouse-pointer" class="h-3 w-3" />
-              Drag to move
+              <Icon name="move" class="h-3 w-3" />
+              Pan & Zoom
             </span>
           </div>
         </div>
