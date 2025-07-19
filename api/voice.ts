@@ -36,7 +36,6 @@ async function updateAgentAudioAndStatus(
       agentId: agentId as any, // Cast to handle Convex ID type
       audioUrl,
     });
-    console.log(`✅ Updated agent audio and status to ${status}:`, agentId);
   } catch (error) {
     console.error(`❌ Failed to update agent audio and status:`, agentId, error);
   }
@@ -86,7 +85,7 @@ voiceApi.post('/', async (c) => {
     const baseUrl = `${url.protocol}//${url.host}`;
     const webhookUrl = `${baseUrl}/api/voice/webhook`;
 
-    console.log(`🎤 Starting TTS generation with webhook: ${webhookUrl}`);
+    // console.log(`🎤 Starting TTS generation with webhook: ${webhookUrl}`);
 
     // Update agent status to 'processing' and voice settings in one atomic call
     if (agentId && c.env.CONVEX_URL) {
@@ -135,7 +134,8 @@ voiceApi.post('/', async (c) => {
     }
 
     const queueResult = await falResponse.json() as { request_id: string; gateway_request_id: string };
-    console.log(`✅ TTS queued with request_id: ${queueResult.request_id}`);
+    console.log(`✅ TTS queued with request_id: ${queueResult.request_id} \n
+                 🎤 Starting TTS generation with webhook: ${webhookUrl}`);
 
     // Store request_id with agent for webhook matching
     if (agentId && c.env.CONVEX_URL) {
@@ -173,8 +173,6 @@ voiceApi.post('/webhook', async (c) => {
     const webhookData = await c.req.json();
     const { request_id, status, payload, error } = webhookData;
     
-    console.log(`🎤 Webhook received for request_id: ${request_id}, status: ${status}`);
-
     if (!c.env.CONVEX_URL) {
       console.error('❌ CONVEX_URL not found in webhook');
       return c.json({ error: 'Database service not configured' }, 500);
