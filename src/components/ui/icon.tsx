@@ -1,6 +1,6 @@
 import { Show, Switch, Match, splitProps, type ComponentProps } from "solid-js";
 
-export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "history" | "x" | "database" 
+export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "x" | "database" 
 | "music" | "musicNote" | "server" | "chevronupdown" | "sparkles" | "badgecheck" | "creditcard" | "bell" | 
 "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' | 'video' |
 "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
@@ -64,9 +64,7 @@ const DumbbellIcon = (props: ComponentProps<"svg">) => (
   </svg>
 );
 
-const HistoryIcon = (props: ComponentProps<"svg">) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-history-icon lucide-history" {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
-);
+
 
 const XIcon = (props: ComponentProps<"svg">) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x" {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -408,9 +406,7 @@ export const Icon = (props: IconProps) => {
       <Match when={local.name === "dumbbell"}>
         <DumbbellIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
-      <Match when={local.name === "history"}>
-        <HistoryIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
-      </Match>
+
       <Match when={local.name === "x"}>
         <XIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>

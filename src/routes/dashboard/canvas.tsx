@@ -1,11 +1,7 @@
 import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
-import { ImageCard } from "~/components/ImageCard";
-import { Show, For, createSignal, createEffect } from "solid-js";
-import { Icon } from "~/components/ui/icon";
-import { Button } from "~/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { convexApi, useQuery, useMutation } from "~/lib/convex";
+import { createSignal, createEffect } from "solid-js";
+import { convexApi, useMutation } from "~/lib/convex";
 import { useCurrentUser, useCurrentUserId } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
@@ -23,12 +19,6 @@ export const Route = createFileRoute('/dashboard/canvas')({
 function ImagesPage() {
     const currentUser = useCurrentUser();
     const userId = useCurrentUserId();
-    const imagesQuery = useQuery(
-        convexApi.images.getImages,
-        () => userId() ? { userId: userId()! } : null
-    );
-
-    const [activeTab, setActiveTab] = createSignal("canvas");
     const search = useSearch({ from: '/dashboard/canvas' });
 
     // Mutation hooks
@@ -117,93 +107,17 @@ function ImagesPage() {
                                 />
                             </div>
                         </div>
-
-                        <div class="flex-shrink-0">
-                            <Tabs value={activeTab()} onChange={setActiveTab}>
-                                <TabsList class="grid w-full grid-cols-2">
-                                    <TabsTrigger value="canvas" class="flex items-center gap-2">
-                                        <Icon name="layout-grid" class="h-4 w-4" />
-                                        <span class="hidden sm:inline">Canvas</span>
-                                    </TabsTrigger>
-                                    <TabsTrigger value="history" class="flex items-center gap-2">
-                                        <Icon name="clock" class="h-4 w-4" />
-                                        <span class="hidden sm:inline">History</span>
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Content */}
             <div class="flex-1 overflow-hidden">
-                <Tabs value={activeTab()} class="h-full flex flex-col">
-                    <TabsContent value="canvas" class="flex-1 m-0 p-0">
-                        <ImageCanvas
-                            class="h-full"
-                            activeCanvasId={activeCanvasId()}
-                            onCanvasDisabled={() => setActiveCanvasId(null)}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="history" class="h-full m-0 px-1 py-4">
-                        <div class="container mx-auto h-full">
-                            <div class="h-full overflow-auto">
-                                <div class="mb-6">
-                                    <h2 class="text-xl font-semibold mb-2">Your Generated Images</h2>
-                                    <p class="text-muted-foreground text-sm">
-                                        Browse and manage your previously generated images
-                                    </p>
-                                </div>
-
-                                {/* Loading State */}
-                                <Show when={imagesQuery.isLoading()}>
-                                    <div class="flex justify-center items-center h-64">
-                                        <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground" />
-                                    </div>
-                                </Show>
-
-                                {/* Error State */}
-                                <Show when={imagesQuery.error()}>
-                                    <div class="text-center py-8 text-red-500">
-                                        <Icon name="x" class="mx-auto h-12 w-12 opacity-20 mb-2" />
-                                        <p class="mb-4">Failed to load images: {imagesQuery.error()?.message}</p>
-                                        <Button onClick={() => imagesQuery.reset()} variant="outline">
-                                            <Icon name="refresh-cw" class="mr-2 h-4 w-4" />
-                                            Retry
-                                        </Button>
-                                    </div>
-                                </Show>
-
-                                {/* Images Content */}
-                                <Show when={!imagesQuery.isLoading() && !imagesQuery.error()}>
-                                    <Show when={imagesQuery.data()?.length && imagesQuery.data()!.length > 0} fallback={
-                                        <div class="text-center py-16 border rounded-md">
-                                            <Icon name="image" class="mx-auto h-12 w-12 text-muted-foreground opacity-20 mb-4" />
-                                            <h3 class="text-lg font-medium text-muted-foreground mb-2">No images yet</h3>
-                                            <p class="text-muted-foreground text-sm mb-4">
-                                                Generate your first image using the Canvas tab
-                                            </p>
-                                            <Button onClick={() => setActiveTab("canvas")} size="sm">
-                                                <Icon name="layout-grid" class="h-4 w-4 mr-2" />
-                                                Go to Canvas
-                                            </Button>
-                                        </div>
-                                    }>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            <For each={imagesQuery.data() || []}>
-                                                {(image) => (
-                                                    <ImageCard image={image} />
-                                                )}
-                                            </For>
-                                        </div>
-                                    </Show>
-                                </Show>
-                            </div>
-                        </div>
-                    </TabsContent>
-                </Tabs>
+                <ImageCanvas
+                    class="h-full"
+                    activeCanvasId={activeCanvasId()}
+                    onCanvasDisabled={() => setActiveCanvasId(null)}
+                />
             </div>
         </div>
     );

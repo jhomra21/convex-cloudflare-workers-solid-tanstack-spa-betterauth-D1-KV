@@ -1,16 +1,14 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-export const getImages = query({
+
+
+export const getImageById = query({
   args: {
-    userId: v.string(),
+    imageId: v.id("images"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("images")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .collect();
+    return await ctx.db.get(args.imageId);
   },
 });
 

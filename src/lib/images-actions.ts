@@ -47,17 +47,6 @@ export function useGenerateImage() {
   }));
 }
 
-// This function gets images directly from Convex, not through the Hono API
-export function useUserImages() {
-  const userId = useCurrentUserId();
-  
-  // Use existing custom Convex integration for real-time queries
-  return useQuery(
-    convexApi.images.getImages,
-    () => userId() ? { userId: userId()! } : { userId: "" }
-  );
-}
-
 export function useEditImage() {
   const queryClient = useQueryClient();
   

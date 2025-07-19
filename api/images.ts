@@ -429,8 +429,7 @@ imagesApi.delete('/:imageId', async (c) => {
     const convex = new ConvexHttpClient(c.env.CONVEX_URL);
     
     // Get the image record to extract filename from URL
-    const images = await convex.query(api.images.getImages, { userId: user.id });
-    const imageToDelete = images.find((img: any) => img._id === imageId);
+    const imageToDelete = await convex.query(api.images.getImageById, { imageId: imageId as any });
     
     if (!imageToDelete) {
       console.error('❌ Image not found for user');
