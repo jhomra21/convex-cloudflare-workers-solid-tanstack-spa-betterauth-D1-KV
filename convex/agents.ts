@@ -2,7 +2,6 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type {
   AgentStatus,
-  AgentModel,
   AgentType
 } from "../src/types/agents";
 
@@ -380,6 +379,7 @@ export const getConnectedAgent = query({
       _creationTime: v.number(),
       canvasId: v.id("canvases"),
       userId: v.string(),
+      userName: v.optional(v.string()),
       prompt: v.string(),
       positionX: v.number(),
       positionY: v.number(),
@@ -499,6 +499,7 @@ export const getAgentByRequestId = query({
       _creationTime: v.number(),
       canvasId: v.id("canvases"),
       userId: v.string(),
+      userName: v.optional(v.string()),
       prompt: v.string(),
       positionX: v.number(),
       positionY: v.number(),

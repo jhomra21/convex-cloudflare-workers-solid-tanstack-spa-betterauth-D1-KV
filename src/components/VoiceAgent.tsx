@@ -224,6 +224,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                 <div
                     class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40"
                     title="Drag to move this agent"
+                    onMouseDown={props.onMouseDown}
                 >
                     <div class="flex items-center gap-2">
                         <Show when={isLoading()} fallback={
@@ -252,7 +253,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                     </div>
                 </div>
 
-                <CardContent class="p-4 flex flex-col h-full relative">
+                <CardContent class="p-4 flex flex-col h-full relative" style="pointer-events: auto;">
                     {/* Action Buttons Overlay - Only show when there's no audio or we're in prompt input mode */}
                     <Show when={!isLoading() && props.onRemove && (!hasAudio() || showPromptInput())}>
                         <div class="absolute top-2 right-2 flex gap-1 z-10">
@@ -282,11 +283,14 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                 </div>
 
                                 {/* Custom Audio URL (Optional) */}
-                                <Input
+                                <input
+                                    type="text"
                                     value={customAudioUrl()}
-                                    onInput={(e: Event) => setCustomAudioUrl((e.target as HTMLInputElement).value)}
+                                    onInput={(e) => setCustomAudioUrl((e.target as HTMLInputElement).value)}
                                     placeholder="Optional: Custom voice audio URL"
-                                    class="text-xs cursor-text"
+                                    class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    style="pointer-events: auto;"
+                                    disabled={isLoading()}
                                 />
 
                                 {/* Exaggeration Slider */}
@@ -320,9 +324,10 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     onBlur={handleBlur}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Enter text to convert to speech..."
-                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none cursor-text"
+                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
                                     rows={3}
                                     disabled={isLoading()}
+                                    style="pointer-events: auto;"
                                 />
 
                                 <Button
