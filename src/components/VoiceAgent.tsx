@@ -15,6 +15,7 @@ import type { VoiceOption } from '~/types/agents';
 
 export interface VoiceAgentProps {
     id?: string;
+    userName?: string;
     prompt?: string;
     onRemove?: (id: string) => void;
     onMouseDown?: (e: MouseEvent) => void;
@@ -210,7 +211,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
             </style>
             <Card
                 class={cn(
-                    "flex flex-col relative transition-all duration-300",
+                    "flex flex-col relative transition-all duration-300 cursor-move",
                     isLoading() ? "border border-secondary/50" : "",
                     props.class
                 )}
@@ -221,8 +222,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
             >
                 {/* Drag Handle - Larger clickable area */}
                 <div
-                    class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-between px-3 border-b border-muted/40"
-                    title="Drag to move agent"
+                    class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40"
+                    title="Drag to move this agent"
                 >
                     <div class="flex items-center gap-2">
                         <Show when={isLoading()} fallback={
@@ -239,8 +240,11 @@ export function VoiceAgent(props: VoiceAgentProps) {
                         <span class="text-xs text-muted-foreground/60 capitalize">
                             Voice
                         </span>
+                        <Show when={props.userName}>
+                            <span class="text-xs text-muted-foreground/40">• {props.userName}</span>
+                        </Show>
                     </div>
-                    
+
                     <div class="flex gap-1">
                         <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
                         <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
@@ -280,9 +284,9 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                 {/* Custom Audio URL (Optional) */}
                                 <Input
                                     value={customAudioUrl()}
-                                    onInput={(e) => setCustomAudioUrl((e.target as HTMLInputElement).value)}
+                                    onInput={(e: Event) => setCustomAudioUrl((e.target as HTMLInputElement).value)}
                                     placeholder="Optional: Custom voice audio URL"
-                                    class="text-xs"
+                                    class="text-xs cursor-text"
                                 />
 
                                 {/* Exaggeration Slider */}
@@ -316,7 +320,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     onBlur={handleBlur}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Enter text to convert to speech..."
-                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none cursor-text"
                                     rows={3}
                                     disabled={isLoading()}
                                 />
@@ -360,7 +364,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                             <div class="bg-muted/30 rounded-lg p-3 mb-3 relative">
                                 <audio
                                     controls
-                                    class="w-full"
+                                    class="w-full cursor-default"
                                     preload="none"
                                 >
                                     <source src={props.generatedAudio} type="audio/wav" />

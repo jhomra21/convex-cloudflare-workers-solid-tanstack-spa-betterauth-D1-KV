@@ -1,10 +1,23 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import type { 
-  AgentStatus, 
-  AgentModel, 
-  AgentType 
+import type {
+  AgentStatus,
+  AgentModel,
+  AgentType
 } from "../src/types/agents";
+
+// Get agent count for a canvas
+export const getCanvasAgentCount = query({
+  args: { canvasId: v.id("canvases") },
+  returns: v.number(),
+  handler: async (ctx, { canvasId }) => {
+    const agents = await ctx.db
+      .query("agents")
+      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .collect();
+    return agents.length;
+  },
+});
 
 // Get all agents for a canvas
 export const getCanvasAgents = query({
@@ -15,6 +28,7 @@ export const getCanvasAgents = query({
       _creationTime: v.number(),
       canvasId: v.id("canvases"),
       userId: v.string(),
+      userName: v.optional(v.string()),
       prompt: v.string(),
       positionX: v.number(),
       positionY: v.number(),
@@ -24,8 +38,8 @@ export const getCanvasAgents = query({
       audioUrl: v.optional(v.string()),
       videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
-        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
         v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
       )),
       audioSampleUrl: v.optional(v.string()),
@@ -53,6 +67,7 @@ export const createAgent = mutation({
   args: {
     canvasId: v.id("canvases"),
     userId: v.string(),
+    userName: v.optional(v.string()),
     prompt: v.string(),
     positionX: v.number(),
     positionY: v.number(),
@@ -61,8 +76,8 @@ export const createAgent = mutation({
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
     type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"))),
     voice: v.optional(v.union(
-      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
       v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
     )),
     audioSampleUrl: v.optional(v.string()),
@@ -74,6 +89,7 @@ export const createAgent = mutation({
     const agentId = await ctx.db.insert("agents", {
       canvasId: args.canvasId,
       userId: args.userId,
+      userName: args.userName,
       prompt: args.prompt,
       positionX: args.positionX,
       positionY: args.positionY,
@@ -89,7 +105,7 @@ export const createAgent = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    
+
     return agentId;
   },
 });
@@ -164,25 +180,25 @@ export const updateAgentStatus = mutation({
       if (!currentAgent) {
         throw new Error("Agent not found");
       }
-      
+
       // Import validation function (note: this is a runtime import in Convex)
       // For now, we'll implement basic validation inline
       const currentStatus = currentAgent.status as AgentStatus;
-      
+
       // Basic status transition validation
       const invalidTransitions = [
         { from: 'processing', to: 'idle' }, // Cannot go from processing to idle
       ];
-      
+
       const isInvalidTransition = invalidTransitions.some(
         t => t.from === currentStatus && t.to === status
       );
-      
+
       if (isInvalidTransition) {
         throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
       }
     }
-    
+
     await ctx.db.patch(agentId, {
       status,
       updatedAt: Date.now(),
@@ -229,31 +245,31 @@ export const connectAgents = mutation({
     // Verify both agents exist
     const sourceAgent = await ctx.db.get(sourceAgentId);
     const targetAgent = await ctx.db.get(targetAgentId);
-    
+
     if (!sourceAgent || !targetAgent) {
       throw new Error("One or both agents not found");
     }
-    
+
     // Prevent self-connection
     if (sourceAgentId === targetAgentId) {
       throw new Error("Agents cannot connect to themselves");
     }
-    
+
     if (!forceConnection) {
       // Validate connection rules
       const sourceType = sourceAgent.type as AgentType;
       const targetType = targetAgent.type as AgentType;
-      
+
       // Valid connection rules - be explicit about what's allowed
       const validConnections = [
         { source: 'image-generate', target: 'image-edit' }, // Generate can connect to edit (main workflow)
         { source: 'image-edit', target: 'image-edit' }, // Edit can connect to other edit (chaining)
       ];
-      
+
       const isValidConnection = validConnections.some(
         rule => rule.source === sourceType && rule.target === targetType
       );
-      
+
       if (!isValidConnection) {
         // Provide helpful error messages for common mistakes
         if (sourceType === 'image-edit' && targetType === 'image-generate') {
@@ -264,30 +280,30 @@ export const connectAgents = mutation({
           throw new Error(`Invalid connection: ${sourceType} agents cannot connect to ${targetType} agents`);
         }
       }
-      
+
       // Check if agents are already connected
-      if (sourceAgent.connectedAgentId === targetAgentId || 
-          targetAgent.connectedAgentId === sourceAgentId) {
+      if (sourceAgent.connectedAgentId === targetAgentId ||
+        targetAgent.connectedAgentId === sourceAgentId) {
         throw new Error("Agents are already connected");
       }
-      
+
       // Check if agents already have other connections (for now, limit to one connection per agent)
       if (sourceAgent.connectedAgentId || targetAgent.connectedAgentId) {
         throw new Error("One or both agents are already connected to other agents");
       }
     }
-    
+
     // Update both agents to reference each other
     await ctx.db.patch(sourceAgentId, {
       connectedAgentId: targetAgentId,
       updatedAt: Date.now(),
     });
-    
+
     await ctx.db.patch(targetAgentId, {
       connectedAgentId: sourceAgentId,
       updatedAt: Date.now(),
     });
-    
+
     return null;
   },
 });
@@ -303,18 +319,18 @@ export const disconnectAgents = mutation({
     if (!agent || !agent.connectedAgentId) {
       return null;
     }
-    
+
     // Remove connection from both agents
     await ctx.db.patch(agentId, {
       connectedAgentId: undefined,
       updatedAt: Date.now(),
     });
-    
+
     await ctx.db.patch(agent.connectedAgentId, {
       connectedAgentId: undefined,
       updatedAt: Date.now(),
     });
-    
+
     return null;
   },
 });
@@ -385,8 +401,8 @@ export const getConnectedAgent = query({
       audioUrl: v.optional(v.string()),
       videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
-        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
         v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
       )),
       audioSampleUrl: v.optional(v.string()),
@@ -407,7 +423,7 @@ export const getConnectedAgent = query({
     if (!agent || !agent.connectedAgentId) {
       return null;
     }
-    
+
     return await ctx.db.get(agent.connectedAgentId);
   },
 });
@@ -421,7 +437,7 @@ export const clearCanvasAgents = mutation({
       .query("agents")
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
       .collect();
-    
+
     for (const agent of agents) {
       await ctx.db.delete(agent._id);
     }
@@ -452,8 +468,8 @@ export const startVoiceGeneration = mutation({
     agentId: v.id("agents"),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
     voice: v.optional(v.union(
-      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
       v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
     )),
     audioSampleUrl: v.optional(v.string()),
@@ -504,8 +520,8 @@ export const getAgentByRequestId = query({
       audioUrl: v.optional(v.string()),
       videoUrl: v.optional(v.string()),
       voice: v.optional(v.union(
-        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
         v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
       )),
       audioSampleUrl: v.optional(v.string()),

@@ -12,6 +12,7 @@ import { convexClient, convexApi } from '~/lib/convex';
 
 export interface VideoAgentProps {
     id?: string;
+    userName?: string;
     prompt?: string;
     onRemove?: (id: string) => void;
     onMouseDown?: (e: MouseEvent) => void;
@@ -127,7 +128,7 @@ export function VideoAgent(props: VideoAgentProps) {
         <ErrorBoundary>
             <Card
                 class={cn(
-                    "flex flex-col relative transition-all duration-300",
+                    "flex flex-col relative transition-all duration-300 cursor-move",
                     isLoading() ? "border border-secondary/50" : "",
                     props.class
                 )}
@@ -138,8 +139,8 @@ export function VideoAgent(props: VideoAgentProps) {
             >
                 {/* Drag Handle */}
                 <div
-                    class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-between px-3 border-b border-muted/40"
-                    title="Drag to move agent"
+                    class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40"
+                    title="Drag to move this agent"
                 >
                     <div class="flex items-center gap-2">
                         <Show when={isLoading()} fallback={
@@ -156,6 +157,9 @@ export function VideoAgent(props: VideoAgentProps) {
                         <span class="text-xs text-muted-foreground/60 capitalize">
                             Video
                         </span>
+                        <Show when={props.userName}>
+                            <span class="text-xs text-muted-foreground/40">• {props.userName}</span>
+                        </Show>
                     </div>
                     
                     <div class="flex gap-1">
@@ -214,9 +218,9 @@ export function VideoAgent(props: VideoAgentProps) {
                                 {/* Negative Prompt */}
                                 <Input
                                     value={negativePrompt()}
-                                    onInput={(e) => setNegativePrompt((e.target as HTMLInputElement).value)}
+                                    onInput={(e: Event) => setNegativePrompt((e.target as HTMLInputElement).value)}
                                     placeholder="Optional: What to avoid in the video"
-                                    class="text-xs"
+                                    class="text-xs cursor-text"
                                     disabled={isLoading()}
                                 />
 
@@ -249,7 +253,7 @@ export function VideoAgent(props: VideoAgentProps) {
                                     onBlur={handleBlur}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Describe the video you want to generate..."
-                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-shadow placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none cursor-text"
                                     rows={3}
                                     disabled={isLoading()}
                                 />
@@ -291,7 +295,7 @@ export function VideoAgent(props: VideoAgentProps) {
                             <div class="bg-muted/30 rounded-lg p-3 mb-3 relative flex-1">
                                 <video
                                 controls
-                                class="w-full h-auto max-h-full rounded"
+                                class="w-full h-auto max-h-full rounded cursor-default"
                                 preload="none"
                                 style={{
                                 "aspect-ratio": aspectRatio() === '16:9' ? '16/9' : 

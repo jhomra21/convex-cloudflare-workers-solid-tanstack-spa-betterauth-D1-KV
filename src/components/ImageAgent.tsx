@@ -14,6 +14,7 @@ import { ErrorBoundary } from '~/components/ErrorBoundary';
 
 export interface ImageAgentProps {
   id?: string;
+  userName?: string;
   prompt?: string;
   onRemove?: (id: string) => void;
   onMouseDown?: (e: MouseEvent) => void;
@@ -236,7 +237,7 @@ export function ImageAgent(props: ImageAgentProps) {
     <ErrorBoundary>
       <Card 
         class={cn(
-          "flex flex-col relative transition-all duration-300",
+          "flex flex-col relative transition-all duration-300 cursor-move",
           isLoading() ? "border border-secondary/50" : "",
           props.class
         )}
@@ -247,8 +248,8 @@ export function ImageAgent(props: ImageAgentProps) {
       >
       {/* Drag Handle - Larger clickable area */}
       <div 
-        class="w-full h-8 bg-muted/30 cursor-move rounded-t-lg hover:bg-muted/50 transition-colors flex items-center justify-between px-3 border-b border-muted/40"
-        title="Drag to move agent"
+        class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40"
+        title="Drag to move this agent"
       >
         <div class="flex items-center gap-2">
           <Icon 
@@ -258,6 +259,9 @@ export function ImageAgent(props: ImageAgentProps) {
           <span class="text-xs text-muted-foreground/60 capitalize">
             {props.type === 'image-edit' ? 'Edit' : 'Generate'}
           </span>
+          <Show when={props.userName}>
+            <span class="text-xs text-muted-foreground/40">• {props.userName}</span>
+          </Show>
         </div>
         <div class="flex gap-1">
           <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
@@ -303,7 +307,7 @@ export function ImageAgent(props: ImageAgentProps) {
                   onChange={handlePromptChange}
                   onKeyDown={handleKeyDown}
                   onBlur={handleBlur}
-                  class="flex-1"
+                  class="flex-1 cursor-text"
                   disabled={isLoading()}
                 />
                 <Button

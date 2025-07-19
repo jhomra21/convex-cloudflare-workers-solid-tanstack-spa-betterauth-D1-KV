@@ -64,6 +64,7 @@ export function MemoizedVideoAgent(props: MemoizedVideoAgentProps) {
     >
       <VideoAgent
         id={props.agent.id}
+        userName={props.agent.userName}
         prompt={props.agent.prompt}
         onRemove={props.onRemove}
         size={props.agent.size}

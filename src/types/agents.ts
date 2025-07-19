@@ -19,6 +19,7 @@ export interface AgentData {
     _creationTime: number;
     canvasId: Id<'canvases'>;
     userId: string;
+    userName?: string;
     prompt: string;
     positionX: number;
     positionY: number;
@@ -43,6 +44,7 @@ export interface AgentData {
 // Frontend agent class interface (matches current Agent class)
 export interface Agent {
     id: string;
+    userName?: string;
     prompt: string;
     position: {
         x: number;
@@ -77,6 +79,7 @@ export interface AgentConnection {
 export interface CreateAgentParams {
     canvasId: Id<'canvases'>;
     userId: string;
+    userName?: string;
     prompt: string;
     positionX: number;
     positionY: number;
@@ -173,6 +176,7 @@ export function isAgentData(obj: unknown): obj is AgentData {
         typeof (obj as AgentData)._id === 'string' &&
         typeof (obj as AgentData).canvasId === 'string' &&
         typeof (obj as AgentData).userId === 'string' &&
+        (typeof (obj as AgentData).userName === 'string' || typeof (obj as AgentData).userName === 'undefined') &&
         typeof (obj as AgentData).prompt === 'string' &&
         typeof (obj as AgentData).positionX === 'number' &&
         typeof (obj as AgentData).positionY === 'number' &&
@@ -198,6 +202,7 @@ export function isValidAgentType(type: string): type is AgentType {
 export function agentDataToAgent(agentData: AgentData): Agent {
     return {
         id: agentData._id,
+        userName: agentData.userName,
         prompt: agentData.prompt,
         position: {
             x: agentData.positionX,

@@ -34,6 +34,7 @@ export default defineSchema({
   agents: defineTable({
     canvasId: v.id("canvases"),
     userId: v.string(),
+    userName: v.optional(v.string()),
     prompt: v.string(),
     positionX: v.number(),
     positionY: v.number(),
@@ -43,8 +44,8 @@ export default defineSchema({
     audioUrl: v.optional(v.string()),
     videoUrl: v.optional(v.string()),
     voice: v.optional(v.union(
-      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"), 
-      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"), 
+      v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+      v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
       v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
     )),
     audioSampleUrl: v.optional(v.string()),

@@ -143,27 +143,20 @@ export function useSignOutMutation() {
   }));
 }
 
-/**
- * Get current user from route context
- * Convenience hook that provides reactive access to the current user
+/*
+ * User Auth
  */
 export function useCurrentUser() {
   const context = useRouteContext({ from: '/dashboard' });
   return createMemo(() => context()?.session?.user);
 }
 
-/**
- * Get current user ID from route context
- * Convenience hook that provides reactive access to the current user ID
- */
 export function useCurrentUserId() {
   const context = useRouteContext({ from: '/dashboard' });
   return createMemo(() => context()?.session?.user?.id);
 }
 
-/**
- * Format user ID as a readable fallback name
- */
-export function formatUserIdAsName(userId: string): string {
-  return `User-${userId.slice(-4).toUpperCase()}`;
+export function useCurrentUserName() {
+  const context = useRouteContext({ from: '/dashboard' });
+  return createMemo(() => context()?.session?.user?.name || 'User');
 }

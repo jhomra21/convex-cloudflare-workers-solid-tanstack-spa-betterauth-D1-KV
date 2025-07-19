@@ -8,7 +8,7 @@ import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
 import { convexApi, useQuery, useMutation } from '~/lib/convex';
-import { useCurrentUserId } from '~/lib/auth-actions';
+import { useCurrentUserId, useCurrentUserName } from '~/lib/auth-actions';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { useViewport } from '~/lib/hooks/use-viewport';
@@ -24,35 +24,34 @@ export interface ImageCanvasProps {
 }
 
 export function ImageCanvas(props: ImageCanvasProps) {
-  // =============================================
-  // State Management
-  // =============================================
-  
-  // Authentication state
+
   const userId = useCurrentUserId();
+  const userName = useCurrentUserName();
   const [hasRedirected, setHasRedirected] = createSignal(false);
-  
-  // =============================================
-  // Data Fetching
-  // =============================================
-  
+
   // Canvas data - choose query based on activeCanvasId
   const defaultCanvas = useQuery(
     convexApi.canvas.getCanvas,
     () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null
   );
-  
+
   const specificCanvas = useQuery(
     convexApi.canvas.getCanvasById,
     () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null
   );
-  
+
   // Current active canvas data
   const canvas = () => props.activeCanvasId ? specificCanvas.data() : defaultCanvas.data();
-  
+
   // Canvas agents data
   const dbAgents = useQuery(
     convexApi.agents.getCanvasAgents,
+    () => canvas()?._id ? { canvasId: canvas()!._id } : null
+  );
+
+  // Agent count (separate query to avoid optimistic update issues)
+  const agentCount = useQuery(
+    convexApi.agents.getCanvasAgentCount,
     () => canvas()?._id ? { canvasId: canvas()!._id } : null
   );
 
@@ -61,40 +60,31 @@ export function ImageCanvas(props: ImageCanvasProps) {
     convexApi.canvas.getCanvas,
     () => userId() ? { userId: userId()! } : null
   );
-  
-  // =============================================
-  // Hooks
-  // =============================================
-  
+
   // Viewport management
-  const viewport = useViewport({ 
-    userCanvas: userOwnCanvas.data, 
-    userId 
+  const viewport = useViewport({
+    userCanvas: userOwnCanvas.data,
+    userId
   });
-  
+
   // Agent management
   const agentManagement = useAgentManagement({
     canvas,
     userId,
+    userName,
     dbAgents,
     viewport: viewport.viewport,
   });
-  
+
   // Z-index management
   const zIndexManagement = useZIndexManagement();
-  
-  // =============================================
-  // Mutations
-  // =============================================
+
+
   const createCanvasMutation = useMutation();
-  
+
   // Canvas container reference
   let canvasContainerEl: HTMLDivElement | null = null;
-  
-  // =============================================
-  // Effects and Derived State
-  // =============================================
-  
+
   // Attach wheel listener once container ref is available
   onMount(() => {
     if (!canvasContainerEl) return;
@@ -102,12 +92,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
     canvasContainerEl.addEventListener('wheel', handler, { passive: false });
     onCleanup(() => canvasContainerEl?.removeEventListener('wheel', handler));
   });
-  
+
   // Restore viewport state when canvas loads
   createEffect(() => {
     viewport.restoreViewport();
   });
-  
+
   // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
   createEffect(async () => {
     if (userId() && canvas() === null && !props.activeCanvasId) {
@@ -120,7 +110,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       }
     }
   });
-  
+
   // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
   createEffect(() => {
     // Only handle this for shared canvases (when activeCanvasId is provided)
@@ -152,14 +142,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
     updateAgentSize,
     updateAgentPrompt,
   } = agentManagement;
-
-  // =============================================
-  // Drag and Resize Hooks
-  // =============================================
-
-  // =============================================
-  // Event Handlers
-  // =============================================
 
   // Get Z-index functions from hook
   const { bringAgentToFront, getAgentZIndex } = zIndexManagement;
@@ -195,10 +177,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
     viewportGetter: () => viewport.viewport(),
   });
 
-  // =============================================
-  // Event Handlers
-  // =============================================
-  
   // Mouse down handler for agent dragging
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
     // First check if agent exists in raw database data
@@ -207,7 +185,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       console.warn('Agent not found in database yet:', agentId);
       return;
     }
-    
+
     // Then get the processed agent with optimistic updates
     const currentAgents = agents();
     const agent = currentAgents.find(a => a.id === agentId);
@@ -220,37 +198,33 @@ export function ImageCanvas(props: ImageCanvasProps) {
       });
       return;
     }
-    
+
     bringAgentToFront(agentId);
     dragHook.handleMouseDown(e, agentId, agent.position);
   };
-  
+
   // Resize start handler for agent resizing
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
-    
+
     bringAgentToFront(agentId);
     resizeHook.handleResizeStart(e, agentId, handle, agent.size);
   };
-  
+
   // Helper methods for the toolbar
   const handleAddGenerateAgent = () => addAgent('', 'image-generate');
   const handleAddEditAgent = () => addAgent('', 'image-edit');
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
   const handleAddVideoAgent = () => addAgent('', 'video-generate');
 
-  // =============================================
-  // Render
-  // =============================================
-  
   return (
     <ErrorBoundary>
       <div class={cn("flex flex-col h-full overflow-hidden", props.class)}>
         {/* Toolbar */}
         <AgentToolbar
           activeAgentType={activeAgentType()}
-          agentCount={agents().length}
+          agentCount={agentCount.data() || 0}
           isSharedCanvas={!!props.activeCanvasId}
           isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
           canvasId={canvas()?._id}
@@ -266,13 +240,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
         />
 
         {/* Canvas */}
-        <div 
+        <div
           class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
           ref={(el) => (canvasContainerEl = el)}
           onPointerDown={(e) => {
             // Handle middle mouse button panning
             viewport.handlePanPointerDown(e);
-            
+
             // Handle left mouse button panning on empty space
             if (e.button === 0 && e.target === e.currentTarget) {
               e.preventDefault();
@@ -284,7 +258,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
             "background-size": `20px 20px`
           }}
         >
-          <div 
+          <div
             class="canvas-content"
             style={{
               'min-width': '100%',
@@ -296,98 +270,98 @@ export function ImageCanvas(props: ImageCanvasProps) {
               'transform-style': 'preserve-3d'
             }}
           >
-          {/* Loading State */}
-          <Show when={!canvas() || !dbAgents.data()}>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="text-center">
-                <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-                <p class="text-sm text-muted-foreground">Loading canvas...</p>
+            {/* Loading State */}
+            <Show when={!canvas() || !dbAgents.data()}>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="text-center">
+                  <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                  <p class="text-sm text-muted-foreground">Loading canvas...</p>
+                </div>
               </div>
-            </div>
-          </Show>
+            </Show>
 
-          {/* Agent Connection Lines */}
-          <For each={connectedAgentPairs()}>
-            {(pair) => (
-              <AgentConnection
-                sourcePosition={pair.source.position}
-                targetPosition={pair.target.position}
-                sourceWidth={pair.source.size.width}
-                sourceHeight={pair.source.size.height}
-                targetWidth={pair.target.size.width}
-                targetHeight={pair.target.size.height}
-                sourceId={pair.source.id}
-                targetId={pair.target.id}
-              />
-            )}
-          </For>
+            {/* Agent Connection Lines */}
+            <For each={connectedAgentPairs()}>
+              {(pair) => (
+                <AgentConnection
+                  sourcePosition={pair.source.position}
+                  targetPosition={pair.target.position}
+                  sourceWidth={pair.source.size.width}
+                  sourceHeight={pair.source.size.height}
+                  targetWidth={pair.target.size.width}
+                  targetHeight={pair.target.size.height}
+                  sourceId={pair.source.id}
+                  targetId={pair.target.id}
+                />
+              )}
+            </For>
 
-          {/* Agents with individual memoization for better performance */}
-          <For each={agents()}>
-            {(agent) => {
-              // Calculate current interaction state
-              const isDragged = () => dragHook.draggedAgent() === agent.id;
-              const isResizing = () => resizeHook.resizingAgent() === agent.id;
-              const zIndex = () => getAgentZIndex(agent.id, isDragged());
-              
-              // Calculate animation state
-              const isExiting = () => exitingAgents().has(agent.id);
-              
+            {/* Agents with individual memoization for better performance */}
+            <For each={agents()}>
+              {(agent) => {
+                // Calculate current interaction state
+                const isDragged = () => dragHook.draggedAgent() === agent.id;
+                const isResizing = () => resizeHook.resizingAgent() === agent.id;
+                const zIndex = () => getAgentZIndex(agent.id, isDragged());
 
-              
-              // Render different agent types
-              if (agent.type === 'voice-generate') {
-              return (
-              <MemoizedVoiceAgent
-              agent={agent}
-              isDragged={isDragged()}
-              isResizing={isResizing()}
-              zIndex={zIndex()}
-              isExiting={isExiting()}
-              onRemove={removeAgent}
-              onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-              onPromptChange={updateAgentPrompt}
-              />
-              );
-              } else if (agent.type === 'video-generate') {
+                // Calculate animation state
+                const isExiting = () => exitingAgents().has(agent.id);
+
+
+
+                // Render different agent types
+                if (agent.type === 'voice-generate') {
+                  return (
+                    <MemoizedVoiceAgent
+                      agent={agent}
+                      isDragged={isDragged()}
+                      isResizing={isResizing()}
+                      zIndex={zIndex()}
+                      isExiting={isExiting()}
+                      onRemove={removeAgent}
+                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                      onPromptChange={updateAgentPrompt}
+                    />
+                  );
+                } else if (agent.type === 'video-generate') {
+                  return (
+                    <MemoizedVideoAgent
+                      agent={agent}
+                      isDragged={isDragged()}
+                      isResizing={isResizing()}
+                      zIndex={zIndex()}
+                      isExiting={isExiting()}
+                      onRemove={removeAgent}
+                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
+                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                      onPromptChange={updateAgentPrompt}
+                      class={cn(
+                        "shadow-lg border-2 transition-all duration-200",
+                        isDragged() ? "border-primary/50 shadow-xl" : "border-border/50"
+                      )}
+                    />
+                  );
+                }
+
                 return (
-                  <MemoizedVideoAgent
+                  <MemoizedImageAgent
                     agent={agent}
                     isDragged={isDragged()}
                     isResizing={isResizing()}
                     zIndex={zIndex()}
                     isExiting={isExiting()}
+                    availableAgents={availableAgents()}
                     onRemove={removeAgent}
                     onMouseDown={(e) => handleMouseDown(e, agent.id)}
                     onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                     onPromptChange={updateAgentPrompt}
-                    class={cn(
-                      "shadow-lg border-2 transition-all duration-200",
-                      isDragged() ? "border-primary/50 shadow-xl" : "border-border/50"
-                    )}
+                    onConnectAgent={connectAgents}
+                    onDisconnectAgent={disconnectAgent}
                   />
                 );
-              }
-              
-              return (
-                <MemoizedImageAgent
-                  agent={agent}
-                  isDragged={isDragged()}
-                  isResizing={isResizing()}
-                  zIndex={zIndex()}
-                  isExiting={isExiting()}
-                  availableAgents={availableAgents()}
-                  onRemove={removeAgent}
-                  onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                  onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
-                  onPromptChange={updateAgentPrompt}
-                  onConnectAgent={connectAgents}
-                  onDisconnectAgent={disconnectAgent}
-                />
-              );
-            }}
-          </For>
+              }}
+            </For>
           </div>
         </div>
 
@@ -441,7 +415,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       </div>
 
       {/* Empty State Overlay */}
-      <Show when={canvas() && dbAgents.data() && agents().length === 0}>
+      <Show when={canvas() && dbAgents.data() && agentCount.data() === 0}>
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div class="text-center pointer-events-auto">
             <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">

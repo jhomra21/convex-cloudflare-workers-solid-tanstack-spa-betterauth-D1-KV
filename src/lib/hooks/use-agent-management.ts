@@ -19,6 +19,7 @@ import { useOptimisticUpdates } from './use-optimistic-updates';
 export interface UseAgentManagementProps {
   canvas: () => any;
   userId: () => string | null;
+  userName: () => string;
   dbAgents: any;
   viewport: () => ViewportState;
 }
@@ -288,6 +289,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       const createParams: any = {
         canvasId: props.canvas()!._id,
         userId: props.userId()!,
+        userName: props.userName(),
         prompt: prompt || '',
         positionX: newPosition.x,
         positionY: newPosition.y,
@@ -305,6 +307,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       const tempId = crypto.randomUUID();
       const tempAgent: Agent = {
         id: tempId,
+        userName: props.userName(),
         prompt: createParams.prompt,
         type,
         position: newPosition,
@@ -313,14 +316,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
 
       addOptimisticAgent(tempAgent);
 
-      try {
-        await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
-      } finally {
-        // Remove temp once Convex snapshot arrives
-        setTimeout(() => {
-          removeOptimisticAgent(tempId);
-        }, 250);
-      }
+      await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
+      
+      // Remove optimistic agent immediately after mutation completes
+      removeOptimisticAgent(tempId);
       
     } catch (error) {
       console.error('Failed to create agent:', error);
