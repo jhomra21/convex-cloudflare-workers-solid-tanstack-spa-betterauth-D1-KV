@@ -256,10 +256,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
           }}
         >
           <div
-            class="canvas-content"
+            class="canvas-content absolute inset-0"
             style={{
-              'min-width': '100%',
-              'min-height': '100%',
               width: '200vw', // Make canvas content larger for infinite feel
               height: '200vh',
               transform: `translate(${viewport.viewport().tx}px, ${viewport.viewport().ty}px) scale(${viewport.viewport().zoom})`,
