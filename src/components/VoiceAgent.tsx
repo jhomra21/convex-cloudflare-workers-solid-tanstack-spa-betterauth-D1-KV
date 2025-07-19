@@ -2,8 +2,8 @@ import { createSignal, createUniqueId, Show, For } from 'solid-js';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-// Using native textarea to avoid Kobalte context issues
 import { Icon } from '~/components/ui/icon';
+import { Slider, SliderTrack, SliderFill, SliderThumb } from '~/components/ui/slider';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
 import { useAgentPromptState, useAgentVoiceState, useAgentExaggerationState, useAgentCustomAudioState } from '~/lib/hooks/use-persistent-state';
@@ -136,79 +136,6 @@ export function VoiceAgent(props: VoiceAgentProps) {
 
     return (
         <ErrorBoundary>
-            <style>
-                {`
-          .exaggeration-slider {
-            -webkit-appearance: none;
-            appearance: none;
-            background: transparent;
-            outline: none;
-          }
-          
-          .exaggeration-slider::-webkit-slider-track {
-            height: 12px;
-            border-radius: 6px;
-            background: transparent;
-          }
-          
-          .exaggeration-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #3b82f6;
-            border: 2px solid white;
-            cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            margin-top: -6px;
-          }
-          
-          .exaggeration-slider::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
-            will-change: transform;
-            -moz-transition: transform 0.1s ease-in-out;
-            transition: transform 0.1s ease-in-out;
-            -webkit-transition: transform 0.1s ease-in-out;
-          }
-          
-          .exaggeration-slider::-moz-range-track {
-            height: 12px;
-            border-radius: 6px;
-            background: transparent;
-            border: none;
-          }
-          
-          .exaggeration-slider::-moz-range-thumb {
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #3b82f6;
-            border: 2px solid white;
-            cursor: pointer;
-            -moz-appearance: none;
-            appearance: none;
-          }
-          
-          .exaggeration-slider::-moz-range-thumb:hover {
-            transform: scale(1.1);
-            will-change: transform;
-            transition: transform 0.1s ease-in-out;
-            -moz-transition: transform 0.1s ease-in-out;
-            -webkit-transition: transform 0.1s ease-in-out;
-          }
-          
-          .exaggeration-slider:disabled::-webkit-slider-thumb {
-            background: #9ca3af;
-            cursor: not-allowed;
-          }
-          
-          .exaggeration-slider:disabled::-moz-range-thumb {
-            background: #9ca3af;
-            cursor: not-allowed;
-          }
-        `}
-            </style>
             <Card
                 class={cn(
                     "flex flex-col relative transition-all duration-300 cursor-move",
@@ -283,51 +210,49 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                 </div>
 
                                 {/* Custom Audio URL (Optional) */}
-                                <input
-                                    type="text"
+                                <Input
                                     value={customAudioUrl()}
-                                    onInput={(e) => setCustomAudioUrl((e.target as HTMLInputElement).value)}
+                                    onChange={setCustomAudioUrl}
                                     placeholder="Optional: Custom voice audio URL"
-                                    class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                    style="pointer-events: auto;"
+                                    class="text-xs"
                                     disabled={isLoading()}
                                 />
 
                                 {/* Exaggeration Slider */}
-                                <div class="space-y-1">
+                                <div class="space-y-2">
                                     <div class="flex items-center justify-between">
                                         <label class="text-xs text-muted-foreground">Exaggeration:</label>
                                         <span class="text-xs text-muted-foreground font-mono">{exaggeration().toFixed(2)}</span>
                                     </div>
-                                    <input
-                                        type="range"
-                                        min="0.25"
-                                        max="2.0"
-                                        step="0.05"
-                                        value={exaggeration()}
-                                        onInput={(e) => setExaggeration(parseFloat((e.target as HTMLInputElement).value))}
+                                    <Slider
+                                        value={[exaggeration()]}
+                                        onChange={(value) => setExaggeration(value[0])}
+                                        minValue={0.25}
+                                        maxValue={2.0}
+                                        step={0.05}
                                         disabled={isLoading()}
-                                        class="exaggeration-slider w-full h-3 bg-muted rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 border border-muted-foreground/20"
-                                        style={{
-                                            background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${((exaggeration() - 0.25) / (2.0 - 0.25)) * 100}%, hsl(var(--muted-foreground) / 0.3) ${((exaggeration() - 0.25) / (2.0 - 0.25)) * 100}%, hsl(var(--muted-foreground) / 0.3) 100%)`
-                                        }}
-                                    />
+                                        class="w-full"
+                                    >
+                                        <SliderTrack>
+                                            <SliderFill />
+                                        </SliderTrack>
+                                        <SliderThumb />
+                                    </Slider>
                                     <div class="flex justify-between text-xs text-muted-foreground/60">
                                         <span>Subtle (0.25)</span>
                                         <span>Dramatic (2.0)</span>
                                     </div>
                                 </div>
 
-                                <textarea
+                                <Input
+                                    multiline
                                     value={localPrompt()}
-                                    onInput={(e) => handlePromptChange(e.currentTarget.value)}
+                                    onChange={handlePromptChange}
                                     onBlur={handleBlur}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Enter text to convert to speech..."
-                                    class="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                                    rows={3}
+                                    inputClass="min-h-[60px] resize-none"
                                     disabled={isLoading()}
-                                    style="pointer-events: auto;"
                                 />
 
                                 <Button
