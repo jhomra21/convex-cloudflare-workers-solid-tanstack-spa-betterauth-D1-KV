@@ -245,7 +245,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
             viewport.handlePanPointerDown(e);
 
             // Handle left mouse button panning on empty space
-            if (e.button === 0 && e.target === e.currentTarget) {
+            if (e.button === 0 && (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('canvas-content'))) {
               e.preventDefault();
               viewport.startPanning(e);
             }
@@ -260,11 +260,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
             style={{
               'min-width': '100%',
               'min-height': '100%',
+              width: '200vw', // Make canvas content larger for infinite feel
+              height: '200vh',
               transform: `translate(${viewport.viewport().tx}px, ${viewport.viewport().ty}px) scale(${viewport.viewport().zoom})`,
               'transform-origin': 'top left',
               'image-rendering': 'crisp-edges',
               'backface-visibility': 'hidden',
               'transform-style': 'preserve-3d'
+            }}
+            onPointerDown={(e) => {
+              // Handle panning on canvas content (empty areas)
+              if (e.button === 0 && e.target === e.currentTarget) {
+                e.preventDefault();
+                viewport.startPanning(e);
+              }
             }}
           >
             {/* Loading State */}
