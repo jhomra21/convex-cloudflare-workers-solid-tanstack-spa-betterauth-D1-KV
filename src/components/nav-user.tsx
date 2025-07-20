@@ -79,11 +79,11 @@ export const NavUser: Component = () => {
             <DropdownMenuTrigger class="w-full flex !rounded-xl">
               <SidebarMenuButton
                 size="lg"
-                class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground 
-                       transition-[padding,width,scale,translate] duration-200 ease-in-out flex items-center transform translate-z-0
+                class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground !cursor-pointer 
+                       transition-[scale,translate] duration-200 ease-in-out flex items-center transform translate-z-0
                        bg-gradient-to-b from-white via-foreground/5 to-foreground/0.5 border !border-t-foreground/3 !border-b-foreground/10 border-x-foreground/10
-                       hover:shadow-md hover:shadow-foreground/5 hover:scale-102
-                       active:scale-97 active:shadow-none !rounded-xl will-change-auto
+                       hover:shadow-md hover:shadow-foreground/10 hover:scale-101 hover:transition-[shadow,scale]
+                       active:scale-96 active:shadow-none !rounded-xl will-change-auto
                       "
                 classList={{
                   "p-1 rounded-md w-auto": isSidebarCollapsed() && !isMobile(),
@@ -135,17 +135,17 @@ export const NavUser: Component = () => {
               <DropdownMenuSeparator />
               
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => navigate({ to: "/" })}>
+                  <DropdownMenuItem class="!cursor-pointer" onClick={() => navigate({ to: "/" })}>
                     <Icon name="house" class="mr-2 size-4" />
                     Go to Home Page
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate({ to: "/dashboard/account" })}>
+                  <DropdownMenuItem class="!cursor-pointer" onClick={() => navigate({ to: "/dashboard/account" })}>
                     <Icon name="user" class="mr-2 size-4" />
                     Profile
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuItem class="!cursor-pointer" onClick={handleSignOut}>
                   <Icon name="logout" class="mr-2 size-4" />
                   Log out
                 </DropdownMenuItem>
