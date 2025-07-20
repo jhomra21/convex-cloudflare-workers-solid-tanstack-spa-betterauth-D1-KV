@@ -27,63 +27,80 @@ function ImagesPage() {
     // Track active canvas ID (null = default canvas, string = specific canvas)
     const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
 
-    // Track processed shares to prevent infinite loops
-    const [processedShareIds, setProcessedShareIds] = createSignal<Set<string>>(new Set());
+    // Track the last processed share ID to prevent duplicate processing
+    const [lastProcessedShareId, setLastProcessedShareId] = createSignal<string | null>(null);
+    const [hasCheckedPendingShare, setHasCheckedPendingShare] = createSignal(false);
 
-    // Handle share parameter and share intents
+    // Handle URL share parameter
     createEffect(() => {
         const shareId = search().share;
+        const currentUserId = userId();
 
-        if (shareId) {
-            // Check if we already processed this share ID
-            if (processedShareIds().has(shareId)) {
-                return;
-            }
+        // Guard: Only process if we have a share ID, user is authenticated, and we haven't processed this share yet
+        if (!shareId || !currentUserId || lastProcessedShareId() === shareId) {
+            return;
+        }
 
-            // Store share intent immediately for persistence across auth
-            storeShareIntent(shareId);
+        // Store share intent for persistence across auth flows
+        storeShareIntent(shareId);
 
-            if (userId()) {
-                setProcessedShareIds(prev => new Set([...prev, shareId]));
-                handleJoinSharedCanvas(shareId as string);
-            }
-        } else {
-            // Check for pending share intent from previous auth flow
-            const pendingShareId = getAndClearShareIntent();
-            if (pendingShareId && userId()) {
-                setProcessedShareIds(prev => new Set([...prev, pendingShareId]));
-                handleJoinSharedCanvas(pendingShareId);
-                // Update URL to show the share (this will trigger effect again, but we'll skip it)
+        // Mark as processed and handle the share
+        setLastProcessedShareId(shareId);
+        handleJoinSharedCanvas(shareId);
+    });
+
+    // Handle pending share intents when user becomes authenticated
+    createEffect(() => {
+        const currentUserId = userId();
+
+        // Guard: Only check when user becomes authenticated and we haven't checked yet
+        if (!currentUserId || hasCheckedPendingShare()) {
+            return;
+        }
+
+        // Check for pending share intent from storage
+        const pendingShareId = getAndClearShareIntent();
+
+        // Always mark as checked to prevent re-runs
+        setHasCheckedPendingShare(true);
+
+        if (pendingShareId) {
+            // Only proceed if there's no current share in URL to avoid conflicts
+            const currentShareId = search().share;
+            if (!currentShareId) {
+                setLastProcessedShareId(pendingShareId);
+                // Update URL first, then handle the share
                 window.history.replaceState({}, '', '/dashboard/canvas?share=' + pendingShareId);
+                handleJoinSharedCanvas(pendingShareId);
             }
         }
     });
 
     const handleJoinSharedCanvas = async (shareId: string) => {
-    try {
-    const user = currentUser();
-    const userName = user?.name || `User-${userId()?.slice(-4).toUpperCase()}`;
-    
-    const canvasId = await joinSharedCanvasMutation.mutate(convexApi.canvas.joinSharedCanvas, {
-      shareId,
-      userId: userId()!,
-    userName,
-    });
-    
-    if (canvasId) {
-    // Set the active canvas to the shared canvas
-      setActiveCanvasId(canvasId);
-    toast.success('Successfully joined shared canvas!');
-      // Remove share parameter from URL
-        window.history.replaceState({}, '', '/dashboard/canvas');
-    } else {
-      toast.error('Canvas not found or no longer shareable');
-      }
-      } catch (error) {
-      console.error('Failed to join canvas:', error);
-      toast.error('Failed to join shared canvas');
-    }
-  };
+        try {
+            const user = currentUser();
+            const userName = user?.name || `User-${userId()?.slice(-4).toUpperCase()}`;
+
+            const canvasId = await joinSharedCanvasMutation.mutate(convexApi.canvas.joinSharedCanvas, {
+                shareId,
+                userId: userId()!,
+                userName,
+            });
+
+            if (canvasId) {
+                // Set the active canvas to the shared canvas
+                setActiveCanvasId(canvasId);
+                toast.success('Successfully joined shared canvas!');
+                // Remove share parameter from URL
+                window.history.replaceState({}, '', '/dashboard/canvas');
+            } else {
+                toast.error('Canvas not found or no longer shareable');
+            }
+        } catch (error) {
+            console.error('Failed to join canvas:', error);
+            toast.error('Failed to join shared canvas');
+        }
+    };
 
     return (
         <div class="h-full flex flex-col">

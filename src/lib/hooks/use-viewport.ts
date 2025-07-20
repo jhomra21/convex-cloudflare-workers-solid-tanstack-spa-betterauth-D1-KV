@@ -17,7 +17,7 @@ export function useViewport(props: UseViewportProps) {
   const [viewport, setViewport] = createSignal<ViewportState>({
     tx: 0,
     ty: 0,
-    zoom: 0.8,
+    zoom: 0.1,
   });
 
   // Zoom constraints
@@ -321,7 +321,7 @@ export function useViewport(props: UseViewportProps) {
     const userCanvasData = props.userCanvas();
     if (userCanvasData) {
       const storedAny = (userCanvasData.viewport ?? {}) as any;
-      const converted = 'tx' in storedAny ? storedAny : { tx: storedAny.x ?? 0, ty: storedAny.y ?? 0, zoom: storedAny.zoom ?? 1 };
+      const converted = 'tx' in storedAny ? storedAny : { tx: storedAny.x ?? 0, ty: storedAny.y ?? 0, zoom: storedAny.zoom ?? 0.1 };
       setViewport(converted);
     }
   };
