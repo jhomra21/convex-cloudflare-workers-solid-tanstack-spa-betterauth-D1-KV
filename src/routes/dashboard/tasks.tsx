@@ -1,35 +1,26 @@
 import { For, createSignal, Show, onMount, onCleanup } from "solid-js";
-import { createFileRoute, useLoaderData } from "@tanstack/solid-router";
+import { createFileRoute } from "@tanstack/solid-router";
 import { toast } from "solid-sonner";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { convexApi, useQuery, useMutation, convexClient } from "~/lib/convex";
+import { convexApi, useQuery, useMutation } from "~/lib/convex";
 import { useCurrentUserId } from "~/lib/auth-actions";
 import { Icon } from "~/components/ui/icon";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import * as TextFieldPrimitive from "@kobalte/core/text-field";
-import type { SessionData } from "~/lib/auth-guard";
 
 function TasksPage() {
   const userId = useCurrentUserId();
-  const loaderData = useLoaderData({ from: '/dashboard/tasks' });
 
+  // Simple Convex query for tasks with real-time updates
   const tasksQuery = useQuery(
     convexApi.tasks.getTasks,
     () => userId() ? { userId: userId()! } : null
   );
 
-  // Use prefetched data initially, then transition to live data
-  const tasksData = () => {
-    // If we have live data from the subscription, use that (for real-time updates)
-    if (tasksQuery.data() !== undefined) {
-      return tasksQuery.data();
-    }
-    // Otherwise, use prefetched data for instant initial render
-    return loaderData().prefetchedTasks;
-  };
+  const tasksData = () => tasksQuery.data();
 
   // Mutation hooks
   const createTaskMutation = useMutation();
@@ -275,8 +266,8 @@ function TasksPage() {
               </div>
             </Show>
 
-            {/* Error State - only show if no prefetched data and query has error */}
-            <Show when={!loaderData().prefetchedTasks && tasksQuery.error()}>
+            {/* Error State */}
+            <Show when={tasksQuery.error()}>
               <div class="text-center py-8 text-red-500 animate-in fade-in-0 duration-300">
                 <Icon name="x" class="mx-auto h-12 w-12 opacity-20 mb-2" />
                 <p class="mb-4">Failed to load tasks: {tasksQuery.error()?.message}</p>
@@ -430,25 +421,4 @@ function TasksPage() {
 
 export const Route = createFileRoute('/dashboard/tasks')({
   component: TasksPage,
-  loader: async ({ context }) => {
-    const { queryClient } = context;
-    try {
-      const session = queryClient.getQueryData(['session']) as SessionData;
-      if (session?.user?.id) {
-        // Prefetch tasks data using Convex client for instant initial render
-        const prefetchedTasks = await convexClient.query(convexApi.tasks.getTasks, { userId: session.user.id });
-
-        return { prefetchedTasks };
-      }
-
-      return {
-        prefetchedTasks: null
-      };
-    } catch (error) {
-      console.warn('Failed to prefetch tasks:', error);
-      return {
-        prefetchedTasks: null
-      };
-    }
-  },
 });
