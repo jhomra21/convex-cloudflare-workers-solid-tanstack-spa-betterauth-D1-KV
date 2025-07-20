@@ -101,6 +101,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       try {
         await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
           userId: userId()!,
+          userName: userName(),
         });
       } catch (error) {
         console.error('Failed to create canvas:', error);

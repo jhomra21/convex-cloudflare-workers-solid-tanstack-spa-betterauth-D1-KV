@@ -2,7 +2,7 @@ import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
 import { createSignal, createEffect } from "solid-js";
 import { convexApi, useMutation } from "~/lib/convex";
-import { useCurrentUser, useCurrentUserId } from "~/lib/auth-actions";
+import { useCurrentUserId, useCurrentUserName } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
 import { storeShareIntent, getAndClearShareIntent } from '~/lib/share-intent';
@@ -17,7 +17,7 @@ export const Route = createFileRoute('/dashboard/canvas')({
 });
 
 function ImagesPage() {
-    const currentUser = useCurrentUser();
+    const currentUserName = useCurrentUserName();
     const userId = useCurrentUserId();
     const search = useSearch({ from: '/dashboard/canvas' });
 
@@ -78,8 +78,7 @@ function ImagesPage() {
 
     const handleJoinSharedCanvas = async (shareId: string) => {
         try {
-            const user = currentUser();
-            const userName = user?.name || `User-${userId()?.slice(-4).toUpperCase()}`;
+            const userName = currentUserName();
 
             const canvasId = await joinSharedCanvasMutation.mutate(convexApi.canvas.joinSharedCanvas, {
                 shareId,

@@ -15,6 +15,7 @@ export const getCanvas = query({
       _creationTime: v.number(),
       name: v.string(),
       userId: v.string(),
+      userName: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
       shareId: v.optional(v.string()),
@@ -47,6 +48,7 @@ export const getCanvasById = query({
       _creationTime: v.number(),
       name: v.string(),
       userId: v.string(),
+      userName: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
       shareId: v.optional(v.string()),
@@ -86,15 +88,20 @@ export const getCanvasById = query({
 
 // Create default canvas for user
 export const createCanvas = mutation({
-  args: { userId: v.string() },
+  args: { userId: v.string(), userName: v.optional(v.string()) },
   returns: v.id("canvases"),
-  handler: async (ctx, { userId }) => {
-    return await ctx.db.insert("canvases", {
+  handler: async (ctx, { userId, userName }) => {
+    const canvasData: any = {
       name: "Default Canvas",
       userId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    };
+    if (userName) {
+      canvasData.userName = userName;
+    }
+    
+    return await ctx.db.insert("canvases", canvasData);
   },
 });
 
@@ -170,16 +177,29 @@ export const deleteCanvas = mutation({
 
 // Enable canvas sharing - generates shareId
 export const enableCanvasSharing = mutation({
-  args: { canvasId: v.id("canvases") },
+  args: { canvasId: v.id("canvases"), userName: v.optional(v.string()) },
   returns: v.string(),
-  handler: async (ctx, { canvasId }) => {
+  handler: async (ctx, { canvasId, userName }) => {
     const shareId = generateShareId();
     
-    await ctx.db.patch(canvasId, {
+    // Get current canvas to check if userName is already stored
+    const canvas = await ctx.db.get(canvasId);
+    if (!canvas) {
+      throw new Error("Canvas not found");
+    }
+    
+    const updates: any = {
       shareId,
       isShareable: true,
       updatedAt: Date.now(),
-    });
+    };
+    
+    // If canvas doesn't have userName stored and we have one, add it
+    if (!canvas.userName && userName) {
+      updates.userName = userName;
+    }
+    
+    await ctx.db.patch(canvasId, updates);
     
     return shareId;
   },
@@ -217,7 +237,7 @@ export const joinSharedCanvas = mutation({
   args: { 
     shareId: v.string(), 
     userId: v.string(),
-    userName: v.string() // User's display name
+    userName: v.optional(v.string()) // User's display name
   },
   returns: v.union(v.id("canvases"), v.null()),
   handler: async (ctx, { shareId, userId, userName }) => {
@@ -249,7 +269,7 @@ export const joinSharedCanvas = mutation({
       await ctx.db.insert("sharedCanvases", {
         originalCanvasId: canvas._id,
         sharedWithUserId: userId,
-        sharedWithUserName: userName,
+        sharedWithUserName: userName || `Unknown User`,
         sharedByUserId: canvas.userId,
         joinedAt: Date.now(),
         isActive: true,
@@ -271,7 +291,7 @@ export const getSharedCanvases = query({
     updatedAt: v.number(),
     shareId: v.optional(v.string()),
     isShareable: v.optional(v.boolean()),
-    sharedBy: v.string(), // Original owner's name (fallback to ID)
+    sharedBy: v.string(), // Original owner's name
     joinedAt: v.number(),
   })),
   handler: async (ctx, { userId, userName }) => {
@@ -285,10 +305,6 @@ export const getSharedCanvases = query({
     for (const entry of sharedEntries) {
       const canvas = await ctx.db.get(entry.originalCanvasId);
       if (canvas) {
-        // For the owner name, we'll use a fallback since we don't store it
-        // In a full implementation, you'd want to store owner names too
-        const ownerName = `User-${canvas.userId.slice(-4).toUpperCase()}`;
-        
         canvases.push({
           _id: canvas._id,
           name: canvas.name,
@@ -297,7 +313,7 @@ export const getSharedCanvases = query({
           updatedAt: canvas.updatedAt,
           shareId: canvas.shareId,
           isShareable: canvas.isShareable,
-          sharedBy: ownerName,
+          sharedBy: canvas.userName || "Unknown User", // Use stored name with fallback
           joinedAt: entry.joinedAt,
         });
       }
@@ -323,10 +339,11 @@ export const getCanvasActiveUsers = query({
     
     const users = [];
     
-    // Add the canvas owner first
+    // Add the canvas owner first - use stored userName, fallback to ownerName param, then generate fallback
+    const canvasOwnerName = canvas.userName || ownerName || `User-${canvas.userId.slice(-4).toUpperCase()}`;
     users.push({
       userId: canvas.userId,
-      userName: ownerName || `User-${canvas.userId.slice(-4).toUpperCase()}`,
+      userName: canvasOwnerName,
       joinedAt: canvas.createdAt,
       isOwner: true,
     });

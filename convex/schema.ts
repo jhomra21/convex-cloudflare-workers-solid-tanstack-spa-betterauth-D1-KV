@@ -20,6 +20,7 @@ export default defineSchema({
   canvases: defineTable({
     name: v.string(),
     userId: v.string(),
+    userName: v.optional(v.string()), // Store canvas owner's display name (optional for backward compatibility)
     createdAt: v.number(),
     updatedAt: v.number(),
     shareId: v.optional(v.string()),

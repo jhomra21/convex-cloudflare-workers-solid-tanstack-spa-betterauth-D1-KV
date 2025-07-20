@@ -5,6 +5,7 @@ import { Input } from '~/components/ui/input';
 import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { convexClient, convexApi } from '~/lib/convex';
+import { useCurrentUserName } from '~/lib/auth-actions';
 
 export interface ShareCanvasDialogProps {
   canvasId?: string;
@@ -17,6 +18,7 @@ export interface ShareCanvasDialogProps {
 }
 
 export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
+  const userName = useCurrentUserName();
   const [isOpen, setIsOpen] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal(false);
   const [shareId, setShareId] = createSignal(props.currentShareId || '');
@@ -44,6 +46,7 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
     try {
       const newShareId = await convexClient.mutation(convexApi.canvas.enableCanvasSharing, {
         canvasId: props.canvasId as any,
+        userName: userName(),
       });
       
       setShareId(newShareId);

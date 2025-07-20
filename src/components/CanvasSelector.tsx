@@ -1,6 +1,6 @@
 import { Show, For, createMemo } from 'solid-js';
 import { convexApi, useQuery } from '~/lib/convex';
-import { useCurrentUserId } from '~/lib/auth-actions';
+import { useCurrentUserId, useCurrentUserName } from '~/lib/auth-actions';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,6 +20,7 @@ export interface CanvasSelectorProps {
 
 export function CanvasSelector(props: CanvasSelectorProps) {
     const userId = useCurrentUserId();
+    const userName = useCurrentUserName();
 
     // Fetch user's own canvas
     const ownCanvas = useQuery(
@@ -30,7 +31,7 @@ export function CanvasSelector(props: CanvasSelectorProps) {
     // Fetch shared canvases
     const sharedCanvases = useQuery(
         convexApi.canvas.getSharedCanvases,
-        () => userId() ? { userId: userId()! } : null
+        () => userId() ? { userId: userId()!, userName: userName() } : null
     );
 
     // Fetch specific canvas by ID if we have an activeCanvasId
@@ -121,7 +122,7 @@ export function CanvasSelector(props: CanvasSelectorProps) {
                                 <div class="flex-1 min-w-0">
                                     <div class="font-medium truncate">{canvas.name}</div>
                                     <div class="text-xs text-muted-foreground">
-                                        Shared by {canvas.sharedBy}
+                                        Owner: {canvas.sharedBy}
                                     </div>
                                 </div>
                                 <Show when={props.activeCanvasId === canvas._id}>
