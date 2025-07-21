@@ -25,7 +25,7 @@ export function CanvasSelector(props: CanvasSelectorProps) {
     // The main canvas queries are handled by the parent ImageCanvas component
     const sharedCanvases = useQuery(
         convexApi.canvas.getSharedCanvases,
-        () => userId() ? { userId: userId()!} : null
+        () => userId() ? { userId: userId()! } : null
     );
 
     // For the current canvas display, we'll use a simple approach
@@ -49,9 +49,9 @@ export function CanvasSelector(props: CanvasSelectorProps) {
         }
 
         // Fallback to passed name or generic name
-        return { 
-            name: currentCanvasName(), 
-            type: props.activeCanvasId ? 'shared' as const : 'own' as const 
+        return {
+            name: currentCanvasName(),
+            type: props.activeCanvasId ? 'shared' as const : 'own' as const
         };
     });
 
