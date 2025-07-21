@@ -20,34 +20,26 @@ export interface CanvasSelectorProps {
 
 export function CanvasSelector(props: CanvasSelectorProps) {
     const userId = useCurrentUserId();
-    const userName = useCurrentUserName();
 
-    // Fetch user's own canvas
-    const ownCanvas = useQuery(
-        convexApi.canvas.getCanvas,
-        () => userId() ? { userId: userId()! } : null
-    );
-
-    // Fetch shared canvases
+    // Only query for shared canvases (these are needed for the dropdown)
+    // The main canvas queries are handled by the parent ImageCanvas component
     const sharedCanvases = useQuery(
         convexApi.canvas.getSharedCanvases,
-        () => userId() ? { userId: userId()!, userName: userName() } : null
+        () => userId() ? { userId: userId()!} : null
     );
 
-    // Fetch specific canvas by ID if we have an activeCanvasId
-    const specificCanvas = useQuery(
-        convexApi.canvas.getCanvasById,
-        () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null
-    );
+    // For the current canvas display, we'll use a simple approach
+    // The parent component will pass the current canvas name if needed
+    const currentCanvasName = () => {
+        if (props.currentCanvasName) {
+            return props.currentCanvasName;
+        }
+        return props.activeCanvasId ? 'Shared Canvas' : 'My Canvas';
+    };
 
     const currentCanvas = createMemo(() => {
         if (!props.activeCanvasId) {
-            return { name: ownCanvas.data()?.name || 'My Canvas', type: 'own' as const };
-        }
-
-        // Check if it's the user's own canvas first
-        if (ownCanvas.data()?._id === props.activeCanvasId) {
-            return { name: ownCanvas.data()?.name || 'My Canvas', type: 'own' as const };
+            return { name: currentCanvasName(), type: 'own' as const };
         }
 
         // Find in shared canvases (where user is recipient)
@@ -56,16 +48,11 @@ export function CanvasSelector(props: CanvasSelectorProps) {
             return { name: shared.name, type: 'shared' as const };
         }
 
-        // Try specific canvas query (for cases where user joined via share link)
-        if (specificCanvas.data()) {
-            const isOwner = specificCanvas.data()?.userId === userId();
-            return {
-                name: specificCanvas.data()?.name || 'Canvas',
-                type: isOwner ? 'own' as const : 'shared' as const
-            };
-        }
-
-        return { name: 'Loading...', type: 'unknown' as const };
+        // Fallback to passed name or generic name
+        return { 
+            name: currentCanvasName(), 
+            type: props.activeCanvasId ? 'shared' as const : 'own' as const 
+        };
     });
 
     return (
@@ -88,23 +75,21 @@ export function CanvasSelector(props: CanvasSelectorProps) {
                 <DropdownMenuSeparator />
 
                 {/* User's own canvas */}
-                <Show when={ownCanvas.data()}>
-                    <DropdownMenuItem
-                        class="flex items-center gap-2 cursor-pointer"
-                        onClick={() => props.onCanvasChange(null)}
-                    >
-                        <Icon name="user" class="h-4 w-4" />
-                        <div class="flex-1 min-w-0">
-                            <div class="font-medium truncate">
-                                {ownCanvas.data()?.name || 'My Canvas'}
-                            </div>
-                            <div class="text-xs text-muted-foreground">Your canvas</div>
+                <DropdownMenuItem
+                    class="flex items-center gap-2 cursor-pointer"
+                    onClick={() => props.onCanvasChange(null)}
+                >
+                    <Icon name="user" class="h-4 w-4" />
+                    <div class="flex-1 min-w-0">
+                        <div class="font-medium truncate">
+                            My Canvas
                         </div>
-                        <Show when={!props.activeCanvasId}>
-                            <Icon name="check" class="h-4 w-4 text-primary" />
-                        </Show>
-                    </DropdownMenuItem>
-                </Show>
+                        <div class="text-xs text-muted-foreground">Your canvas</div>
+                    </div>
+                    <Show when={!props.activeCanvasId}>
+                        <Icon name="check" class="h-4 w-4 text-primary" />
+                    </Show>
+                </DropdownMenuItem>
 
                 {/* Shared canvases */}
                 <Show when={sharedCanvases.data() && sharedCanvases.data()!.length > 0}>

@@ -52,15 +52,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Agent count derived from the agents query (no separate query needed)
   const agentCount = () => dbAgents.data()?.length || 0;
 
-  // User's own canvas for viewport preferences (works for both own and shared canvases)
-  const userOwnCanvas = useQuery(
-    convexApi.canvas.getCanvas,
-    () => userId() ? { userId: userId()! } : null
-  );
-
-  // Viewport management
+  // Viewport management - now uses separate viewport storage
   const viewport = useViewport({
-    userCanvas: userOwnCanvas.data,
+    canvasId: () => canvas()?._id || null,
     userId
   });
 
@@ -90,14 +84,15 @@ export function ImageCanvas(props: ImageCanvasProps) {
     onCleanup(() => canvasContainerEl?.removeEventListener('wheel', handler));
   });
 
-  // Restore viewport state when canvas loads
-  createEffect(() => {
-    viewport.restoreViewport();
-  });
+  // Viewport is now automatically restored via the viewport hook
 
   // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
+  // Add a flag to prevent duplicate creation attempts
+  const [isCreatingCanvas, setIsCreatingCanvas] = createSignal(false);
+  
   createEffect(async () => {
-    if (userId() && canvas() === null && !props.activeCanvasId) {
+    if (userId() && canvas() === null && !props.activeCanvasId && !isCreatingCanvas()) {
+      setIsCreatingCanvas(true);
       try {
         await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
           userId: userId()!,
@@ -105,6 +100,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
         });
       } catch (error) {
         console.error('Failed to create canvas:', error);
+      } finally {
+        setIsCreatingCanvas(false);
       }
     }
   });

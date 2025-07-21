@@ -17,6 +17,7 @@ import type * as agents from "../agents.js";
 import type * as canvas from "../canvas.js";
 import type * as images from "../images.js";
 import type * as tasks from "../tasks.js";
+import type * as viewports from "../viewports.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   canvas: typeof canvas;
   images: typeof images;
   tasks: typeof tasks;
+  viewports: typeof viewports;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

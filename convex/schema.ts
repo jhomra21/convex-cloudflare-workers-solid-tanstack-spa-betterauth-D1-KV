@@ -25,13 +25,17 @@ export default defineSchema({
     updatedAt: v.number(),
     shareId: v.optional(v.string()),
     isShareable: v.optional(v.boolean()),
-    viewport: v.optional(v.object({
-      x: v.number(),      // Pan X position (pixels)
-      y: v.number(),      // Pan Y position (pixels) 
-      zoom: v.number(),   // Zoom level (0.5 to 2.0)
-    })),
   }).index("by_userId", ["userId"])
     .index("by_shareId", ["shareId"]),
+  viewports: defineTable({
+    userId: v.string(),
+    canvasId: v.id("canvases"),
+    x: v.number(),      // Pan X position (pixels)
+    y: v.number(),      // Pan Y position (pixels) 
+    zoom: v.number(),   // Zoom level (0.01 to 2.0)
+    updatedAt: v.number(),
+  }).index("by_user_canvas", ["userId", "canvasId"])
+    .index("by_canvas", ["canvasId"]),
   agents: defineTable({
     canvasId: v.id("canvases"),
     userId: v.string(),

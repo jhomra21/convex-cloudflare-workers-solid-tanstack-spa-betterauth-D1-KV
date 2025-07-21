@@ -1,5 +1,5 @@
-import { createSignal, onCleanup } from 'solid-js';
-import { convexApi, useMutation } from '~/lib/convex';
+import { createSignal, onCleanup, createEffect } from 'solid-js';
+import { convexApi, useMutation, useQuery } from '~/lib/convex';
 
 export interface ViewportState {
   tx: number;
@@ -8,7 +8,7 @@ export interface ViewportState {
 }
 
 export interface UseViewportProps {
-  userCanvas: () => any;
+  canvasId: () => string | null;
   userId: () => string | null;
 }
 
@@ -17,7 +17,7 @@ export function useViewport(props: UseViewportProps) {
   const [viewport, setViewport] = createSignal<ViewportState>({
     tx: 0,
     ty: 0,
-    zoom: 0.1,
+    zoom: 0.25,
   });
 
   // Zoom constraints
@@ -25,9 +25,17 @@ export function useViewport(props: UseViewportProps) {
   const MAX_ZOOM = 2.0; // 200%
   const ZOOM_STEP = 0.1; // 10% increments for button clicks
 
+  // Query viewport data from separate table
+  const viewportData = useQuery(
+    convexApi.viewports.getUserViewport,
+    () => (props.userId() && props.canvasId()) ? { 
+      userId: props.userId()!, 
+      canvasId: props.canvasId()! as any 
+    } : null
+  );
 
   // Mutations
-  const updateCanvasViewportMutation = useMutation();
+  const updateViewportMutation = useMutation();
 
   // Smooth zoom animation state
   let animationId: number | null = null;
@@ -103,13 +111,26 @@ export function useViewport(props: UseViewportProps) {
 
   // Immediate viewport save (for pan/zoom end)
   const saveViewportStateImmediate = async (newViewport: ViewportState) => {
-    const userCanvas = props.userCanvas();
-    if (!userCanvas?._id || !props.userId()) return;
+    const canvasId = props.canvasId();
+    const userId = props.userId();
+    if (!canvasId || !userId) return;
+
+    // Check if viewport actually changed to avoid unnecessary saves
+    const currentData = viewportData.data();
+    if (currentData && 
+        Math.abs(currentData.x - newViewport.tx) < 0.1 && 
+        Math.abs(currentData.y - newViewport.ty) < 0.1 && 
+        Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
+      return; // No significant change
+    }
 
     try {
-      await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
-        canvasId: userCanvas._id,
-        viewport: { x: newViewport.tx, y: newViewport.ty, zoom: newViewport.zoom },
+      await updateViewportMutation.mutate(convexApi.viewports.updateUserViewport, {
+        userId,
+        canvasId: canvasId as any,
+        x: newViewport.tx,
+        y: newViewport.ty,
+        zoom: newViewport.zoom,
       });
     } catch (error) {
       console.error('Failed to save viewport state:', error);
@@ -119,18 +140,31 @@ export function useViewport(props: UseViewportProps) {
   // Debounced viewport save to prevent excessive API calls (for continuous operations)
   let viewportSaveTimeout: any;
   const saveViewportState = (newViewport: ViewportState) => {
-    const userCanvas = props.userCanvas();
-    if (!userCanvas?._id || !props.userId()) return;
+    const canvasId = props.canvasId();
+    const userId = props.userId();
+    if (!canvasId || !userId) return;
 
     if (viewportSaveTimeout) {
       clearTimeout(viewportSaveTimeout);
     }
 
     viewportSaveTimeout = setTimeout(async () => {
+      // Check if viewport actually changed to avoid unnecessary saves
+      const currentData = viewportData.data();
+      if (currentData && 
+          Math.abs(currentData.x - newViewport.tx) < 0.1 && 
+          Math.abs(currentData.y - newViewport.ty) < 0.1 && 
+          Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
+        return; // No significant change
+      }
+
       try {
-        await updateCanvasViewportMutation.mutate(convexApi.canvas.updateCanvasViewport, {
-          canvasId: userCanvas._id,
-          viewport: { x: newViewport.tx, y: newViewport.ty, zoom: newViewport.zoom },
+        await updateViewportMutation.mutate(convexApi.viewports.updateUserViewport, {
+          userId,
+          canvasId: canvasId as any,
+          x: newViewport.tx,
+          y: newViewport.ty,
+          zoom: newViewport.zoom,
         });
       } catch (error) {
         console.error('Failed to save viewport state:', error);
@@ -316,14 +350,29 @@ export function useViewport(props: UseViewportProps) {
     panAnimationId = requestAnimationFrame(updatePanPosition);
   };
 
-  // Restore viewport state when canvas loads
-  const restoreViewport = () => {
-    const userCanvasData = props.userCanvas();
-    if (userCanvasData) {
-      const storedAny = (userCanvasData.viewport ?? {}) as any;
-      const converted = 'tx' in storedAny ? storedAny : { tx: storedAny.x ?? 0, ty: storedAny.y ?? 0, zoom: storedAny.zoom ?? 0.1 };
-      setViewport(converted);
+  // Auto-restore viewport state when data loads
+  createEffect(() => {
+    const storedViewport = viewportData.data();
+    if (storedViewport) {
+      setViewport({
+        tx: storedViewport.x,
+        ty: storedViewport.y,
+        zoom: storedViewport.zoom,
+      });
+    } else if (props.canvasId() && props.userId()) {
+      // Default viewport if none exists and we have valid canvas/user
+      setViewport({
+        tx: 0,
+        ty: 0,
+        zoom: 0.25,
+      });
     }
+  });
+
+  // Legacy restore function for manual calls (kept for compatibility)
+  const restoreViewport = () => {
+    // This is now handled automatically by the effect above
+    // but kept for any existing manual calls
   };
 
   // Cleanup
