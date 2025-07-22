@@ -1,5 +1,10 @@
 import { createSignal, onCleanup, createEffect } from 'solid-js';
 import { convexApi, useMutation, useQuery } from '~/lib/convex';
+import {
+  getLocalViewport,
+  saveLocalViewport,
+  resolveInitialViewport,
+} from '~/lib/utils/viewport-storage';
 
 export interface ViewportState {
   tx: number;
@@ -25,13 +30,33 @@ export function useViewport(props: UseViewportProps) {
   const MAX_ZOOM = 2.0; // 200%
   const ZOOM_STEP = 0.1; // 10% increments for button clicks
 
-  // Query viewport data from separate table
+  // Signal to control when we need to query Convex
+  const [needsConvexQuery, setNeedsConvexQuery] = createSignal(false);
+
+  // Check if we need to query Convex on canvas/user change
+  createEffect(() => {
+    const canvasId = props.canvasId();
+    const userId = props.userId();
+
+    if (!canvasId || !userId) {
+      setNeedsConvexQuery(false);
+      return;
+    }
+
+    const localViewport = getLocalViewport(canvasId, userId);
+    // Only query Convex if no local viewport exists
+    setNeedsConvexQuery(!localViewport);
+  });
+
   const viewportData = useQuery(
     convexApi.viewports.getUserViewport,
-    () => (props.userId() && props.canvasId()) ? { 
-      userId: props.userId()!, 
-      canvasId: props.canvasId()! as any 
-    } : null
+    () => {
+      if (!needsConvexQuery()) return null;
+      return (props.userId() && props.canvasId()) ? {
+        userId: props.userId()!,
+        canvasId: props.canvasId()! as any
+      } : null;
+    }
   );
 
   // Mutations
@@ -98,7 +123,7 @@ export function useViewport(props: UseViewportProps) {
         } else {
           // Animation complete
           setViewport(targetViewport);
-          saveViewportStateImmediate(targetViewport);
+          saveViewportState(targetViewport);
           animationId = null;
           targetViewport = null;
           startViewport = null;
@@ -109,21 +134,46 @@ export function useViewport(props: UseViewportProps) {
     animationId = requestAnimationFrame(animate);
   };
 
-  // Immediate viewport save (for pan/zoom end)
-  const saveViewportStateImmediate = async (newViewport: ViewportState) => {
+  // Track last synced viewport to prevent duplicate saves
+  let lastSyncedViewport: ViewportState | null = null;
+  let isSyncing = false;
+
+  // Force immediate Convex save (for special cases like page unload)
+  const forceConvexSync = async (newViewport: ViewportState) => {
     const canvasId = props.canvasId();
     const userId = props.userId();
     if (!canvasId || !userId) return;
 
-    // Check if viewport actually changed to avoid unnecessary saves
+    // Always save to localStorage first (local-first)
+    saveLocalViewport(newViewport, canvasId, userId);
+
+    // Cancel any pending debounced save since we're saving immediately
+    if (convexSaveTimeout) {
+      clearTimeout(convexSaveTimeout);
+      convexSaveTimeout = null;
+    }
+
+    // Prevent duplicate syncs if already syncing or viewport hasn't changed
+    if (isSyncing) return;
+
+    if (lastSyncedViewport &&
+      Math.abs(lastSyncedViewport.tx - newViewport.tx) < 0.1 &&
+      Math.abs(lastSyncedViewport.ty - newViewport.ty) < 0.1 &&
+      Math.abs(lastSyncedViewport.zoom - newViewport.zoom) < 0.001) {
+      return; // No significant change since last sync
+    }
+
+    // Check if viewport actually changed from Convex data to avoid unnecessary saves
     const currentData = viewportData.data();
-    if (currentData && 
-        Math.abs(currentData.x - newViewport.tx) < 0.1 && 
-        Math.abs(currentData.y - newViewport.ty) < 0.1 && 
-        Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
+    if (currentData &&
+      Math.abs(currentData.x - newViewport.tx) < 0.1 &&
+      Math.abs(currentData.y - newViewport.ty) < 0.1 &&
+      Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
+      lastSyncedViewport = { ...newViewport };
       return; // No significant change
     }
 
+    isSyncing = true;
     try {
       await updateViewportMutation.mutate(convexApi.viewports.updateUserViewport, {
         userId,
@@ -132,30 +182,46 @@ export function useViewport(props: UseViewportProps) {
         y: newViewport.ty,
         zoom: newViewport.zoom,
       });
+      lastSyncedViewport = { ...newViewport };
     } catch (error) {
-      console.error('Failed to save viewport state:', error);
+      console.error('Failed to force sync viewport state to Convex:', error);
+    } finally {
+      isSyncing = false;
     }
   };
 
-  // Debounced viewport save to prevent excessive API calls (for continuous operations)
-  let viewportSaveTimeout: any;
+  // Local-first viewport save with 20-second debounced Convex backup
+  let convexSaveTimeout: any;
+
   const saveViewportState = (newViewport: ViewportState) => {
     const canvasId = props.canvasId();
     const userId = props.userId();
     if (!canvasId || !userId) return;
 
-    if (viewportSaveTimeout) {
-      clearTimeout(viewportSaveTimeout);
+    // Always save to localStorage immediately (local-first)
+    saveLocalViewport(newViewport, canvasId, userId);
+
+    // Debounce Convex save for 20 seconds
+    if (convexSaveTimeout) {
+      clearTimeout(convexSaveTimeout);
     }
 
-    viewportSaveTimeout = setTimeout(async () => {
+    convexSaveTimeout = setTimeout(async () => {
       // Check if viewport actually changed to avoid unnecessary saves
       const currentData = viewportData.data();
-      if (currentData && 
-          Math.abs(currentData.x - newViewport.tx) < 0.1 && 
-          Math.abs(currentData.y - newViewport.ty) < 0.1 && 
-          Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
+      if (currentData &&
+        Math.abs(currentData.x - newViewport.tx) < 0.1 &&
+        Math.abs(currentData.y - newViewport.ty) < 0.1 &&
+        Math.abs(currentData.zoom - newViewport.zoom) < 0.001) {
         return; // No significant change
+      }
+
+      // Check if we already synced this viewport
+      if (lastSyncedViewport &&
+        Math.abs(lastSyncedViewport.tx - newViewport.tx) < 0.1 &&
+        Math.abs(lastSyncedViewport.ty - newViewport.ty) < 0.1 &&
+        Math.abs(lastSyncedViewport.zoom - newViewport.zoom) < 0.001) {
+        return; // Already synced this viewport
       }
 
       try {
@@ -166,10 +232,11 @@ export function useViewport(props: UseViewportProps) {
           y: newViewport.ty,
           zoom: newViewport.zoom,
         });
+        lastSyncedViewport = { ...newViewport };
       } catch (error) {
-        console.error('Failed to save viewport state:', error);
+        console.error('Failed to save viewport state to Convex:', error);
       }
-    }, 500); // 500ms debounce
+    }, 20000); // 20 second debounce for Convex
   };
 
   // Zoom functions
@@ -300,9 +367,9 @@ export function useViewport(props: UseViewportProps) {
     if (Math.abs(finalViewport.tx - currentVp.tx) > 0.1 || Math.abs(finalViewport.ty - currentVp.ty) > 0.1) {
       setViewport(finalViewport);
     }
-    
-    // Save immediately after panning ends (no debounce for pan end)
-    saveViewportStateImmediate(finalViewport);
+
+    // Save with debounce after panning ends (local-first approach)
+    saveViewportState(finalViewport);
   };
 
   const handlePanPointerDown = (e: PointerEvent) => {
@@ -331,10 +398,10 @@ export function useViewport(props: UseViewportProps) {
       }
     }
 
-    // Cancel any pending viewport saves to prevent conflicts
-    if (viewportSaveTimeout) {
-      clearTimeout(viewportSaveTimeout);
-      viewportSaveTimeout = null;
+    // Cancel any pending Convex saves to prevent conflicts
+    if (convexSaveTimeout) {
+      clearTimeout(convexSaveTimeout);
+      convexSaveTimeout = null;
     }
 
     isPanning = true;
@@ -350,22 +417,36 @@ export function useViewport(props: UseViewportProps) {
     panAnimationId = requestAnimationFrame(updatePanPosition);
   };
 
-  // Auto-restore viewport state when data loads
+  // Auto-restore viewport state using local-first approach
   createEffect(() => {
-    const storedViewport = viewportData.data();
-    if (storedViewport) {
-      setViewport({
-        tx: storedViewport.x,
-        ty: storedViewport.y,
-        zoom: storedViewport.zoom,
-      });
-    } else if (props.canvasId() && props.userId()) {
-      // Default viewport if none exists and we have valid canvas/user
-      setViewport({
-        tx: 0,
-        ty: 0,
-        zoom: 0.25,
-      });
+    const canvasId = props.canvasId();
+    const userId = props.userId();
+
+    if (!canvasId || !userId) return;
+
+    // Get local viewport first
+    const localViewport = getLocalViewport(canvasId, userId);
+
+    // Get convex viewport data (handle undefined case)
+    const convexViewportData = viewportData.data();
+    const convexViewport = convexViewportData ? {
+      x: convexViewportData.x,
+      y: convexViewportData.y,
+      zoom: convexViewportData.zoom,
+    } : null;
+
+    // Use local-first resolution strategy
+    const resolvedViewport = resolveInitialViewport(localViewport, convexViewport);
+
+    setViewport({
+      tx: resolvedViewport.tx,
+      ty: resolvedViewport.ty,
+      zoom: resolvedViewport.zoom,
+    });
+
+    // Once we have viewport data (local or convex), disable further queries
+    if (localViewport || convexViewport) {
+      setNeedsConvexQuery(false);
     }
   });
 
@@ -377,9 +458,9 @@ export function useViewport(props: UseViewportProps) {
 
   // Cleanup
   onCleanup(() => {
-    if (viewportSaveTimeout) {
-      clearTimeout(viewportSaveTimeout);
-      viewportSaveTimeout = null;
+    if (convexSaveTimeout) {
+      clearTimeout(convexSaveTimeout);
+      convexSaveTimeout = null;
     }
     if (animationId) {
       cancelAnimationFrame(animationId);
@@ -403,6 +484,7 @@ export function useViewport(props: UseViewportProps) {
     createWheelHandler,
     restoreViewport,
     saveViewportState,
+    forceConvexSync, // For cases where immediate Convex sync is needed
     MIN_ZOOM,
     MAX_ZOOM,
   };

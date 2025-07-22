@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 // Get viewport for a specific user and canvas
 export const getUserViewport = query({
-  args: { 
+  args: {
     userId: v.string(),
     canvasId: v.id("canvases")
   },
@@ -78,7 +78,7 @@ export const updateUserViewport = mutation({
 
 // Delete viewport (cleanup when canvas is deleted)
 export const deleteViewport = mutation({
-  args: { 
+  args: {
     userId: v.string(),
     canvasId: v.id("canvases")
   },
