@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, For, createEffect } from 'solid-js';
+import { createSignal, createUniqueId, Show, For } from 'solid-js';
 import { useGenerateImage, useEditImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';

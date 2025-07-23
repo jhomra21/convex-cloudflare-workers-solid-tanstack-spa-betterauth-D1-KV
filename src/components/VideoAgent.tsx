@@ -137,36 +137,31 @@ export function VideoAgent(props: VideoAgentProps) {
                     height: `${agentSize().height}px`
                 }}
             >
-                {/* Drag Handle */}
+                {/* Drag Handle - Larger clickable area */}
                 <div
-                    class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40"
+                    class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40 flex-shrink-0 z-20"
                     title="Drag to move this agent"
+                    onMouseDown={props.onMouseDown}
                 >
                     <div class="flex items-center gap-2">
                         <Show when={isLoading()} fallback={
                             <Icon
                                 name="video"
-                                class="h-3 w-3 text-muted-foreground/60"
+                                class="h-4 w-4 text-muted-foreground/60"
                             />
                         }>
                             <Icon
                                 name="loader"
-                                class="h-3 w-3 animate-spin text-muted-foreground/60"
+                                class="h-4 w-4 animate-spin text-muted-foreground/60"
                             />
                         </Show>
                         <span class="text-xs text-muted-foreground/60 capitalize">
                             Video
                         </span>
-                        <Show when={props.userName}>
-                            <span class="text-xs text-muted-foreground/40">• {props.userName}</span>
-                        </Show>
                     </div>
-                    
-                    <div class="flex gap-1">
-                        <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
-                        <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
-                        <div class="w-1 h-1 bg-muted-foreground/40 rounded-full"></div>
-                    </div>
+                    <Show when={props.userName}>
+                        <span class="text-xs text-muted-foreground/40">{props.userName}</span>
+                    </Show>
                 </div>
 
                 <CardContent class="p-4 flex flex-col h-full relative">
