@@ -193,7 +193,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       }
 
       debouncedSaves.delete(agentId);
-    }, 300); // Debounce for resize operations
+    }, 180); // Debounce for resize operations
 
     debouncedSaves.set(agentId, timeout);
   };
