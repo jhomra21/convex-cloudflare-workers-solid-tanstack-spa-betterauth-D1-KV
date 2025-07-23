@@ -89,7 +89,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
   // Add a flag to prevent duplicate creation attempts
   const [isCreatingCanvas, setIsCreatingCanvas] = createSignal(false);
-  
+
   createEffect(async () => {
     if (userId() && canvas() === null && !props.activeCanvasId && !isCreatingCanvas()) {
       setIsCreatingCanvas(true);
@@ -141,11 +141,26 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Get Z-index functions from hook
   const { bringAgentToFront, getAgentZIndex } = zIndexManagement;
 
+  // Track recently dragged agents to prevent hover flashing
+  const [recentlyDraggedAgents, setRecentlyDraggedAgents] = createSignal<Set<string>>(new Set());
+
   // Use custom hooks for drag and resize
   const dragHook = useCanvasDrag({
     onDragStart: bringAgentToFront,
     onDragEnd: (agentId, finalPosition) => {
       updateAgentPosition(agentId, finalPosition);
+
+      // Add to recently dragged set to prevent hover flashing
+      setRecentlyDraggedAgents(prev => new Set(prev).add(agentId));
+
+      // Remove from recently dragged after a brief delay
+      setTimeout(() => {
+        setRecentlyDraggedAgents(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(agentId);
+          return newSet;
+        });
+      }, 85); // 200ms cooldown
     },
     constrainToBounds: false,
     agentSize: { width: 320, height: 384 },
@@ -353,6 +368,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                     isResizing={isResizing()}
                     zIndex={zIndex()}
                     isExiting={isExiting()}
+                    isRecentlyDragged={recentlyDraggedAgents().has(agent.id)}
                     availableAgents={availableAgents()}
                     onRemove={removeAgent}
                     onMouseDown={(e) => handleMouseDown(e, agent.id)}
