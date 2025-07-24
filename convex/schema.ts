@@ -56,7 +56,7 @@ export default defineSchema({
     audioSampleUrl: v.optional(v.string()),
     requestId: v.optional(v.string()),
     model: v.union(v.literal("normal"), v.literal("pro")),
-    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
     type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
     connectedAgentId: v.optional(v.id("agents")),
     uploadedImageUrl: v.optional(v.string()),

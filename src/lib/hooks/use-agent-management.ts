@@ -38,9 +38,6 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // UI state
   const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice' | 'video'>('none');
 
-  // Animation state management
-  const [exitingAgents, setExitingAgents] = createSignal<Set<string>>(new Set());
-
   // Agent tracking for new agent z-index management
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
 
@@ -97,26 +94,9 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
   });
 
-  const deleteAgentMutation = useConvexMutation(convexApi.agents.deleteAgent, {
-    onMutate: async (variables) => {
-      const canvasId = props.canvas()?._id;
-      if (!canvasId) return;
-
-      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
-      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
-
-      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
-        old?.filter(agent => agent._id !== variables.agentId) || []
-      );
-
-      return { previousAgents, canvasId };
-    },
-    onError: (error, variables, context) => {
-      if (context?.previousAgents && context?.canvasId) {
-        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
-      }
-    }
-  });
+  const markAgentDeletingMutation = useConvexMutation(convexApi.agents.markAgentDeleting);
+  const markAgentsDeletingMutation = useConvexMutation(convexApi.agents.markAgentsDeleting);
+  const deleteAgentMutation = useConvexMutation(convexApi.agents.deleteAgent);
 
   const updateAgentTransformMutation = useConvexMutation(convexApi.agents.updateAgentTransform, {
     onMutate: async (variables) => {
@@ -146,47 +126,9 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   const updateAgentPromptMutation = useConvexMutation(convexApi.agents.updateAgentPrompt);
   const connectAgentsMutation = useConvexMutation(convexApi.agents.connectAgents);
   const disconnectAgentsMutation = useConvexMutation(convexApi.agents.disconnectAgents);
-  const clearCanvasAgentsMutation = useConvexMutation(convexApi.agents.clearCanvasAgents, {
-    onMutate: async (variables) => {
-      const canvasId = props.canvas()?._id;
-      if (!canvasId) return;
+  const clearCanvasAgentsMutation = useConvexMutation(convexApi.agents.clearCanvasAgents);
 
-      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
-      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
-
-      // Optimistically remove all agents
-      queryClient.setQueryData(['convex', 'agents', canvasId], []);
-
-      return { previousAgents, canvasId };
-    },
-    onError: (error, variables, context) => {
-      if (context?.previousAgents && context?.canvasId) {
-        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
-      }
-    }
-  });
-
-  const clearUserAgentsMutation = useConvexMutation(convexApi.agents.clearUserAgents, {
-    onMutate: async (variables) => {
-      const canvasId = props.canvas()?._id;
-      if (!canvasId) return;
-
-      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
-      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
-
-      // Optimistically remove only user's agents
-      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
-        old?.filter(agent => agent.userId !== variables.userId) || []
-      );
-
-      return { previousAgents, canvasId };
-    },
-    onError: (error, variables, context) => {
-      if (context?.previousAgents && context?.canvasId) {
-        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
-      }
-    }
-  });
+  const clearUserAgentsMutation = useConvexMutation(convexApi.agents.clearUserAgents);
 
   // Debounced saves for transforms to reduce API calls
   const debouncedSaves = new Map<string, number>();
@@ -196,10 +138,26 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     const rawAgentData = dbAgents.data;
     if (!rawAgentData) return [];
 
-    // Convert and validate agent data
+    // Convert and validate agent data, filtering out agents marked for deletion
     return rawAgentData
-      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent))
+      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent) && rawAgent.status !== 'deleting')
       .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
+  });
+
+  // Separate memo for agents that are being deleted (for animation)
+  const deletingAgents = createMemo((): Agent[] => {
+    const rawAgentData = dbAgents.data;
+    if (!rawAgentData) return [];
+
+    // Only include agents marked for deletion
+    return rawAgentData
+      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent) && rawAgent.status === 'deleting')
+      .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
+  });
+
+  // Combined agents list for rendering (includes deleting agents for animation)
+  const allAgentsForRendering = createMemo((): Agent[] => {
+    return [...agents(), ...deletingAgents()];
   });
 
   // Memoized connection pairs calculation - only recalculates when agents change
@@ -391,13 +349,15 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
   };
 
-  // Remove an agent with exit animation
+  // Remove an agent with cross-client exit animation
   const removeAgent = async (id: string) => {
     try {
-      // Start exit animation first
-      setExitingAgents(prev => new Set(prev).add(id));
+      // Step 1: Mark agent as deleting (triggers animation across all clients)
+      await markAgentDeletingMutation.mutate({
+        agentId: id as any,
+      });
 
-      // Wait for exit animation to complete, then delete
+      // Step 2: Wait for animation to complete, then actually delete
       setTimeout(async () => {
         try {
           await deleteAgentMutation.mutate({
@@ -405,17 +365,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
           });
         } catch (error) {
           console.error('Failed to delete agent:', error);
-        } finally {
-          // Clear animation state
-          setExitingAgents(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(id);
-            return newSet;
-          });
         }
-      }, 200); // Exit animation duration
+      }, 100); // Match animation duration
     } catch (error) {
-      console.error('Failed to delete agent:', error);
+      console.error('Failed to mark agent for deletion:', error);
     }
   };
 
@@ -442,30 +395,33 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
   };
 
-  // Clear agents from canvas with exit animations
+  // Clear agents from canvas with cross-client exit animations
   const clearCanvas = async () => {
     if (!props.canvas()?._id || !props.userId()) return;
 
     const currentAgents = agents();
     const isShared = props.isSharedCanvas?.() || false;
     const isOwner = props.isCanvasOwner?.() || false;
-    
+
     // Determine what to clear based on user role
     const shouldClearAll = !isShared || isOwner;
-    
+
     // Filter agents based on permissions
-    const agentsToRemove = shouldClearAll 
-      ? currentAgents 
+    const agentsToRemove = shouldClearAll
+      ? currentAgents
       : currentAgents.filter(a => a.userId === props.userId());
-    
+
     if (agentsToRemove.length === 0) return;
 
     try {
-      // Start exit animations for agents to be removed
-      const agentIds = agentsToRemove.map(a => a.id);
-      setExitingAgents(new Set(agentIds));
+      // Step 1: Mark all agents for deletion atomically (smooth simultaneous animation)
+      await markAgentsDeletingMutation.mutate({
+        canvasId: props.canvas()!._id,
+        agentIds: shouldClearAll ? undefined : agentsToRemove.map(a => a.id as any),
+        userId: shouldClearAll ? undefined : props.userId()!,
+      });
 
-      // Wait for exit animations to complete, then clear
+      // Step 2: Wait for animations to complete, then actually delete
       setTimeout(async () => {
         try {
           if (shouldClearAll) {
@@ -482,18 +438,15 @@ export function useAgentManagement(props: UseAgentManagementProps) {
           }
         } catch (error) {
           console.error('Failed to clear canvas:', error);
-        } finally {
-          // Clear animation state
-          setExitingAgents(new Set<string>());
         }
-      }, 200); // Match exit animation duration
+      }, 100); // Match animation duration
 
     } catch (error) {
-      console.error('Failed to clear canvas:', error);
+      console.error('Failed to mark agents for deletion:', error);
     }
   };
 
-  // Watch for new agents and clean up removed ones
+  // Watch for new agents to manage z-index
   createEffect(() => {
     const currentAgents = dbAgents.data;
     if (!currentAgents) return;
@@ -510,23 +463,8 @@ export function useAgentManagement(props: UseAgentManagementProps) {
 
     if (!idsChanged) return;
 
-    // Find removed agents (cleanup any lingering animation states)  
-    const removedAgentIds = prevIdsArray.filter(id => !currentAgentIds.has(id));
-
-    // Use batch to group all state updates and prevent intermediate renders
-    batch(() => {
-      // Handle removed agents - cleanup animation states
-      if (removedAgentIds.length > 0) {
-        setExitingAgents(prev => {
-          const newSet = new Set(prev);
-          removedAgentIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-      }
-
-      // Update previous agent IDs last
-      setPreviousAgentIds(currentAgentIds as Set<string>);
-    });
+    // Update previous agent IDs
+    setPreviousAgentIds(currentAgentIds as Set<string>);
   });
 
   // Cleanup timeouts on unmount
@@ -541,11 +479,11 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   });
 
   return {
-    agents,
+    agents: allAgentsForRendering, // Use combined list for rendering
     connectedAgentPairs,
     availableAgents,
     activeAgentType,
-    exitingAgents,
+    deletingAgents, // Expose deleting agents for animation checks
     addAgent,
     removeAgent,
     connectAgents,

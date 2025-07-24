@@ -45,14 +45,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Current active canvas data
   const canvas = () => props.activeCanvasId ? specificCanvas.data : defaultCanvas.data;
 
-  // Agent count derived from the agents query (no separate query needed)
-  const agentCount = () => agentManagement.agents().length || 0;
+  // Agent count derived from active agents (excluding deleting ones)
+  const agentCount = () => {
+    const allAgents = agentManagement.agents();
+    const deletingAgentIds = new Set(agentManagement.deletingAgents().map(a => a.id));
+    return allAgents.filter(a => !deletingAgentIds.has(a.id)).length || 0;
+  };
 
   // User's agent count for any shared canvas activity
   const userAgentCount = () => {
     const isSharedActivity = !!props.activeCanvasId || !!canvas()?.isShareable;
     if (!isSharedActivity) return 0; // Not involved in sharing
-    return agentManagement.agents().filter(a => a.userId === userId()).length || 0;
+    const allAgents = agentManagement.agents();
+    const deletingAgentIds = new Set(agentManagement.deletingAgents().map(a => a.id));
+    return allAgents.filter(a => a.userId === userId() && !deletingAgentIds.has(a.id)).length || 0;
   };
 
   // Viewport management - now uses separate viewport storage
@@ -134,7 +140,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     connectedAgentPairs,
     availableAgents,
     activeAgentType,
-    exitingAgents,
+    deletingAgents,
     addAgent,
     removeAgent,
     connectAgents,
@@ -315,7 +321,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                 const zIndex = () => getAgentZIndex(agent.id, isDragged());
 
                 // Calculate animation state
-                const isExiting = () => exitingAgents().has(agent.id);
+                const isExiting = () => deletingAgents().some(deletingAgent => deletingAgent.id === agent.id);
 
 
 

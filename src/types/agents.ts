@@ -6,7 +6,7 @@
 import type { Id } from '../../convex/_generated/dataModel';
 
 // Base agent types from schema
-export type AgentStatus = 'idle' | 'processing' | 'success' | 'failed';
+export type AgentStatus = 'idle' | 'processing' | 'success' | 'failed' | 'deleting';
 export type AgentModel = 'normal' | 'pro';
 export type AgentType = 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate';
 
@@ -181,14 +181,14 @@ export function isAgentData(obj: unknown): obj is AgentData {
         typeof (obj as AgentData).prompt === 'string' &&
         typeof (obj as AgentData).positionX === 'number' &&
         typeof (obj as AgentData).positionY === 'number' &&
-        ['idle', 'processing', 'success', 'failed'].includes((obj as AgentData).status) &&
+        ['idle', 'processing', 'success', 'failed', 'deleting'].includes((obj as AgentData).status) &&
         ['normal', 'pro'].includes((obj as AgentData).model) &&
         ['image-generate', 'image-edit', 'voice-generate', 'video-generate'].includes((obj as AgentData).type)
     );
 }
 
 export function isValidAgentStatus(status: string): status is AgentStatus {
-    return ['idle', 'processing', 'success', 'failed'].includes(status);
+    return ['idle', 'processing', 'success', 'failed', 'deleting'].includes(status);
 }
 
 export function isValidAgentModel(model: string): model is AgentModel {
@@ -234,7 +234,7 @@ export function createAgentMetrics(agents: AgentData[]): AgentMetrics {
     const metrics: AgentMetrics = {
         totalAgents: agents.length,
         agentsByType: { 'image-generate': 0, 'image-edit': 0, 'voice-generate': 0, 'video-generate': 0 },
-        agentsByStatus: { idle: 0, processing: 0, success: 0, failed: 0 },
+        agentsByStatus: { idle: 0, processing: 0, success: 0, failed: 0, deleting: 0 },
         agentsByModel: { normal: 0, pro: 0 },
         connections: 0,
     };

@@ -32,7 +32,7 @@ export const getCanvasAgents = query({
       audioSampleUrl: v.optional(v.string()),
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
-      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
       type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
@@ -156,7 +156,7 @@ export const updateAgentImage = mutation({
 export const updateAgentStatus = mutation({
   args: {
     agentId: v.id("agents"),
-    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
     forceUpdate: v.optional(v.boolean()), // Allow bypassing validation in special cases
   },
   returns: v.null(),
@@ -206,6 +206,66 @@ export const updateAgentModel = mutation({
       model,
       updatedAt: Date.now(),
     });
+    return null;
+  },
+});
+
+// Mark agent as deleting (for cross-client animation)
+export const markAgentDeleting = mutation({
+  args: { agentId: v.id("agents") },
+  returns: v.null(),
+  handler: async (ctx, { agentId }) => {
+    await ctx.db.patch(agentId, {
+      status: "deleting",
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Mark multiple agents as deleting (for bulk operations)
+export const markAgentsDeleting = mutation({
+  args: {
+    canvasId: v.id("canvases"),
+    agentIds: v.optional(v.array(v.id("agents"))), // If provided, only mark these agents
+    userId: v.optional(v.string()) // If provided, only mark agents owned by this user
+  },
+  returns: v.null(),
+  handler: async (ctx, { canvasId, agentIds, userId }) => {
+    let agents;
+
+    if (agentIds) {
+      // Mark specific agents
+      agents = await Promise.all(
+        agentIds.map(id => ctx.db.get(id))
+      );
+      agents = agents.filter(agent => agent !== null);
+    } else {
+      // Get agents from canvas
+      let query = ctx.db
+        .query("agents")
+        .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId));
+
+      if (userId) {
+        // Filter by user
+        const allAgents = await query.collect();
+        agents = allAgents.filter(agent => agent.userId === userId);
+      } else {
+        // All agents
+        agents = await query.collect();
+      }
+    }
+
+    // Mark all agents as deleting in parallel
+    await Promise.all(
+      agents.map(agent =>
+        ctx.db.patch(agent._id, {
+          status: "deleting",
+          updatedAt: Date.now(),
+        })
+      )
+    );
+
     return null;
   },
 });
@@ -396,7 +456,7 @@ export const getConnectedAgent = query({
       audioSampleUrl: v.optional(v.string()),
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
-      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
       type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
@@ -475,7 +535,7 @@ export const updateAgentAudio = mutation({
 export const startVoiceGeneration = mutation({
   args: {
     agentId: v.id("agents"),
-    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+    status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
     voice: v.optional(v.union(
       v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
       v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
@@ -537,7 +597,7 @@ export const getAgentByRequestId = query({
       audioSampleUrl: v.optional(v.string()),
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
-      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
       type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
