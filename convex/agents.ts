@@ -270,11 +270,26 @@ export const markAgentsDeleting = mutation({
   },
 });
 
-// Delete agent
+// Delete agent (unidirectional model)
 export const deleteAgent = mutation({
   args: { agentId: v.id("agents") },
   returns: v.null(),
   handler: async (ctx, { agentId }) => {
+    // In the unidirectional model, we need to clean up agents that point to this agent
+    const agentsConnectedToThis = await ctx.db
+      .query("agents")
+      .withIndex("by_connected_agent", (q) => q.eq("connectedAgentId", agentId))
+      .collect();
+
+    // Clear the connectedAgentId for any agents that were getting input from this agent
+    for (const connectedAgent of agentsConnectedToThis) {
+      await ctx.db.patch(connectedAgent._id, {
+        connectedAgentId: undefined,
+        updatedAt: Date.now(),
+      });
+    }
+
+    // Finally delete the agent
     await ctx.db.delete(agentId);
     return null;
   },
@@ -302,10 +317,12 @@ export const connectAgents = mutation({
       throw new Error("Agents cannot connect to themselves");
     }
 
+    // Get agent types (needed for both validation and connection logic)
+    const sourceType = sourceAgent.type as AgentType;
+    const targetType = targetAgent.type as AgentType;
+
     if (!forceConnection) {
       // Validate connection rules
-      const sourceType = sourceAgent.type as AgentType;
-      const targetType = targetAgent.type as AgentType;
 
       // Valid connection rules - be explicit about what's allowed
       const validConnections = [
@@ -333,29 +350,42 @@ export const connectAgents = mutation({
         targetAgent.connectedAgentId === sourceAgentId) {
         throw new Error("Agents are already connected");
       }
-
-      // Check if agents already have other connections (for now, limit to one connection per agent)
-      if (sourceAgent.connectedAgentId || targetAgent.connectedAgentId) {
-        throw new Error("One or both agents are already connected to other agents");
+      
+      // Check if target agent already has an input connection
+      if (targetAgent.connectedAgentId) {
+        // Target already has an input source, disconnect it first
+        await ctx.db.patch(targetAgentId, {
+          connectedAgentId: undefined,
+          updatedAt: Date.now(),
+        });
+        
+        // Clear the local reference
+        targetAgent.connectedAgentId = undefined;
       }
     }
 
-    // Update both agents to reference each other
-    await ctx.db.patch(sourceAgentId, {
-      connectedAgentId: targetAgentId,
-      updatedAt: Date.now(),
-    });
-
-    await ctx.db.patch(targetAgentId, {
-      connectedAgentId: sourceAgentId,
-      updatedAt: Date.now(),
-    });
+    // Update connections based on the unidirectional model:
+    // connectedAgentId represents "what this agent gets input from"
+    
+    if (sourceType === 'image-generate' && targetType === 'image-edit') {
+      // Generate -> Edit: Edit agent points to Generate agent as its input source
+      await ctx.db.patch(targetAgentId, {
+        connectedAgentId: sourceAgentId,
+        updatedAt: Date.now(),
+      });
+    } else if (sourceType === 'image-edit' && targetType === 'image-edit') {
+      // Edit -> Edit: Target edit agent points to source edit agent as its input source
+      await ctx.db.patch(targetAgentId, {
+        connectedAgentId: sourceAgentId,
+        updatedAt: Date.now(),
+      });
+    }
 
     return null;
   },
 });
 
-// Disconnect agents
+// Disconnect agents (unidirectional model)
 export const disconnectAgents = mutation({
   args: {
     agentId: v.id("agents"),
@@ -367,13 +397,9 @@ export const disconnectAgents = mutation({
       return null;
     }
 
-    // Remove connection from both agents
+    // In the unidirectional model, we simply clear the connectedAgentId
+    // This agent will no longer get input from its connected agent
     await ctx.db.patch(agentId, {
-      connectedAgentId: undefined,
-      updatedAt: Date.now(),
-    });
-
-    await ctx.db.patch(agent.connectedAgentId, {
       connectedAgentId: undefined,
       updatedAt: Date.now(),
     });
@@ -486,6 +512,8 @@ export const clearCanvasAgents = mutation({
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
       .collect();
 
+    // Since we're deleting all agents, we don't need to worry about connection cleanup
+    // Just delete all agents directly
     for (const agent of agents) {
       await ctx.db.delete(agent._id);
     }
@@ -493,7 +521,7 @@ export const clearCanvasAgents = mutation({
   },
 });
 
-// Clear only user's agents from canvas (for shared canvases)
+// Clear only user's agents from canvas (for shared canvases) - unidirectional model
 export const clearUserAgents = mutation({
   args: {
     canvasId: v.id("canvases"),
@@ -507,7 +535,22 @@ export const clearUserAgents = mutation({
       .filter((q) => q.eq(q.field("userId"), userId))
       .collect();
 
+    // For each agent being deleted, clean up connections properly
     for (const agent of agents) {
+      // Clean up any agents that were getting input from this agent
+      const agentsConnectedToThis = await ctx.db
+        .query("agents")
+        .withIndex("by_connected_agent", (q) => q.eq("connectedAgentId", agent._id))
+        .collect();
+
+      for (const connectedAgent of agentsConnectedToThis) {
+        await ctx.db.patch(connectedAgent._id, {
+          connectedAgentId: undefined,
+          updatedAt: Date.now(),
+        });
+      }
+
+      // Finally delete the agent
       await ctx.db.delete(agent._id);
     }
     return null;
