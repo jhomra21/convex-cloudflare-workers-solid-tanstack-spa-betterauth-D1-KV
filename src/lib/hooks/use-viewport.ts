@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, createEffect } from 'solid-js';
-import { convexApi, useMutation, useQuery } from '~/lib/convex';
+import { convexApi, useConvexMutation, useConvexQuery } from '~/lib/convex';
 import {
   getLocalViewport,
   saveLocalViewport,
@@ -48,7 +48,7 @@ export function useViewport(props: UseViewportProps) {
     setNeedsConvexQuery(!localViewport);
   });
 
-  const viewportData = useQuery(
+  const viewportData = useConvexQuery(
     convexApi.viewports.getUserViewport,
     () => {
       if (!needsConvexQuery()) return null;
@@ -56,11 +56,12 @@ export function useViewport(props: UseViewportProps) {
         userId: props.userId()!,
         canvasId: props.canvasId()! as any
       } : null;
-    }
+    },
+    () => ['viewport', props.userId(), props.canvasId()]
   );
 
   // Mutations
-  const updateViewportMutation = useMutation();
+  const updateViewportMutation = useConvexMutation(convexApi.viewports.updateUserViewport);
 
   // Smooth zoom animation state
   let animationId: number | null = null;
@@ -164,7 +165,7 @@ export function useViewport(props: UseViewportProps) {
     }
 
     // Check if viewport actually changed from Convex data to avoid unnecessary saves
-    const currentData = viewportData.data();
+    const currentData = viewportData.data;
     if (currentData &&
       Math.abs(currentData.x - newViewport.tx) < 0.1 &&
       Math.abs(currentData.y - newViewport.ty) < 0.1 &&
@@ -175,7 +176,7 @@ export function useViewport(props: UseViewportProps) {
 
     isSyncing = true;
     try {
-      await updateViewportMutation.mutate(convexApi.viewports.updateUserViewport, {
+      updateViewportMutation.mutate({
         userId,
         canvasId: canvasId as any,
         x: newViewport.tx,
@@ -208,7 +209,7 @@ export function useViewport(props: UseViewportProps) {
 
     convexSaveTimeout = setTimeout(async () => {
       // Check if viewport actually changed to avoid unnecessary saves
-      const currentData = viewportData.data();
+      const currentData = viewportData.data;
       if (currentData &&
         Math.abs(currentData.x - newViewport.tx) < 0.1 &&
         Math.abs(currentData.y - newViewport.ty) < 0.1 &&
@@ -225,7 +226,7 @@ export function useViewport(props: UseViewportProps) {
       }
 
       try {
-        await updateViewportMutation.mutate(convexApi.viewports.updateUserViewport, {
+        updateViewportMutation.mutate({
           userId,
           canvasId: canvasId as any,
           x: newViewport.tx,
@@ -428,7 +429,7 @@ export function useViewport(props: UseViewportProps) {
     const localViewport = getLocalViewport(canvasId, userId);
 
     // Get convex viewport data (handle undefined case)
-    const convexViewportData = viewportData.data();
+    const convexViewportData = viewportData.data;
     const convexViewport = convexViewportData ? {
       x: convexViewportData.x,
       y: convexViewportData.y,

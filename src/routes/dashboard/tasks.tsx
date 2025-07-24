@@ -5,7 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/componen
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { convexApi, useQuery, useMutation } from "~/lib/convex";
+import { convexApi, useConvexQuery, useConvexMutation } from "~/lib/convex";
 import { useCurrentUserId } from "~/lib/auth-actions";
 import { Icon } from "~/components/ui/icon";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -15,18 +15,19 @@ function TasksPage() {
   const userId = useCurrentUserId();
 
   // Simple Convex query for tasks with real-time updates
-  const tasksQuery = useQuery(
+  const tasksQuery = useConvexQuery(
     convexApi.tasks.getTasks,
-    () => userId() ? { userId: userId()! } : null
+    () => userId() ? { userId: userId()! } : null,
+    () => ['tasks', userId()]
   );
 
-  const tasksData = () => tasksQuery.data();
+  const tasksData = (): Doc<"tasks">[] | undefined => tasksQuery.data;
 
   // Mutation hooks
-  const createTaskMutation = useMutation();
-  const updateStatusMutation = useMutation();
-  const updateTextMutation = useMutation();
-  const deleteTaskMutation = useMutation();
+  const createTaskMutation = useConvexMutation(convexApi.tasks.createTask);
+  const updateStatusMutation = useConvexMutation(convexApi.tasks.updateTaskStatus);
+  const updateTextMutation = useConvexMutation(convexApi.tasks.updateTaskText);
+  const deleteTaskMutation = useConvexMutation(convexApi.tasks.deleteTask);
 
   const [newTaskText, setNewTaskText] = createSignal("");
   const [filter, setFilter] = createSignal<"all" | "completed" | "active">("all");
@@ -37,15 +38,15 @@ function TasksPage() {
   const [exitingDeleteId, setExitingDeleteId] = createSignal<string | null>(null);
   const [showDeleteButtons, setShowDeleteButtons] = createSignal<string | null>(null);
 
-  const filteredTasks = () => {
+  const filteredTasks = (): Doc<"tasks">[] => {
     const tasks = tasksData();
     if (!tasks || !userId()) return [];
 
     switch (filter()) {
       case "completed":
-        return tasks.filter(task => task.isCompleted);
+        return tasks.filter((task: Doc<"tasks">) => task.isCompleted);
       case "active":
-        return tasks.filter(task => !task.isCompleted);
+        return tasks.filter((task: Doc<"tasks">) => !task.isCompleted);
       default:
         return tasks;
     }
@@ -60,7 +61,7 @@ function TasksPage() {
     }
 
     try {
-      await createTaskMutation.mutate(convexApi.tasks.createTask, {
+      await createTaskMutation.mutate({
         text: newTaskText(),
         userId: userId()!
       });
@@ -74,7 +75,7 @@ function TasksPage() {
 
   const setCompleted = async (taskId: Doc<"tasks">["_id"], isCompleted: boolean) => {
     try {
-      await updateStatusMutation.mutate(convexApi.tasks.updateTaskStatus, {
+      await updateStatusMutation.mutate({
         taskId,
         isCompleted
       });
@@ -107,7 +108,7 @@ function TasksPage() {
 
   const deleteTask = async (taskId: Doc<"tasks">["_id"]) => {
     try {
-      await deleteTaskMutation.mutate(convexApi.tasks.deleteTask, { taskId });
+      await deleteTaskMutation.mutate({ taskId });
 
       toast.success("Task deleted");
       // Use the same animation pattern for consistency
@@ -135,7 +136,7 @@ function TasksPage() {
     }
 
     try {
-      await updateTextMutation.mutate(convexApi.tasks.updateTaskText, {
+      await updateTextMutation.mutate({
         taskId,
         text: newText
       });
@@ -235,20 +236,20 @@ function TasksPage() {
                   value={newTaskText()}
                   onChange={(value) => setNewTaskText(value)}
                   class="flex-grow"
-                  disabled={createTaskMutation.isLoading()}
+                  disabled={createTaskMutation.isPending}
                 />
                 <Button
                   type="submit"
                   variant="sf-compute"
-                  disabled={createTaskMutation.isLoading() || !newTaskText().trim()}
+                  disabled={createTaskMutation.isPending || !newTaskText().trim()}
                 >
                   <Icon name="plus" class="mr-2 h-4 w-4" />
-                  {createTaskMutation.isLoading() ? "Creating..." : "Add Task"}
+                  {createTaskMutation.isPending ? "Creating..." : "Add Task"}
                 </Button>
               </div>
-              {createTaskMutation.error() && (
+              {createTaskMutation.error && (
                 <p class="text-red-500 text-sm mt-2">
-                  {createTaskMutation.error()?.message}
+                  {createTaskMutation.error?.message}
                 </p>
               )}
             </CardContent>
@@ -259,7 +260,7 @@ function TasksPage() {
         <Card class="!border-none !shadow-none">
           <CardContent class="!px-0">
             {/* Loading State - only show if no data available at all */}
-            <Show when={!tasksData() && tasksQuery.isLoading()}>
+            <Show when={!tasksData() && tasksQuery.isLoading}>
               <div class="text-center py-8 text-muted-foreground animate-in fade-in-0 duration-300">
                 <Icon name="clock" class="mx-auto h-12 w-12 opacity-20 mb-2" />
                 <p>Loading tasks...</p>
@@ -267,11 +268,11 @@ function TasksPage() {
             </Show>
 
             {/* Error State */}
-            <Show when={tasksQuery.error()}>
+            <Show when={tasksQuery.error}>
               <div class="text-center py-8 text-red-500 animate-in fade-in-0 duration-300">
                 <Icon name="x" class="mx-auto h-12 w-12 opacity-20 mb-2" />
-                <p class="mb-4">Failed to load tasks: {tasksQuery.error()?.message}</p>
-                <Button onClick={() => tasksQuery.reset()} variant="outline">
+                <p class="mb-4">Failed to load tasks: {tasksQuery.error?.message}</p>
+                <Button onClick={() => tasksQuery.refetch()} variant="outline">
                   <Icon name="clock" class="mr-2 h-4 w-4" />
                   Retry
                 </Button>

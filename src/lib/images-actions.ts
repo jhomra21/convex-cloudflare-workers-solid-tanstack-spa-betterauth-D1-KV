@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
-import { convexApi, useQuery } from './convex';
+import { convexApi, useConvexQuery } from './convex';
 import { useCurrentUserId } from './auth-actions';
 
 interface GenerateImageOptions {

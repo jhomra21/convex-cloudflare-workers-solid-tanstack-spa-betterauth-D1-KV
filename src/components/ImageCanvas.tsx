@@ -7,7 +7,7 @@ import { AgentToolbar } from './AgentToolbar';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
-import { convexApi, useQuery, useMutation } from '~/lib/convex';
+import { convexApi, useConvexQuery, useConvexMutation } from '~/lib/convex';
 import { useCurrentUserId, useCurrentUserName } from '~/lib/auth-actions';
 import { useCanvasDrag } from '~/lib/hooks/use-canvas-drag';
 import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
@@ -30,27 +30,23 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const [hasRedirected, setHasRedirected] = createSignal(false);
 
   // Canvas data - choose query based on activeCanvasId
-  const defaultCanvas = useQuery(
+  const defaultCanvas = useConvexQuery(
     convexApi.canvas.getCanvas,
-    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null
+    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null,
+    () => ['canvas', 'default', userId()]
   );
 
-  const specificCanvas = useQuery(
+  const specificCanvas = useConvexQuery(
     convexApi.canvas.getCanvasById,
-    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null
+    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null,
+    () => ['canvas', 'specific', props.activeCanvasId, userId()]
   );
 
   // Current active canvas data
-  const canvas = () => props.activeCanvasId ? specificCanvas.data() : defaultCanvas.data();
-
-  // Canvas agents data
-  const dbAgents = useQuery(
-    convexApi.agents.getCanvasAgents,
-    () => canvas()?._id ? { canvasId: canvas()!._id } : null
-  );
+  const canvas = () => props.activeCanvasId ? specificCanvas.data : defaultCanvas.data;
 
   // Agent count derived from the agents query (no separate query needed)
-  const agentCount = () => dbAgents.data()?.length || 0;
+  const agentCount = () => agentManagement.agents().length || 0;
 
   // Viewport management - now uses separate viewport storage
   const viewport = useViewport({
@@ -63,7 +59,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
     canvas,
     userId,
     userName,
-    dbAgents,
     viewport: viewport.viewport,
   });
 
@@ -71,7 +66,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const zIndexManagement = useZIndexManagement();
 
 
-  const createCanvasMutation = useMutation();
+  const createCanvasMutation = useConvexMutation(convexApi.canvas.createCanvas);
 
   // Canvas container reference
   let canvasContainerEl: HTMLDivElement | null = null;
@@ -94,7 +89,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     if (userId() && canvas() === null && !props.activeCanvasId && !isCreatingCanvas()) {
       setIsCreatingCanvas(true);
       try {
-        await createCanvasMutation.mutate(convexApi.canvas.createCanvas, {
+        await createCanvasMutation.mutate({
           userId: userId()!,
           userName: userName(),
         });
@@ -110,7 +105,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   createEffect(() => {
     // Only handle this for shared canvases (when activeCanvasId is provided)
     if (props.activeCanvasId && userId() && !hasRedirected()) {
-      const canvasData = specificCanvas.data();
+      const canvasData = specificCanvas.data;
       // If we were trying to access a specific canvas but it's now null,
       // it means sharing was disabled or access was revoked
       if (canvasData === null) {
@@ -189,23 +184,10 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Mouse down handler for agent dragging
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
-    // First check if agent exists in raw database data
-    const rawAgent = dbAgents.data()?.find((a: any) => a._id === agentId);
-    if (!rawAgent) {
-      console.warn('Agent not found in database yet:', agentId);
-      return;
-    }
-
-    // Then get the processed agent with optimistic updates
     const currentAgents = agents();
     const agent = currentAgents.find(a => a.id === agentId);
     if (!agent) {
-      console.error('Agent found in DB but not in processed agents array!', {
-        agentId,
-        rawAgent: !!rawAgent,
-        totalAgents: currentAgents.length,
-        agentIds: currentAgents.map(a => a.id)
-      });
+      console.warn('Agent not found:', agentId);
       return;
     }
 
@@ -288,7 +270,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
             }}
           >
             {/* Loading State */}
-            <Show when={!canvas() || !dbAgents.data()}>
+            <Show when={!canvas() || !agentManagement.agents()}>
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="text-center">
                   <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
@@ -433,7 +415,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
       </div>
 
       {/* Empty State Overlay */}
-      <Show when={canvas() && dbAgents.data() && agentCount() === 0}>
+      <Show when={canvas() && agentCount() === 0}>
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div class="text-center pointer-events-auto">
             <div class="w-16 h-16 mx-auto mb-4 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">

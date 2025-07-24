@@ -1,7 +1,15 @@
 import { Show, For, createMemo } from 'solid-js';
-import { convexApi, useQuery } from '~/lib/convex';
+import { convexApi, useConvexQuery } from '~/lib/convex';
 import { Icon } from '~/components/ui/icon';
 import { useCurrentUser } from '~/lib/auth-actions';
+
+// Type for active user data returned from Convex
+type ActiveUser = {
+  userId: string;
+  userName: string;
+  isOwner?: boolean;
+  lastSeen?: number;
+};
 
 export interface CanvasActiveUsersProps {
   canvasId?: string;
@@ -11,22 +19,23 @@ export interface CanvasActiveUsersProps {
 
 export function CanvasActiveUsers(props: CanvasActiveUsersProps) {
   const currentUser = useCurrentUser();
-  
+
   // Fetch active users for the canvas
-  const activeUsers = useQuery(
+  const activeUsers = useConvexQuery(
     convexApi.canvas.getCanvasActiveUsers,
-    () => props.canvasId ? { 
+    () => props.canvasId ? {
       canvasId: props.canvasId as any,
       ownerName: currentUser()?.name || undefined
-    } : null
+    } : null,
+    () => ['canvas', 'activeUsers', props.canvasId, currentUser()?.name]
   );
 
   // Format user names with current user context
   const formattedUsers = createMemo(() => {
-    const users = activeUsers.data();
+    const users = activeUsers.data as ActiveUser[] | undefined;
     if (!users) return [];
-    
-    return users.map(user => ({
+
+    return users.map((user: ActiveUser) => ({
       ...user,
       displayName: user.userId === props.currentUserId ? "You" : user.userName,
       isCurrentUser: user.userId === props.currentUserId
@@ -34,13 +43,13 @@ export function CanvasActiveUsers(props: CanvasActiveUsersProps) {
   });
 
   return (
-    <Show when={activeUsers.data() && activeUsers.data()!.length > 0}>
+    <Show when={activeUsers.data && activeUsers.data.length > 0}>
       <div class={`flex items-center gap-1 text-xs text-muted-foreground ${props.class || ''}`}>
         <Icon name="users" class="h-3 w-3" />
         <span>
-          {activeUsers.data()!.length} active
+          {activeUsers.data.length} active
         </span>
-        <Show when={activeUsers.data()!.length <= 4}>
+        <Show when={activeUsers.data.length <= 4}>
           <span class="text-muted-foreground/70">•</span>
           <div class="flex items-center gap-1">
             <For each={formattedUsers().slice(0, 4)}>
@@ -54,9 +63,9 @@ export function CanvasActiveUsers(props: CanvasActiveUsersProps) {
                 </span>
               )}
             </For>
-            <Show when={activeUsers.data()!.length > 4}>
+            <Show when={activeUsers.data.length > 4}>
               <span class="text-muted-foreground/70">
-                +{activeUsers.data()!.length - 4} more
+                +{activeUsers.data.length - 4} more
               </span>
             </Show>
           </div>

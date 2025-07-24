@@ -1,6 +1,6 @@
 import { Show, For, createMemo } from 'solid-js';
-import { convexApi, useQuery } from '~/lib/convex';
-import { useCurrentUserId, useCurrentUserName } from '~/lib/auth-actions';
+import { convexApi, useConvexQuery } from '~/lib/convex';
+import { useCurrentUserId } from '~/lib/auth-actions';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,9 +23,10 @@ export function CanvasSelector(props: CanvasSelectorProps) {
 
     // Only query for shared canvases (these are needed for the dropdown)
     // The main canvas queries are handled by the parent ImageCanvas component
-    const sharedCanvases = useQuery(
+    const sharedCanvases = useConvexQuery(
         convexApi.canvas.getSharedCanvases,
-        () => userId() ? { userId: userId()! } : null
+        () => userId() ? { userId: userId()! } : null,
+        () => ['canvas', 'shared', userId()]
     );
 
     // For the current canvas display, we'll use a simple approach
@@ -43,7 +44,7 @@ export function CanvasSelector(props: CanvasSelectorProps) {
         }
 
         // Find in shared canvases (where user is recipient)
-        const shared = sharedCanvases.data()?.find((c: any) => c._id === props.activeCanvasId);
+        const shared = sharedCanvases.data?.find((c: any) => c._id === props.activeCanvasId);
         if (shared) {
             return { name: shared.name, type: 'shared' as const };
         }
@@ -92,12 +93,12 @@ export function CanvasSelector(props: CanvasSelectorProps) {
                 </DropdownMenuItem>
 
                 {/* Shared canvases */}
-                <Show when={sharedCanvases.data() && sharedCanvases.data()!.length > 0}>
+                <Show when={sharedCanvases.data && sharedCanvases.data.length > 0}>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel class="text-xs text-muted-foreground">
                         Shared with me
                     </DropdownMenuLabel>
-                    <For each={sharedCanvases.data()}>
+                    <For each={sharedCanvases.data}>
                         {(canvas: any) => (
                             <DropdownMenuItem
                                 class="flex items-center gap-2 cursor-pointer"
@@ -118,7 +119,7 @@ export function CanvasSelector(props: CanvasSelectorProps) {
                     </For>
                 </Show>
 
-                <Show when={!sharedCanvases.data() || sharedCanvases.data()!.length === 0}>
+                <Show when={!sharedCanvases.data || sharedCanvases.data.length === 0}>
                     <Show when={userId()}>
                         <DropdownMenuSeparator />
                         <div class="px-2 py-2 text-sm text-muted-foreground text-center">

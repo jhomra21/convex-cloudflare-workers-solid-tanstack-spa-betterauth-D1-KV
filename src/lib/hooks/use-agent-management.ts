@@ -1,5 +1,6 @@
 import { createSignal, createMemo, createEffect, batch, onCleanup } from 'solid-js';
-import { convexApi, useMutation } from '~/lib/convex';
+import { useQueryClient } from '@tanstack/solid-query';
+import { convexApi, useConvexQuery, useConvexMutation } from '~/lib/convex';
 import { toast } from 'solid-sonner';
 import {
   getCanvasElement,
@@ -14,31 +15,23 @@ import {
   isAgentData,
 } from '~/types/agents';
 import { type ViewportState } from './use-viewport';
-import { useOptimisticUpdates } from './use-optimistic-updates';
 
 export interface UseAgentManagementProps {
   canvas: () => any;
   userId: () => string | null;
   userName: () => string;
-  dbAgents: any;
   viewport: () => ViewportState;
 }
 
 export function useAgentManagement(props: UseAgentManagementProps) {
-  // Use optimistic updates hook
-  const {
-    optimisticPositions,
-    optimisticSizes,
-    optimisticNewAgents,
-    optimisticDeletedAgentIds,
-    updateOptimisticPosition,
-    updateOptimisticSize,
-    addOptimisticAgent,
-    removeOptimisticAgent,
-    markAsOptimisticallyDeleted,
-    restoreOptimisticallyDeleted,
-    clearOptimisticTransform,
-  } = useOptimisticUpdates();
+  const queryClient = useQueryClient();
+
+  // Query for canvas agents using TanStack Query + Convex
+  const dbAgents = useConvexQuery(
+    convexApi.agents.getCanvasAgents,
+    () => props.canvas()?._id ? { canvasId: props.canvas()!._id } : null,
+    () => ['agents', props.canvas()?._id]
+  );
 
   // UI state
   const [activeAgentType, setActiveAgentType] = createSignal<'none' | 'generate' | 'edit' | 'voice' | 'video'>('none');
@@ -49,59 +42,122 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Agent tracking for new agent z-index management
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
 
-  // Mutations
-  const createAgentMutation = useMutation();
-  const deleteAgentMutation = useMutation();
-  const updateAgentTransformMutation = useMutation();
-  const updateAgentPromptMutation = useMutation();
-  const connectAgentsMutation = useMutation();
-  const disconnectAgentsMutation = useMutation();
-  const clearCanvasAgentsMutation = useMutation();
+  // Mutations with optimistic updates
+  const createAgentMutation = useConvexMutation(convexApi.agents.createAgent, {
+    onMutate: async (variables) => {
+      const canvasId = props.canvas()?._id;
+      if (!canvasId) return;
+
+      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
+      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
+
+      // Create optimistic agent with processing status for image generation
+      const optimisticAgent: AgentData = {
+        _id: crypto.randomUUID() as any, // Temporary ID
+        _creationTime: Date.now(),
+        canvasId: canvasId as any,
+        userId: variables.userId,
+        userName: variables.userName,
+        prompt: variables.prompt,
+        positionX: variables.positionX,
+        positionY: variables.positionY,
+        width: variables.width,
+        height: variables.height,
+        type: variables.type || 'image-generate',
+        status: variables.type?.includes('image') ? 'processing' : 'idle', // Set processing for image agents
+        model: 'normal', // Default model
+        imageUrl: undefined,
+        audioUrl: undefined,
+        videoUrl: undefined,
+        uploadedImageUrl: variables.uploadedImageUrl || undefined,
+        connectedAgentId: variables.connectedAgentId || undefined,
+        voice: variables.voice || undefined,
+        audioSampleUrl: undefined,
+        requestId: undefined,
+        activeImageUrl: undefined,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
+        old ? [...old, optimisticAgent] : [optimisticAgent]
+      );
+
+      return { previousAgents, canvasId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousAgents && context?.canvasId) {
+        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['convex', 'agents'] });
+    }
+  });
+
+  const deleteAgentMutation = useConvexMutation(convexApi.agents.deleteAgent, {
+    onMutate: async (variables) => {
+      const canvasId = props.canvas()?._id;
+      if (!canvasId) return;
+
+      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
+      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
+
+      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
+        old?.filter(agent => agent._id !== variables.agentId) || []
+      );
+
+      return { previousAgents, canvasId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousAgents && context?.canvasId) {
+        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
+      }
+    }
+  });
+
+  const updateAgentTransformMutation = useConvexMutation(convexApi.agents.updateAgentTransform, {
+    onMutate: async (variables) => {
+      const canvasId = props.canvas()?._id;
+      if (!canvasId) return;
+
+      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
+      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
+
+      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
+        old?.map(agent =>
+          agent._id === variables.agentId
+            ? { ...agent, positionX: variables.positionX, positionY: variables.positionY, width: variables.width, height: variables.height }
+            : agent
+        ) || []
+      );
+
+      return { previousAgents, canvasId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousAgents && context?.canvasId) {
+        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
+      }
+    }
+  });
+
+  const updateAgentPromptMutation = useConvexMutation(convexApi.agents.updateAgentPrompt);
+  const connectAgentsMutation = useConvexMutation(convexApi.agents.connectAgents);
+  const disconnectAgentsMutation = useConvexMutation(convexApi.agents.disconnectAgents);
+  const clearCanvasAgentsMutation = useConvexMutation(convexApi.agents.clearCanvasAgents);
 
   // Debounced saves for transforms to reduce API calls
   const debouncedSaves = new Map<string, number>();
 
   // Memoized agent processing with proper typing and validation
   const agents = createMemo((): Agent[] => {
-    const rawAgentData = props.dbAgents.data();
+    const rawAgentData = dbAgents.data;
     if (!rawAgentData) return [];
 
-    const positions = optimisticPositions();
-    const sizes = optimisticSizes();
-
-    // Validate and convert agent data with type safety
-    // Merge DB agents with optimistic creations and filter out optimistic deletions
-    const optimisticRemoved = optimisticDeletedAgentIds();
-    const optimisticAdds = optimisticNewAgents();
-
-    const baseAgents = rawAgentData
+    // Convert and validate agent data
+    return rawAgentData
       .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent))
-      .filter((a: AgentData) => !optimisticRemoved.has(a._id));
-
-    // Convert base agents with optimistic updates
-    const processedBaseAgents = baseAgents.map((agentData: AgentData): Agent => {
-      // Use optimistic position/size if available, otherwise use database values
-      const optimisticPos = positions.get(agentData._id);
-      const optimisticSize = sizes.get(agentData._id);
-
-      // Convert to frontend Agent interface with optimistic updates
-      const agent = agentDataToAgent(agentData);
-
-      // Apply optimistic updates if they exist
-      if (optimisticPos) {
-        agent.position = optimisticPos;
-      }
-      if (optimisticSize) {
-        agent.size = optimisticSize;
-      }
-
-      return agent;
-    });
-
-    // Convert optimistic agents directly (they're already in Agent format)
-    const processedOptimisticAgents = optimisticAdds;
-
-    return [...processedBaseAgents, ...processedOptimisticAgents];
+      .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
   });
 
   // Memoized connection pairs calculation - only recalculates when agents change
@@ -137,100 +193,55 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }))
   );
 
-  // Save transform immediately (for drag end)
-  const saveAgentTransformImmediate = async (
-    agentId: string,
-    position: Position,
-    size: Size
-  ) => {
-    if (!props.canvas()?._id) return;
+  // Update agent position (immediate save for drag end)
+  const updateAgentPosition = (id: string, position: Position) => {
+    const agent = agents().find(a => a.id === id);
+    if (!agent) return;
 
-    try {
-      await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
-        agentId: agentId as any,
-        positionX: position.x,
-        positionY: position.y,
-        width: size.width,
-        height: size.height,
-      });
-
-      // Clear optimistic updates once saved to Convex
-      clearOptimisticTransform(agentId);
-    } catch (error) {
-      console.error('Failed to save agent transform:', error);
-    }
+    updateAgentTransformMutation.mutate({
+      agentId: id as any,
+      positionX: position.x,
+      positionY: position.y,
+      width: agent.size.width,
+      height: agent.size.height,
+    });
   };
 
-  // Save transform with debounce (for resize operations)
-  const saveAgentTransformDebounced = (
-    agentId: string,
-    position: Position,
-    size: Size
-  ) => {
-    if (!props.canvas()?._id) return;
+  // Update agent size (debounced save for resize operations)
+  const updateAgentSize = (id: string, size: Size) => {
+    const agent = agents().find(a => a.id === id);
+    if (!agent) return;
 
     // Clear existing timeout
-    const existingTimeout = debouncedSaves.get(agentId);
+    const existingTimeout = debouncedSaves.get(id);
     if (existingTimeout) {
       window.clearTimeout(existingTimeout);
     }
 
     // Set new timeout
-    const timeout = window.setTimeout(async () => {
-      try {
-        await updateAgentTransformMutation.mutate(convexApi.agents.updateAgentTransform, {
-          agentId: agentId as any,
-          positionX: position.x,
-          positionY: position.y,
-          width: size.width,
-          height: size.height,
-        });
+    const timeout = window.setTimeout(() => {
+      updateAgentTransformMutation.mutate({
+        agentId: id as any,
+        positionX: agent.position.x,
+        positionY: agent.position.y,
+        width: size.width,
+        height: size.height,
+      });
+      debouncedSaves.delete(id);
+    }, 180);
 
-        // Clear optimistic updates once saved to Convex
-        clearOptimisticTransform(agentId);
-      } catch (error) {
-        console.error('Failed to save agent transform:', error);
-      }
-
-      debouncedSaves.delete(agentId);
-    }, 180); // Debounce for resize operations
-
-    debouncedSaves.set(agentId, timeout);
-  };
-
-  // Update agent position with optimistic update (immediate save for drag end)
-  const updateAgentPosition = (id: string, position: Position) => {
-    updateOptimisticPosition(id, position);
-
-    const agent = agents().find(a => a.id === id);
-    if (agent) {
-      saveAgentTransformImmediate(id, position, agent.size);
-    }
-  };
-
-  // Update agent size with optimistic update (debounced save for resize operations)
-  const updateAgentSize = (id: string, size: Size) => {
-    updateOptimisticSize(id, size);
-
-    const agent = agents().find(a => a.id === id);
-    if (agent) {
-      saveAgentTransformDebounced(id, agent.position, size);
-    }
+    debouncedSaves.set(id, timeout);
   };
 
   // Debounced prompt update to minimise writes
   let promptDebounceHandle: any;
   const updateAgentPrompt = (id: string, prompt: string) => {
     if (promptDebounceHandle) clearTimeout(promptDebounceHandle);
-    promptDebounceHandle = setTimeout(async () => {
-      try {
-        await updateAgentPromptMutation.mutate(convexApi.agents.updateAgentPrompt, {
-          agentId: id as any,
-          prompt,
-        });
-      } catch (error) {
-        console.error('Failed to update agent prompt:', error);
-      }
+    promptDebounceHandle = setTimeout(() => {
+      updateAgentPromptMutation.mutate({
+        agentId: id as any,
+        prompt,
+      });
     }, 200);
   };
 
@@ -327,23 +338,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         createParams.voice = 'Aurora'; // Default voice
       }
 
-      // Optimistic insert
-      const tempId = crypto.randomUUID();
-      const tempAgent: Agent = {
-        id: tempId,
-        userName: props.userName(),
-        prompt: createParams.prompt,
-        type,
-        position: newPosition,
-        size: agentSize,
-      } as any;
-
-      addOptimisticAgent(tempAgent);
-
-      await createAgentMutation.mutate(convexApi.agents.createAgent, createParams);
-
-      // Remove optimistic agent immediately after mutation completes
-      removeOptimisticAgent(tempId);
+      await createAgentMutation.mutate(createParams);
 
     } catch (error) {
       console.error('Failed to create agent:', error);
@@ -354,40 +349,29 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
   };
 
-  // Remove an agent with optimistic UI and exit animation
+  // Remove an agent with exit animation
   const removeAgent = async (id: string) => {
     try {
       // Start exit animation first
       setExitingAgents(prev => new Set(prev).add(id));
 
-      // Wait for exit animation to complete, then hide
-      setTimeout(() => {
-        batch(() => {
-          markAsOptimisticallyDeleted(id);
+      // Wait for exit animation to complete, then delete
+      setTimeout(async () => {
+        try {
+          await deleteAgentMutation.mutate({
+            agentId: id as any,
+          });
+        } catch (error) {
+          console.error('Failed to delete agent:', error);
+        } finally {
+          // Clear animation state
           setExitingAgents(prev => {
             const newSet = new Set(prev);
             newSet.delete(id);
             return newSet;
           });
-        });
+        }
       }, 200); // Exit animation duration
-
-      try {
-        await deleteAgentMutation.mutate(convexApi.agents.deleteAgent, {
-          agentId: id as any,
-        });
-      } catch (error) {
-        console.error('Failed to delete agent:', error);
-        // Rollback - restore the agent and clear animation state
-        batch(() => {
-          restoreOptimisticallyDeleted(id);
-          setExitingAgents(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(id);
-            return newSet;
-          });
-        });
-      }
     } catch (error) {
       console.error('Failed to delete agent:', error);
     }
@@ -396,7 +380,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Connect two agents
   const connectAgents = async (sourceAgentId: string, targetAgentId: string) => {
     try {
-      await connectAgentsMutation.mutate(convexApi.agents.connectAgents, {
+      await connectAgentsMutation.mutate({
         sourceAgentId: sourceAgentId as any,
         targetAgentId: targetAgentId as any,
       });
@@ -408,7 +392,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Disconnect an agent
   const disconnectAgent = async (agentId: string) => {
     try {
-      await disconnectAgentsMutation.mutate(convexApi.agents.disconnectAgents, {
+      await disconnectAgentsMutation.mutate({
         agentId: agentId as any,
       });
     } catch (error) {
@@ -431,12 +415,13 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       // Wait for exit animations to complete, then clear
       setTimeout(async () => {
         try {
-          await clearCanvasAgentsMutation.mutate(convexApi.agents.clearCanvasAgents, {
+          await clearCanvasAgentsMutation.mutate({
             canvasId: props.canvas()!._id,
           });
         } catch (error) {
           console.error('Failed to clear canvas:', error);
-          // Rollback animation state on error
+        } finally {
+          // Clear animation state
           setExitingAgents(new Set<string>());
         }
       }, 200); // Match exit animation duration
@@ -448,7 +433,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
 
   // Watch for new agents and clean up removed ones
   createEffect(() => {
-    const currentAgents = props.dbAgents.data();
+    const currentAgents = dbAgents.data;
     if (!currentAgents) return;
 
     // Create a stable set of current agent IDs

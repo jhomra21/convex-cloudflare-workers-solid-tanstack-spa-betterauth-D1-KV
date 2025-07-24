@@ -1,6 +1,6 @@
 import { ConvexClient } from "convex/browser";
-import { createStore, reconcile } from "solid-js/store";
-import { createEffect, onCleanup, createSignal } from "solid-js";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/solid-query";
+import { createEffect, onCleanup } from "solid-js";
 import { api } from "../../convex/_generated/api";
 import type {
   FunctionReference,
@@ -10,132 +10,95 @@ import type {
 
 const convex = new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
 
-type Store<T> = {
-  value: T | undefined;
-};
-
-// A type-safe useQuery hook for Convex
-export function useQuery<
+// Type-safe Convex query hook using TanStack Query with real-time subscriptions
+export function useConvexQuery<
   Query extends FunctionReference<"query", "public", any, any>,
 >(
   query: Query,
-  // Wrap args in a function to make them reactive for SolidJS - can return null to skip query
   args: () => FunctionArgs<Query> | null | undefined,
+  queryKey: () => (string | number | boolean | null | undefined)[],
 ) {
-  const [data, setData] = createStore<Store<FunctionReturnType<Query>>>({
-    value: undefined,
-  });
-  const [error, setError] = createSignal<Error | null>(null);
+  const queryClient = useQueryClient();
+  
+  const tanstackQuery = useQuery(() => ({
+    queryKey: ['convex', ...queryKey()],
+    queryFn: async () => {
+      const currentArgs = args();
+      if (currentArgs === null || currentArgs === undefined) {
+        throw new Error('Query args are null or undefined');
+      }
+      return await convex.query(query as any, currentArgs as any);
+    },
+    enabled: () => {
+      const currentArgs = args();
+      return currentArgs !== null && currentArgs !== undefined;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes - we rely on real-time invalidation
+  }));
 
+  // Set up Convex real-time subscription to invalidate TanStack Query cache
   createEffect(() => {
     const currentArgs = args();
-    
-    // Skip subscription if args are invalid/null
     if (currentArgs === null || currentArgs === undefined) {
-      setData("value", reconcile(undefined));
-      setError(null);
       return;
     }
 
-    try {
-      const unsubscribe = convex.onUpdate(
-        query as any,
-        currentArgs as any,
-        (newData: any) => {
-          setData("value", reconcile(newData));
-          setError(null);
-        },
-      );
-      onCleanup(() => unsubscribe());
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-    }
+    const unsubscribe = convex.onUpdate(
+      query as any,
+      currentArgs as any,
+      (newData: any) => {
+        // Update TanStack Query cache with new data from Convex
+        queryClient.setQueryData(['convex', ...queryKey()], newData);
+      }
+    );
+
+    onCleanup(() => unsubscribe());
   });
 
-  return {
-    data: () => data.value,
-    error,
-    isLoading: () => data.value === undefined && error() === null,
-    reset: () => {
-      setData("value", reconcile(undefined));
-      setError(null);
-    },
-  };
+  return tanstackQuery;
 }
 
-// A type-safe useMutation hook for Convex mutations
-export function useMutation<
+// Type-safe Convex mutation hook using TanStack Query
+export function useConvexMutation<
   Mutation extends FunctionReference<"mutation", "public", any, any>,
->() {
-  const [isLoading, setIsLoading] = createSignal(false);
-  const [error, setError] = createSignal<Error | null>(null);
-
-  const mutate = async (
-    mutation: Mutation,
-    args: FunctionArgs<Mutation>,
-  ): Promise<FunctionReturnType<Mutation>> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const result = await convex.mutation(mutation as any, args as any);
-      return result;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return {
-    mutate,
-    isLoading,
-    error,
-    reset: () => {
-      setError(null);
-      setIsLoading(false);
+>(
+  mutation: Mutation,
+  options?: {
+    onSuccess?: (data: FunctionReturnType<Mutation>, variables: FunctionArgs<Mutation>, context: any) => void;
+    onError?: (error: Error, variables: FunctionArgs<Mutation>, context: any) => void;
+    onMutate?: (variables: FunctionArgs<Mutation>) => Promise<any> | any;
+    onSettled?: (data: FunctionReturnType<Mutation> | undefined, error: Error | null, variables: FunctionArgs<Mutation>, context: any) => void;
+    invalidateQueries?: string[][];
+  }
+) {
+  return useMutation(() => ({
+    mutationFn: async (args: FunctionArgs<Mutation>) => {
+      return await convex.mutation(mutation as any, args as any);
     },
-  };
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
+    onMutate: options?.onMutate,
+    onSettled: options?.onSettled,
+  }));
 }
 
-// A type-safe useAction hook for Convex actions
-export function useAction<
+// Type-safe Convex action hook using TanStack Query
+export function useConvexAction<
   Action extends FunctionReference<"action", "public", any, any>,
->() {
-  const [isLoading, setIsLoading] = createSignal(false);
-  const [error, setError] = createSignal<Error | null>(null);
-
-  const execute = async (
-    action: Action,
-    args: FunctionArgs<Action>,
-  ): Promise<FunctionReturnType<Action>> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const result = await convex.action(action as any, args as any);
-      return result;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return {
-    execute,
-    isLoading,
-    error,
-    reset: () => {
-      setError(null);
-      setIsLoading(false);
+>(
+  action: Action,
+  options?: {
+    onSuccess?: (data: FunctionReturnType<Action>, variables: FunctionArgs<Action>) => void;
+    onError?: (error: Error, variables: FunctionArgs<Action>) => void;
+  }
+) {
+  return useMutation(() => ({
+    mutationFn: async (args: FunctionArgs<Action>) => {
+      return await convex.action(action as any, args as any);
     },
-  };
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
+  }));
 }
 
 export const convexClient = convex;
