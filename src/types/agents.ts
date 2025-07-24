@@ -44,6 +44,7 @@ export interface AgentData {
 // Frontend agent class interface (matches current Agent class)
 export interface Agent {
     id: string;
+    userId: string;
     userName?: string;
     prompt: string;
     position: {
@@ -202,6 +203,7 @@ export function isValidAgentType(type: string): type is AgentType {
 export function agentDataToAgent(agentData: AgentData): Agent {
     return {
         id: agentData._id,
+        userId: agentData.userId,
         userName: agentData.userName,
         prompt: agentData.prompt,
         position: {

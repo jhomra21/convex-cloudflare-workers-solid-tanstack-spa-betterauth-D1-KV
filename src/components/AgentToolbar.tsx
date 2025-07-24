@@ -1,82 +1,58 @@
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
-import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
 import { cn } from '~/lib/utils';
 import { Show } from 'solid-js';
 import { CanvasActiveUsers } from './CanvasActiveUsers';
-
 export interface AgentToolbarProps {
-  /**
-   * Active agent type ('generate', 'edit', 'voice', or 'video')
-   * Used for showing active button states
-   */
+
   activeAgentType: 'none' | 'generate' | 'edit' | 'voice' | 'video';
-  
-  /**
-   * The number of agents currently on the canvas
-   */
   agentCount: number;
-  
-  /**
-   * If true, this is someone else's canvas being viewed
-   */
+  userAgentCount?: number;
   isSharedCanvas?: boolean;
-  
-  /**
-   * If true, this canvas is being shared with others
-   */
   isOwnerSharingCanvas?: boolean;
-  
-  /**
-   * Canvas details for sharing
-   */
   canvasId?: string;
-  canvasName?: string;
-  currentShareId?: string;
-  canvasOwnerId?: string;
   currentUserId?: string;
-  
-  /**
-   * Callback functions
-   */
+  isCanvasOwner?: boolean;
   onAddGenerateAgent: () => void;
   onAddEditAgent: () => void;
   onAddVoiceAgent: () => void;
   onAddVideoAgent: () => void;
   onClearCanvas: () => void;
-  
-
 }
 
-/**
- * The toolbar for the image canvas, displaying controls for adding agents
- * and managing the canvas
- */
 export function AgentToolbar(props: AgentToolbarProps) {
   return (
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-1 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 gap-3 sm:gap-0">
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">
-          {props.agentCount} <span class="!font-normal text-muted-foreground/70">agent{props.agentCount !== 1 ? 's' : ''}</span>
-        </span>
-        
+        <Show when={props.isSharedCanvas || props.isOwnerSharingCanvas} fallback={
+          <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">
+            {props.agentCount} <span class="!font-normal text-muted-foreground/70">agent{props.agentCount !== 1 ? 's' : ''}</span>
+          </span>
+        }>
+          {/* Stacked layout for any shared canvas activity */}
+          <div class="flex flex-col text-sm font-semibold text-muted-foreground leading-tight">
+            <div>{props.agentCount} agent{props.agentCount !== 1 ? 's' : ''}</div>
+            <div class="text-xs !font-normal text-muted-foreground/60">{props.userAgentCount || 0} yours</div>
+          </div>
+        </Show>
+
         <Show when={props.isSharedCanvas}>
           <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-md">
             <Icon name="users" class="h-3 w-3" />
             <span>Shared Canvas</span>
           </div>
         </Show>
-        
+
         <Show when={!props.isSharedCanvas && props.isOwnerSharingCanvas}>
           <div class="flex items-center gap-1 px-2 py-1 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs rounded-md">
             <Icon name="share" class="h-3 w-3" />
             <span>Sharing Enabled</span>
           </div>
         </Show>
-        
+
         {/* Show active users for shared canvases */}
         <Show when={props.canvasId && (props.isSharedCanvas || props.isOwnerSharingCanvas)}>
-          <CanvasActiveUsers 
+          <CanvasActiveUsers
             canvasId={props.canvasId}
             currentUserId={props.currentUserId}
             class="border-l pl-2 ml-2"
@@ -84,7 +60,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
         </Show>
 
       </div>
-      
+
       <div class="flex flex-wrap items-center gap-2">
         {/* Agent Selection Section with improved UI */}
         <div class="bg-muted/30 border rounded-md flex items-center h-9 overflow-hidden min-w-0">
@@ -99,7 +75,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 props.activeAgentType === 'generate' ? "bg-background" : ""
               )}
             >
-              <div 
+              <div
                 class={cn(
                   "absolute left-0 h-4 w-0.5 bg-blue-500 rounded-full transition-opacity",
                   props.activeAgentType === 'generate' ? "opacity-100" : "opacity-0"
@@ -121,7 +97,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 props.activeAgentType === 'edit' ? "bg-background" : ""
               )}
             >
-              <div 
+              <div
                 class={cn(
                   "absolute left-0 h-4 w-0.5 bg-purple-500 rounded-full transition-opacity",
                   props.activeAgentType === 'edit' ? "opacity-100" : "opacity-0"
@@ -140,7 +116,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 props.activeAgentType === 'voice' ? "bg-background" : ""
               )}
             >
-              <div 
+              <div
                 class={cn(
                   "absolute left-0 h-4 w-0.5 bg-indigo-500 rounded-full transition-opacity",
                   props.activeAgentType === 'voice' ? "opacity-100" : "opacity-0"
@@ -162,7 +138,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
                 props.activeAgentType === 'video' ? "bg-background" : ""
               )}
             >
-              <div 
+              <div
                 class={cn(
                   "absolute left-0 h-4 w-0.5 bg-red-500 rounded-full transition-opacity",
                   props.activeAgentType === 'video' ? "opacity-100" : "opacity-0"
@@ -176,37 +152,24 @@ export function AgentToolbar(props: AgentToolbarProps) {
             </button>
           </div>
         </div>
-        
-        <ShareCanvasDialog
-          canvasId={props.canvasId}
-          canvasName={props.canvasName}
-          currentShareId={props.currentShareId}
-          isShareable={props.isOwnerSharingCanvas}
-          canvasOwnerId={props.canvasOwnerId}
-          currentUserId={props.currentUserId}
-        >
-          <Button
-            size="sm"
-            variant={props.isOwnerSharingCanvas ? "default" : "outline"}
-            class={cn(
-              "flex items-center gap-2 h-9",
-              props.isOwnerSharingCanvas && "bg-blue-600 hover:bg-blue-700 border-blue-600"
-            )}
-          >
-            <Icon name={props.isOwnerSharingCanvas ? "users" : "share"} class="h-4 w-4" />
-            {props.isOwnerSharingCanvas ? "Shared" : "Share"}
-          </Button>
-        </ShareCanvasDialog>
-        
+
+
         <Button
           onClick={props.onClearCanvas}
           variant="outline"
           size="sm"
           class="h-9"
-          disabled={props.agentCount === 0}
+          disabled={
+            // Disable if:
+            // - Collaborator on shared canvas with no own agents
+            // - Anyone with no agents to clear
+            props.isSharedCanvas && !props.isCanvasOwner
+              ? (props.userAgentCount || 0) === 0
+              : props.agentCount === 0
+          }
         >
           <Icon name="trash-2" class="h-4 w-4" />
-          Clear All
+          {props.isSharedCanvas && !props.isCanvasOwner ? "Clear Mine" : "Clear All"}
         </Button>
       </div>
     </div>

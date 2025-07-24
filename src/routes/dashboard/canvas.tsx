@@ -1,11 +1,15 @@
 import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
 import { createSignal, createEffect } from "solid-js";
-import { convexApi, useConvexMutation } from "~/lib/convex";
+import { convexApi, useConvexMutation, useConvexQuery } from "~/lib/convex";
 import { useCurrentUserId, useCurrentUserName } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
+import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
 import { storeShareIntent, getAndClearShareIntent } from '~/lib/share-intent';
+import { Button } from '~/components/ui/button';
+import { Icon } from '~/components/ui/icon';
+import { cn } from '~/lib/utils';
 
 export const Route = createFileRoute('/dashboard/canvas')({
     component: ImagesPage,
@@ -26,6 +30,22 @@ function ImagesPage() {
 
     // Track active canvas ID (null = default canvas, string = specific canvas)
     const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
+
+    // Canvas data for share functionality
+    const defaultCanvas = useConvexQuery(
+        convexApi.canvas.getCanvas,
+        () => (!activeCanvasId() && userId()) ? { userId: userId()! } : null,
+        () => ['canvas', 'default', userId()]
+    );
+
+    const specificCanvas = useConvexQuery(
+        convexApi.canvas.getCanvasById,
+        () => (activeCanvasId() && userId()) ? { canvasId: activeCanvasId() as any, userId: userId()! } : null,
+        () => ['canvas', 'specific', activeCanvasId(), userId()]
+    );
+
+    // Current active canvas data
+    const currentCanvas = () => activeCanvasId() ? specificCanvas.data : defaultCanvas.data;
 
     // Track the last processed share ID to prevent duplicate processing
     const [lastProcessedShareId, setLastProcessedShareId] = createSignal<string | null>(null);
@@ -117,10 +137,37 @@ function ImagesPage() {
 
                             <div class="flex-shrink-0 sm:border-l sm:pl-4 sm:ml-4">
                                 <div class="text-xs text-muted-foreground mb-1">Canvas</div>
-                                <CanvasSelector
-                                    activeCanvasId={activeCanvasId()}
-                                    onCanvasChange={setActiveCanvasId}
-                                />
+                                <div class="flex items-center gap-2">
+                                    <CanvasSelector
+                                        activeCanvasId={activeCanvasId()}
+                                        onCanvasChange={setActiveCanvasId}
+                                        currentCanvasName={currentCanvas()?.name}
+                                    />
+                                    <ShareCanvasDialog
+                                        canvasId={currentCanvas()?._id}
+                                        canvasName={currentCanvas()?.name}
+                                        currentShareId={currentCanvas()?.shareId}
+                                        isShareable={!activeCanvasId() && !!currentCanvas()?.isShareable}
+                                        canvasOwnerId={currentCanvas()?.userId}
+                                        currentUserId={userId()}
+                                    >
+                                        <Button
+                                            size="sm"
+                                            variant={(!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) ? "default" : "outline"}
+                                            class={cn(
+                                                "flex items-center gap-2",
+                                                (!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) && "bg-blue-600 hover:bg-blue-700 border-blue-600"
+                                            )}
+                                        >
+                                            <Icon name={(!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) ? "users" : "share"} class="h-4 w-4" />
+                                            {
+                                                !!activeCanvasId() ? "Shared" : // Collaborator on shared canvas
+                                                    (!activeCanvasId() && !!currentCanvas()?.isShareable) ? "Sharing" : // Owner sharing their canvas
+                                                        "Share" // Not shared
+                                            }
+                                        </Button>
+                                    </ShareCanvasDialog>
+                                </div>
                             </div>
                         </div>
                     </div>

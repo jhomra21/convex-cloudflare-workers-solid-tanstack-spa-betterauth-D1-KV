@@ -21,6 +21,8 @@ export interface UseAgentManagementProps {
   userId: () => string | null;
   userName: () => string;
   viewport: () => ViewportState;
+  isSharedCanvas?: () => boolean;
+  isCanvasOwner?: () => boolean;
 }
 
 export function useAgentManagement(props: UseAgentManagementProps) {
@@ -64,7 +66,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         width: variables.width,
         height: variables.height,
         type: variables.type || 'image-generate',
-        status: variables.type?.includes('image') ? 'processing' : 'idle', // Set processing for image agents
+        status: 'idle', // All agents start as idle
         model: 'normal', // Default model
         imageUrl: undefined,
         audioUrl: undefined,
@@ -144,7 +146,47 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   const updateAgentPromptMutation = useConvexMutation(convexApi.agents.updateAgentPrompt);
   const connectAgentsMutation = useConvexMutation(convexApi.agents.connectAgents);
   const disconnectAgentsMutation = useConvexMutation(convexApi.agents.disconnectAgents);
-  const clearCanvasAgentsMutation = useConvexMutation(convexApi.agents.clearCanvasAgents);
+  const clearCanvasAgentsMutation = useConvexMutation(convexApi.agents.clearCanvasAgents, {
+    onMutate: async (variables) => {
+      const canvasId = props.canvas()?._id;
+      if (!canvasId) return;
+
+      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
+      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
+
+      // Optimistically remove all agents
+      queryClient.setQueryData(['convex', 'agents', canvasId], []);
+
+      return { previousAgents, canvasId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousAgents && context?.canvasId) {
+        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
+      }
+    }
+  });
+
+  const clearUserAgentsMutation = useConvexMutation(convexApi.agents.clearUserAgents, {
+    onMutate: async (variables) => {
+      const canvasId = props.canvas()?._id;
+      if (!canvasId) return;
+
+      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
+      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
+
+      // Optimistically remove only user's agents
+      queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
+        old?.filter(agent => agent.userId !== variables.userId) || []
+      );
+
+      return { previousAgents, canvasId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousAgents && context?.canvasId) {
+        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
+      }
+    }
+  });
 
   // Debounced saves for transforms to reduce API calls
   const debouncedSaves = new Map<string, number>();
@@ -400,24 +442,44 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
   };
 
-  // Clear all agents from canvas with exit animations
+  // Clear agents from canvas with exit animations
   const clearCanvas = async () => {
-    if (!props.canvas()?._id) return;
+    if (!props.canvas()?._id || !props.userId()) return;
 
     const currentAgents = agents();
-    if (currentAgents.length === 0) return;
+    const isShared = props.isSharedCanvas?.() || false;
+    const isOwner = props.isCanvasOwner?.() || false;
+    
+    // Determine what to clear based on user role
+    const shouldClearAll = !isShared || isOwner;
+    
+    // Filter agents based on permissions
+    const agentsToRemove = shouldClearAll 
+      ? currentAgents 
+      : currentAgents.filter(a => a.userId === props.userId());
+    
+    if (agentsToRemove.length === 0) return;
 
     try {
-      // Start exit animations for all agents
-      const agentIds = currentAgents.map(a => a.id);
+      // Start exit animations for agents to be removed
+      const agentIds = agentsToRemove.map(a => a.id);
       setExitingAgents(new Set(agentIds));
 
       // Wait for exit animations to complete, then clear
       setTimeout(async () => {
         try {
-          await clearCanvasAgentsMutation.mutate({
-            canvasId: props.canvas()!._id,
-          });
+          if (shouldClearAll) {
+            // Clear all agents (owner or own canvas)
+            await clearCanvasAgentsMutation.mutate({
+              canvasId: props.canvas()!._id,
+            });
+          } else {
+            // Clear only user's agents (collaborator on shared canvas)
+            await clearUserAgentsMutation.mutate({
+              canvasId: props.canvas()!._id,
+              userId: props.userId()!,
+            });
+          }
         } catch (error) {
           console.error('Failed to clear canvas:', error);
         } finally {

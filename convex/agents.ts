@@ -83,7 +83,7 @@ export const createAgent = mutation({
       width: args.width,
       height: args.height,
       model: args.model || "normal",
-      status: "idle",
+      status: "idle", // All agents start as idle
       type: args.type || "image-generate",
       voice: args.voice,
       audioSampleUrl: args.audioSampleUrl,
@@ -424,6 +424,27 @@ export const clearCanvasAgents = mutation({
     const agents = await ctx.db
       .query("agents")
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .collect();
+
+    for (const agent of agents) {
+      await ctx.db.delete(agent._id);
+    }
+    return null;
+  },
+});
+
+// Clear only user's agents from canvas (for shared canvases)
+export const clearUserAgents = mutation({
+  args: {
+    canvasId: v.id("canvases"),
+    userId: v.string()
+  },
+  returns: v.null(),
+  handler: async (ctx, { canvasId, userId }) => {
+    const agents = await ctx.db
+      .query("agents")
+      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .filter((q) => q.eq(q.field("userId"), userId))
       .collect();
 
     for (const agent of agents) {

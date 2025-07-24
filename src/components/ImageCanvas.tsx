@@ -48,6 +48,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Agent count derived from the agents query (no separate query needed)
   const agentCount = () => agentManagement.agents().length || 0;
 
+  // User's agent count for any shared canvas activity
+  const userAgentCount = () => {
+    const isSharedActivity = !!props.activeCanvasId || !!canvas()?.isShareable;
+    if (!isSharedActivity) return 0; // Not involved in sharing
+    return agentManagement.agents().filter(a => a.userId === userId()).length || 0;
+  };
+
   // Viewport management - now uses separate viewport storage
   const viewport = useViewport({
     canvasId: () => canvas()?._id || null,
@@ -60,6 +67,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
     userId,
     userName,
     viewport: viewport.viewport,
+    isSharedCanvas: () => !!props.activeCanvasId,
+    isCanvasOwner: () => {
+      const canvasData = canvas();
+      return canvasData?.userId === userId();
+    },
   });
 
   // Z-index management
@@ -217,12 +229,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
         <AgentToolbar
           activeAgentType={activeAgentType()}
           agentCount={agentCount()}
+          userAgentCount={userAgentCount()}
           isSharedCanvas={!!props.activeCanvasId}
           isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
+          isCanvasOwner={canvas()?.userId === userId()}
           canvasId={canvas()?._id}
-          canvasName={canvas()?.name}
-          currentShareId={canvas()?.shareId}
-          canvasOwnerId={canvas()?.userId}
           currentUserId={userId()}
           onAddGenerateAgent={handleAddGenerateAgent}
           onAddEditAgent={handleAddEditAgent}
