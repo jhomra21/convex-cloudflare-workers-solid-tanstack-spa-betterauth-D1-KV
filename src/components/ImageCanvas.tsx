@@ -372,6 +372,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                     onRemove={removeAgent}
                     onMouseDown={(e) => handleMouseDown(e, agent.id)}
                     onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                    onSizeChange={updateAgentSize}
                     onPromptChange={updateAgentPrompt}
                     onConnectAgent={connectAgents}
                     onDisconnectAgent={disconnectAgent}

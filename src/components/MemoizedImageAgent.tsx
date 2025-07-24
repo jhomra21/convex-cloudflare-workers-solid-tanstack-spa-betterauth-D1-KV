@@ -19,6 +19,7 @@ interface MemoizedImageAgentProps {
   onRemove: (id: string) => void;
   onMouseDown: (e: MouseEvent) => void;
   onResizeStart: (e: MouseEvent, handle: string) => void;
+  onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   onPromptChange: (id: string, prompt: string) => void;
   onConnectAgent: (sourceId: string, targetId: string) => void;
   onDisconnectAgent: (id: string) => void;
@@ -30,15 +31,15 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
   const agentState = createMemo(() => {
     // Animation classes based on state
     const animationClass = props.isExiting ? 'animate-scale-out' : '';
-    
+
     return {
       transform: props.isDragged ? 'scale(1.05)' : 'scale(1)',
       transition: props.isDragged ? 'none' : 'transform 0.2s ease',
-      borderClass: props.isDragged 
-        ? "border-primary shadow-xl" 
+      borderClass: props.isDragged
+        ? "border-primary shadow-xl"
         : props.isResizing
-        ? "border-secondary shadow-lg"
-        : "border-transparent hover:border-muted-foreground/20",
+          ? "border-secondary shadow-lg"
+          : "border-transparent hover:border-muted-foreground/20",
       animationClass
     };
   });
@@ -60,8 +61,8 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         // Prevent drag if clicking on interactive elements
         const target = e.target as HTMLElement;
         const isInteractiveElement = target.matches('input, textarea, button, select, input[type="range"], [contenteditable="true"], [role="slider"], [data-part="thumb"]') ||
-                                   target.closest('input, textarea, button, select, input[type="range"], [contenteditable="true"], [role="slider"], [data-part="thumb"]');
-        
+          target.closest('input, textarea, button, select, input[type="range"], [contenteditable="true"], [role="slider"], [data-part="thumb"]');
+
         if (!isInteractiveElement) {
           props.onMouseDown(e);
         }
@@ -74,6 +75,7 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         onRemove={props.onRemove}
         size={props.agent.size}
         onResizeStart={props.onResizeStart}
+        onSizeChange={props.onSizeChange}
         generatedImage={props.agent.generatedImage}
         isDragged={props.isDragged}
         isRecentlyDragged={props.isRecentlyDragged}

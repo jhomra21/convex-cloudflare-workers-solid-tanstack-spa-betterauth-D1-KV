@@ -1,4 +1,5 @@
-import { createSignal, createUniqueId, Show, For } from 'solid-js';
+import { createSignal, createUniqueId, Show, For, createEffect } from 'solid-js';
+import type { AgentStatus } from '~/types/agents';
 import { useGenerateImage, useEditImage } from '~/lib/images-actions';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -20,12 +21,13 @@ export interface ImageAgentProps {
   onMouseDown?: (e: MouseEvent) => void;
   size?: { width: number; height: number };
   onResizeStart?: (e: MouseEvent, handle: string) => void;
+  onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   generatedImage?: string;
   isDragged?: boolean;
   isRecentlyDragged?: boolean;
 
   onPromptChange?: (id: string, prompt: string) => void;
-  status?: 'idle' | 'processing' | 'success' | 'failed';
+  status?: AgentStatus;
   model?: 'normal' | 'pro';
   type?: 'image-generate' | 'image-edit';
   connectedAgentId?: string;
@@ -354,11 +356,81 @@ export function ImageAgent(props: ImageAgentProps) {
 
 
 
-  // Agent size - use props.size directly to avoid circular dependency
-  const agentSize = () => props.size || { width: 320, height: 384 };
+  // Image dimensions state for dynamic sizing
+  const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(null);
+  
+  // Agent size - use image dimensions when available, otherwise default size
+  const agentSize = () => {
+    if (props.size) return props.size;
+    
+    const imgDims = imageDimensions();
+    if (imgDims && props.generatedImage) {
+      // Calculate size based on image aspect ratio with constraints
+      const maxWidth = 480;
+      const maxHeight = 480;
+      const minWidth = 280;
+      const minHeight = 200;
+      
+      let { width, height } = imgDims;
+      
+      // Scale down if too large
+      if (width > maxWidth || height > maxHeight) {
+        const scale = Math.min(maxWidth / width, maxHeight / height);
+        width *= scale;
+        height *= scale;
+      }
+      
+      // Scale up if too small
+      if (width < minWidth || height < minHeight) {
+        const scale = Math.max(minWidth / width, minHeight / height);
+        width *= scale;
+        height *= scale;
+      }
+      
+      // Add minimal padding for UI elements to ensure image fills most of the space
+      return { 
+        width: Math.round(width), 
+        height: Math.round(height + 60) // Conservative padding for drag handle + prompt overlay
+      };
+    }
+    
+    return { width: 320, height: 384 };
+  };
 
   // Initialize touch device detection on component mount
   checkTouchDevice();
+
+  // Track previous image URL to detect changes
+  const [prevImageUrl, setPrevImageUrl] = createSignal<string | null>(null);
+  
+  // Reset image dimensions when image changes
+  createEffect(() => {
+    const currentImage = props.generatedImage;
+    const prevImage = prevImageUrl();
+    
+    if (currentImage !== prevImage) {
+      setPrevImageUrl(currentImage || null);
+      if (currentImage && currentImage !== prevImage) {
+        // Reset dimensions when image changes to trigger recalculation
+        setImageDimensions(null);
+      }
+    }
+    
+    if (!currentImage) {
+      setImageDimensions(null);
+    }
+  });
+
+  // Update parent when agent size changes due to image dimensions
+  createEffect(() => {
+    const currentSize = agentSize();
+    const imgDims = imageDimensions();
+    
+    // Only notify parent if size changed due to image dimensions (not manual resize)
+    if (imgDims && props.generatedImage && !props.size && props.onSizeChange) {
+      props.onSizeChange(agentId, currentSize);
+    }
+  });
 
   // Handle drag end globally to reset drag state and prevent hover flashing
   const handleGlobalMouseUp = () => {
@@ -381,13 +453,11 @@ export function ImageAgent(props: ImageAgentProps) {
     <ErrorBoundary>
       <Card
         class={cn(
-          "flex flex-col relative transition-all duration-300 cursor-move overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50",
-          isLoading() ? "border border-secondary/50" : "",
+          "flex flex-col relative transition-all !border-0 duration-300 cursor-move overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50",
           props.class
         )}
         style={{
-          width: `${agentSize().width}px`,
-          height: `${agentSize().height}px`
+          transition: "width 150ms ease, height 150ms ease"
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -593,7 +663,7 @@ export function ImageAgent(props: ImageAgentProps) {
                         <img
                           src={getInputImage()!}
                           alt="Input image"
-                          class="w-full h-full object-cover"
+                          class="w-full h-full object-contain"
                         />
                         {/* Show indicator for local files that haven't been uploaded */}
                         <Show when={localImageFile()}>
@@ -686,15 +756,31 @@ export function ImageAgent(props: ImageAgentProps) {
           </CardContent>
         }>
           {/* Full-image layout when image is present */}
-          <div class="relative flex-1 overflow-hidden">
-            {/* Generated image fills entire container */}
+          <div 
+            class="relative overflow-hidden"
+            style={{
+              height: `${agentSize().height - 60}px`, // Exact height for image
+              width: `${agentSize().width}px`
+            }}
+          >
+            {/* Generated image fills container exactly */}
             <img
               src={props.generatedImage}
               alt="Generated image"
-              class="absolute inset-0 w-full h-full object-cover"
+              class="w-full h-full object-cover"
               style={{
                 opacity: isLoading() ? 0.3 : 1,
                 transition: "opacity 300ms ease"
+              }}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                }
+              }}
+              onError={() => {
+                // Reset dimensions on error to fall back to default size
+                setImageDimensions(null);
               }}
             />
 
