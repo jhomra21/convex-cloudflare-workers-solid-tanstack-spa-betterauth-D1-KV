@@ -7,8 +7,8 @@ const imagesApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Helper function to update agent status
 async function updateAgentStatus(
-  convexUrl: string, 
-  agentId: string, 
+  convexUrl: string,
+  agentId: string,
   status: 'idle' | 'processing' | 'success' | 'failed'
 ) {
   try {
@@ -25,8 +25,8 @@ async function updateAgentStatus(
 
 // Helper function to update both agent image and status in one call
 async function updateAgentImageAndStatus(
-  convexUrl: string, 
-  agentId: string, 
+  convexUrl: string,
+  agentId: string,
   imageUrl: string,
   status: 'success' | 'failed'
 ) {
@@ -49,7 +49,7 @@ imagesApi.post('/edit', async (c) => {
   }
 
   let agentId; // Declare agentId in outer scope
-  
+
   try {
     const data = await c.req.json();
     const { prompt, inputImageUrl, model = "fal-ai/flux-kontext-lora", steps = 30 } = data;
@@ -79,7 +79,7 @@ imagesApi.post('/edit', async (c) => {
       return c.json({ error: 'Database service not configured' }, 500);
     }
 
-    
+
     let imageBuffer;
     let base64Image;
 
@@ -105,12 +105,12 @@ imagesApi.post('/edit', async (c) => {
       if (!falResponse.ok) {
         const errorText = await falResponse.text();
         console.error('❌ FAL AI error:', errorText);
-        
+
         // Set agent status to failed if agentId is provided
         if (agentId && c.env.CONVEX_URL) {
           await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
         }
-        
+
         return c.json({ error: 'FAL AI editing failed' }, 500);
       }
 
@@ -119,7 +119,7 @@ imagesApi.post('/edit', async (c) => {
       // Extract image data from FAL response
       if (falResult.images && falResult.images.length > 0) {
         const imageDataUri = falResult.images[0].url;
-        
+
         // Check if it's a data URI (base64)
         if (imageDataUri.startsWith('data:image/')) {
           // Extract base64 data from data URI
@@ -132,7 +132,7 @@ imagesApi.post('/edit', async (c) => {
           if (!imageResponse.ok) {
             throw new Error('Failed to download edited image from FAL');
           }
-          
+
           imageBuffer = await imageResponse.arrayBuffer();
           base64Image = Buffer.from(imageBuffer).toString('base64');
         }
@@ -142,25 +142,25 @@ imagesApi.post('/edit', async (c) => {
       }
     } catch (error) {
       console.error('❌ FAL AI editing error:', error);
-      
+
       // Set agent status to failed if agentId is provided
       if (agentId && c.env.CONVEX_URL) {
         await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
       }
-      
+
       return c.json({ error: 'Failed to edit image with FAL AI', details: error.message }, 500);
     }
-    
+
     // Create unique filename
     const filename = `edited-${user.id}-${Date.now()}.png`;
-    
+
     // Store in R2
     await c.env.convex_cf_workers_images_test.put(filename, imageBuffer, {
       httpMetadata: {
         contentType: 'image/png',
       },
     });
-    
+
     // Verify the file was actually stored
     try {
       const verification = await c.env.convex_cf_workers_images_test.head(filename);
@@ -203,11 +203,84 @@ imagesApi.post('/edit', async (c) => {
       await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
     }
 
-    return c.json({ 
-      error: 'Failed to edit image', 
+    return c.json({
+      error: 'Failed to edit image',
       details: error.message,
       type: error.constructor.name
     }, 500);
+  }
+});
+
+// Upload user image to R2
+imagesApi.post('/upload', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const formData = await c.req.formData();
+    const fileEntry = formData.get('image');
+
+    if (!fileEntry) {
+      return c.json({ error: 'No image file provided' }, 400);
+    }
+
+    // Ensure it's a File object, not a string
+    if (typeof fileEntry === 'string') {
+      return c.json({ error: 'Invalid file data' }, 400);
+    }
+
+    const file = fileEntry as File;
+
+    if (!file.type.startsWith('image/')) {
+      return c.json({ error: 'File must be an image' }, 400);
+    }
+
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return c.json({ error: 'File size must be less than 10MB' }, 400);
+    }
+
+    if (!c.env.convex_cf_workers_images_test) {
+      console.error('❌ R2 bucket binding not found');
+      return c.json({ error: 'Storage service not available' }, 500);
+    }
+
+    // Generate unique filename
+    const fileExtension = file.name.split('.').pop() || 'png';
+    const filename = `uploaded-${user.id}-${Date.now()}.${fileExtension}`;
+
+    // Convert file to buffer
+    const imageBuffer = await file.arrayBuffer();
+
+    // Store in R2
+    await c.env.convex_cf_workers_images_test.put(filename, imageBuffer, {
+      httpMetadata: {
+        contentType: file.type,
+        cacheControl: 'public, max-age=31536000', // 1 year
+      },
+      customMetadata: {
+        uploadedBy: user.id,
+        originalName: file.name,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    // Create a public URL using R2 public domain
+    const imageUrl = `https://pub-1d414b448981415486cf93fcfcaf636d.r2.dev/${filename}`;
+
+    console.log(`✅ Image uploaded successfully: ${imageUrl}`);
+
+    return c.json({
+      success: true,
+      imageUrl,
+      filename
+    });
+
+  } catch (error) {
+    console.error('❌ Upload failed:', error);
+    return c.json({ error: 'Upload failed' }, 500);
   }
 });
 
@@ -219,7 +292,7 @@ imagesApi.post('/', async (c) => {
   }
 
   let agentId; // Declare agentId in outer scope
-  
+
   try {
     const data = await c.req.json();
     const { prompt, model = "@cf/black-forest-labs/flux-1-schnell", steps = 4, seed } = data;
@@ -260,7 +333,7 @@ imagesApi.post('/', async (c) => {
         return c.json({ error: 'FAL AI service not configured' }, 500);
       }
 
-      
+
       try {
         const falResponse = await fetch('https://fal.run/' + model, {
           method: 'POST',
@@ -281,12 +354,12 @@ imagesApi.post('/', async (c) => {
         if (!falResponse.ok) {
           const errorText = await falResponse.text();
           console.error('❌ FAL AI error:', errorText);
-          
+
           // Set agent status to failed if agentId is provided
           if (agentId && c.env.CONVEX_URL) {
             await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
           }
-          
+
           return c.json({ error: 'FAL AI generation failed' }, 500);
         }
 
@@ -296,7 +369,7 @@ imagesApi.post('/', async (c) => {
         // Extract image data from FAL response
         if (falResult.images && falResult.images.length > 0) {
           const imageDataUri = falResult.images[0].url;
-          
+
           // Check if it's a data URI (base64)
           if (imageDataUri.startsWith('data:image/')) {
             // Extract base64 data from data URI
@@ -309,7 +382,7 @@ imagesApi.post('/', async (c) => {
             if (!imageResponse.ok) {
               throw new Error('Failed to download image from FAL');
             }
-            
+
             imageBuffer = await imageResponse.arrayBuffer();
             base64Image = Buffer.from(imageBuffer).toString('base64');
           }
@@ -324,7 +397,7 @@ imagesApi.post('/', async (c) => {
     } else {
       // Use Workers AI for default models
       console.log('🤖 Using Workers AI for model:', model);
-      
+
       const result = await c.env.AI.run(model, {
         prompt,
         num_steps: steps,
@@ -347,17 +420,17 @@ imagesApi.post('/', async (c) => {
         return c.json({ error: 'Failed to generate image - unexpected response format' }, 500);
       }
     }
-    
+
     // Create unique filename
     const filename = `${user.id}-${Date.now()}.png`;
-    
+
     // Store in R2
     await c.env.convex_cf_workers_images_test.put(filename, imageBuffer, {
       httpMetadata: {
         contentType: 'image/png',
       },
     });
-    
+
     // Verify the file was actually stored
     try {
       const verification = await c.env.convex_cf_workers_images_test.head(filename);
@@ -402,8 +475,8 @@ imagesApi.post('/', async (c) => {
       await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
     }
 
-    return c.json({ 
-      error: 'Failed to generate image', 
+    return c.json({
+      error: 'Failed to generate image',
       details: error.message,
       type: error.constructor.name
     }, 500);
@@ -427,10 +500,10 @@ imagesApi.delete('/:imageId', async (c) => {
 
     // First, get the image data from Convex to find the filename
     const convex = new ConvexHttpClient(c.env.CONVEX_URL);
-    
+
     // Get the image record to extract filename from URL
     const imageToDelete = await convex.query(api.images.getImageById, { imageId: imageId as any });
-    
+
     if (!imageToDelete) {
       console.error('❌ Image not found for user');
       return c.json({ error: 'Image not found' }, 404);
@@ -450,9 +523,9 @@ imagesApi.delete('/:imageId', async (c) => {
     return c.json({ success: true });
   } catch (error) {
     console.error('❌ Error deleting image:', error);
-    return c.json({ 
-      error: 'Failed to delete image', 
-      details: error.message 
+    return c.json({
+      error: 'Failed to delete image',
+      details: error.message
     }, 500);
   }
 });
@@ -462,15 +535,15 @@ imagesApi.get('/:filename', async (c) => {
   const filename = c.req.param('filename');
   try {
     const object = await c.env.convex_cf_workers_images_test.get(filename);
-    
+
     if (!object) {
       return c.json({ error: 'Image not found' }, 404);
     }
-    
+
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
-    
+
     return new Response(object.body, {
       headers,
     });

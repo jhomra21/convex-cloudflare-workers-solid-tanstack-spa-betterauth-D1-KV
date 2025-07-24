@@ -52,11 +52,16 @@ export function ImageAgent(props: ImageAgentProps) {
     return null;
   };
 
-  // Get input image from either active image, uploaded image, or connected agent
+  // Get input image from either active image, local image, uploaded image, or connected agent
   const getInputImage = () => {
     // For edit agents, prefer activeImageUrl (user's choice)
     if (props.type === 'image-edit' && props.activeImageUrl) {
       return props.activeImageUrl;
+    }
+
+    // Show local image immediately if available
+    if (localImageUrl()) {
+      return localImageUrl();
     }
 
     if (props.uploadedImageUrl) {
@@ -70,6 +75,8 @@ export function ImageAgent(props: ImageAgentProps) {
 
   // Image upload for edit agents
   const [isDragOver, setIsDragOver] = createSignal(false);
+  const [localImageFile, setLocalImageFile] = createSignal<File | null>(null);
+  const [localImageUrl, setLocalImageUrl] = createSignal<string | null>(null);
 
   const handleImageUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -77,25 +84,36 @@ export function ImageAgent(props: ImageAgentProps) {
       return;
     }
 
-    try {
-      // Convert to base64 for now - in production you'd upload to R2
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-
-        // Update agent with uploaded image
-        await convexClient.mutation(convexApi.agents.updateAgentUploadedImage, {
-          agentId: agentId as any,
-          uploadedImageUrl: base64,
-        });
-
-        toast.success('Image uploaded successfully');
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      toast.error('Failed to upload image');
+    // Clean up previous local URL if it exists
+    if (localImageUrl()) {
+      URL.revokeObjectURL(localImageUrl()!);
     }
+
+    // Create local URL for immediate display
+    const objectUrl = URL.createObjectURL(file);
+    setLocalImageFile(file);
+    setLocalImageUrl(objectUrl);
+
+    toast.success('Image loaded - ready to edit');
+  };
+
+  // Helper to upload file to R2 when needed
+  const uploadFileToR2 = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch('/api/images/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    const result = await response.json();
+    return result.imageUrl;
   };
 
   const handleDrop = (e: DragEvent) => {
@@ -215,12 +233,36 @@ export function ImageAgent(props: ImageAgentProps) {
     try {
       if (props.type === 'image-edit') {
         // For editing, we need an input image
-        const inputImageUrl = getInputImage();
+        let inputImageUrl = getInputImage();
 
         if (!inputImageUrl) {
           toast.error('Edit agents need an input image. Upload one or connect to a generator agent.');
           setIsLocallyGenerating(false);
           return;
+        }
+
+        // If we have a local file, upload it first
+        if (localImageFile() && localImageUrl() === inputImageUrl) {
+          try {
+            inputImageUrl = await uploadFileToR2(localImageFile()!);
+            
+            // Update agent with uploaded image URL for future use
+            await convexClient.mutation(convexApi.agents.updateAgentUploadedImage, {
+              agentId: agentId as any,
+              uploadedImageUrl: inputImageUrl,
+            });
+
+            // Clean up local file references
+            URL.revokeObjectURL(localImageUrl()!);
+            setLocalImageFile(null);
+            setLocalImageUrl(null);
+          } catch (error) {
+            console.error('Failed to upload image:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+            toast.error(`Failed to upload image: ${errorMessage}`);
+            setIsLocallyGenerating(false);
+            return;
+          }
         }
 
         await editImage.mutateAsync({
@@ -547,12 +589,19 @@ export function ImageAgent(props: ImageAgentProps) {
                     </Show>
 
                     <Show when={getInputImage()}>
-                      <div class="w-full h-32 border-2 border-muted-foreground/30 rounded-lg overflow-hidden mb-3">
+                      <div class="w-full h-32 border-2 border-muted-foreground/30 rounded-lg overflow-hidden mb-3 relative">
                         <img
                           src={getInputImage()!}
                           alt="Input image"
                           class="w-full h-full object-cover"
                         />
+                        {/* Show indicator for local files that haven't been uploaded */}
+                        <Show when={localImageFile()}>
+                          <div class="absolute top-1 right-1 bg-blue-500 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                            <Icon name="clock" class="h-3 w-3" />
+                            Local
+                          </div>
+                        </Show>
                       </div>
 
                       <div class="flex gap-2 mb-2">
