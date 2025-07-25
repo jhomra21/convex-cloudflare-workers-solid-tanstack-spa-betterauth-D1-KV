@@ -23,11 +23,98 @@ function TasksPage() {
 
   const tasksData = (): Doc<"tasks">[] | undefined => tasksQuery.data;
 
-  // Mutation hooks
-  const createTaskMutation = useConvexMutation(convexApi.tasks.createTask);
-  const updateStatusMutation = useConvexMutation(convexApi.tasks.updateTaskStatus);
-  const updateTextMutation = useConvexMutation(convexApi.tasks.updateTaskText);
-  const deleteTaskMutation = useConvexMutation(convexApi.tasks.deleteTask);
+  // Mutation hooks with optimistic updates for better UX
+  const createTaskMutation = useConvexMutation(convexApi.tasks.createTask, {
+    optimisticUpdate: (queryClient, variables) => {
+      const currentUserId = userId();
+      if (!currentUserId) return;
+
+      // Create optimistic task
+      const optimisticTask = {
+        _id: crypto.randomUUID() as any,
+        _creationTime: Date.now(),
+        text: variables.text,
+        isCompleted: false,
+        userId: currentUserId,
+      };
+
+      queryClient.setQueryData(['convex', 'tasks', currentUserId], (old: any) =>
+        old ? [...old, optimisticTask] : [optimisticTask]
+      );
+    },
+    invalidateQueries: [['convex', 'tasks']],
+    onSuccess: () => {
+      toast.success("Task created");
+      setNewTaskText("");
+    },
+    onError: () => {
+      toast.error("Failed to create task");
+    }
+  });
+
+  const updateStatusMutation = useConvexMutation(convexApi.tasks.updateTaskStatus, {
+    optimisticUpdate: (queryClient, variables) => {
+      const currentUserId = userId();
+      if (!currentUserId) return;
+
+      queryClient.setQueryData(['convex', 'tasks', currentUserId], (old: any) =>
+        old?.map((task: any) =>
+          task._id === variables.taskId
+            ? { ...task, isCompleted: variables.isCompleted }
+            : task
+        ) || []
+      );
+    },
+    invalidateQueries: [['convex', 'tasks']],
+    onSuccess: (_, variables) => {
+      toast.success(`Task ${variables.isCompleted ? "completed" : "marked active"}`);
+    },
+    onError: () => {
+      toast.error("Failed to update task");
+    }
+  });
+
+  const updateTextMutation = useConvexMutation(convexApi.tasks.updateTaskText, {
+    optimisticUpdate: (queryClient, variables) => {
+      const currentUserId = userId();
+      if (!currentUserId) return;
+
+      queryClient.setQueryData(['convex', 'tasks', currentUserId], (old: any) =>
+        old?.map((task: any) =>
+          task._id === variables.taskId
+            ? { ...task, text: variables.text }
+            : task
+        ) || []
+      );
+    },
+    invalidateQueries: [['convex', 'tasks']],
+    onSuccess: () => {
+      toast.success("Task updated");
+      setEditingTaskId(null);
+    },
+    onError: () => {
+      toast.error("Failed to update task");
+    }
+  });
+
+  const deleteTaskMutation = useConvexMutation(convexApi.tasks.deleteTask, {
+    optimisticUpdate: (queryClient, variables) => {
+      const currentUserId = userId();
+      if (!currentUserId) return;
+
+      queryClient.setQueryData(['convex', 'tasks', currentUserId], (old: any) =>
+        old?.filter((task: any) => task._id !== variables.taskId) || []
+      );
+    },
+    invalidateQueries: [['convex', 'tasks']],
+    onSuccess: () => {
+      toast.success("Task deleted");
+      cancelDelete();
+    },
+    onError: () => {
+      toast.error("Failed to delete task");
+    }
+  });
 
   const [newTaskText, setNewTaskText] = createSignal("");
   const [filter, setFilter] = createSignal<"all" | "completed" | "active">("all");
@@ -60,30 +147,17 @@ function TasksPage() {
       return;
     }
 
-    try {
-      await createTaskMutation.mutate({
-        text: newTaskText(),
-        userId: userId()!
-      });
-
-      toast.success("Task created");
-      setNewTaskText("");
-    } catch (error) {
-      toast.error("Failed to create task");
-    }
+    createTaskMutation.mutate({
+      text: newTaskText(),
+      userId: userId()!
+    });
   };
 
   const setCompleted = async (taskId: Doc<"tasks">["_id"], isCompleted: boolean) => {
-    try {
-      await updateStatusMutation.mutate({
-        taskId,
-        isCompleted
-      });
-
-      toast.success(`Task ${isCompleted ? "completed" : "marked active"}`);
-    } catch (error) {
-      toast.error("Failed to update task");
-    }
+    updateStatusMutation.mutate({
+      taskId,
+      isCompleted
+    });
   };
 
   const confirmDelete = (taskId: Doc<"tasks">["_id"]) => {
@@ -107,15 +181,7 @@ function TasksPage() {
   };
 
   const deleteTask = async (taskId: Doc<"tasks">["_id"]) => {
-    try {
-      await deleteTaskMutation.mutate({ taskId });
-
-      toast.success("Task deleted");
-      // Use the same animation pattern for consistency
-      cancelDelete();
-    } catch (error) {
-      toast.error("Failed to delete task");
-    }
+    deleteTaskMutation.mutate({ taskId });
   };
 
   const startEditing = (task: Doc<"tasks">) => {
@@ -135,17 +201,10 @@ function TasksPage() {
       return;
     }
 
-    try {
-      await updateTextMutation.mutate({
-        taskId,
-        text: newText
-      });
-
-      toast.success("Task updated");
-      setEditingTaskId(null);
-    } catch (error) {
-      toast.error("Failed to update task");
-    }
+    updateTextMutation.mutate({
+      taskId,
+      text: newText
+    });
   };
 
   const handleKeyDown = (e: KeyboardEvent, taskId: Doc<"tasks">["_id"]) => {

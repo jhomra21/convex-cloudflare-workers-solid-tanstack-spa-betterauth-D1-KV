@@ -1,6 +1,6 @@
 import { createSignal, createMemo, createEffect, batch, onCleanup } from 'solid-js';
 import { useQueryClient } from '@tanstack/solid-query';
-import { convexApi, useConvexQuery, useConvexMutation } from '~/lib/convex';
+import { convexApi, useConvexQuery, useConvexMutation, useBatchConvexMutations } from '~/lib/convex';
 import { toast } from 'solid-sonner';
 import {
   getCanvasElement,
@@ -27,6 +27,7 @@ export interface UseAgentManagementProps {
 
 export function useAgentManagement(props: UseAgentManagementProps) {
   const queryClient = useQueryClient();
+  const { batch: batchMutations } = useBatchConvexMutations();
 
   // Query for canvas agents using TanStack Query + Convex
   const dbAgents = useConvexQuery(
@@ -41,14 +42,11 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Agent tracking for new agent z-index management
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
 
-  // Mutations with optimistic updates
+  // Mutations with optimistic updates using new cleaner API
   const createAgentMutation = useConvexMutation(convexApi.agents.createAgent, {
-    onMutate: async (variables) => {
+    optimisticUpdate: (queryClient, variables) => {
       const canvasId = props.canvas()?._id;
       if (!canvasId) return;
-
-      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
-      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
 
       // Create optimistic agent with processing status for image generation
       const optimisticAgent: AgentData = {
@@ -81,16 +79,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
       queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
         old ? [...old, optimisticAgent] : [optimisticAgent]
       );
-
-      return { previousAgents, canvasId };
     },
-    onError: (error, variables, context) => {
-      if (context?.previousAgents && context?.canvasId) {
-        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
-      }
-    },
+    invalidateQueries: [['convex', 'agents']], // Auto-invalidation
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['convex', 'agents'] });
+      // Additional success handling if needed
     }
   });
 
@@ -99,12 +91,9 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   const deleteAgentMutation = useConvexMutation(convexApi.agents.deleteAgent);
 
   const updateAgentTransformMutation = useConvexMutation(convexApi.agents.updateAgentTransform, {
-    onMutate: async (variables) => {
+    optimisticUpdate: (queryClient, variables) => {
       const canvasId = props.canvas()?._id;
       if (!canvasId) return;
-
-      await queryClient.cancelQueries({ queryKey: ['convex', 'agents', canvasId] });
-      const previousAgents = queryClient.getQueryData(['convex', 'agents', canvasId]);
 
       queryClient.setQueryData(['convex', 'agents', canvasId], (old: AgentData[] | undefined) =>
         old?.map(agent =>
@@ -113,14 +102,8 @@ export function useAgentManagement(props: UseAgentManagementProps) {
             : agent
         ) || []
       );
-
-      return { previousAgents, canvasId };
     },
-    onError: (error, variables, context) => {
-      if (context?.previousAgents && context?.canvasId) {
-        queryClient.setQueryData(['convex', 'agents', context.canvasId], context.previousAgents);
-      }
-    }
+    invalidateQueries: [['convex', 'agents']] // Auto-revert on error
   });
 
   const updateAgentPromptMutation = useConvexMutation(convexApi.agents.updateAgentPrompt);
@@ -421,20 +404,29 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         userId: shouldClearAll ? undefined : props.userId()!,
       });
 
-      // Step 2: Wait for animations to complete, then actually delete
+      // Step 2: Wait for animations to complete, then batch delete for better performance
       setTimeout(async () => {
         try {
           if (shouldClearAll) {
-            // Clear all agents (owner or own canvas)
+            // Clear all agents (owner or own canvas) - single operation
             await clearCanvasAgentsMutation.mutate({
               canvasId: props.canvas()!._id,
             });
           } else {
-            // Clear only user's agents (collaborator on shared canvas)
-            await clearUserAgentsMutation.mutate({
-              canvasId: props.canvas()!._id,
-              userId: props.userId()!,
-            });
+            // For individual agent deletion, use batch operations for better performance
+            if (agentsToRemove.length > 5) {
+              // Use batch for many agents
+              const deleteOperations = agentsToRemove.map(agent =>
+                () => deleteAgentMutation.mutateAsync({ agentId: agent.id as any })
+              );
+              await batchMutations(deleteOperations);
+            } else {
+              // Use single operation for few agents
+              await clearUserAgentsMutation.mutate({
+                canvasId: props.canvas()!._id,
+                userId: props.userId()!,
+              });
+            }
           }
         } catch (error) {
           console.error('Failed to clear canvas:', error);

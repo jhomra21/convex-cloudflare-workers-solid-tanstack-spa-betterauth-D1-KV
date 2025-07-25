@@ -7,7 +7,7 @@ import { Input } from '~/components/ui/input';
 import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
-import { convexClient, convexApi } from '~/lib/convex';
+import { useConvexMutation, convexApi } from '~/lib/convex';
 
 import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
@@ -213,6 +213,18 @@ export function ImageAgent(props: ImageAgentProps) {
   const generateImage = useGenerateImage();
   const editImage = useEditImage();
 
+  // Convex mutation hooks for better error handling
+  const updateAgentStatusMutation = useConvexMutation(convexApi.agents.updateAgentStatus);
+  const updateAgentUploadedImageMutation = useConvexMutation(convexApi.agents.updateAgentUploadedImage);
+  const updateAgentActiveImageMutation = useConvexMutation(convexApi.agents.updateAgentActiveImage, {
+    onSuccess: () => {
+      toast.success('Active image updated');
+    },
+    onError: () => {
+      toast.error('Failed to update active image');
+    }
+  });
+
   const handleGenerate = async () => {
     const currentPrompt = localPrompt().trim();
     if (!currentPrompt) {
@@ -224,7 +236,7 @@ export function ImageAgent(props: ImageAgentProps) {
     setIsLocallyGenerating(true);
 
     // Set status to 'processing' optimistically  
-    convexClient.mutation(convexApi.agents.updateAgentStatus, {
+    updateAgentStatusMutation.mutate({
       agentId: agentId as any,
       status: 'processing',
     });
@@ -249,7 +261,7 @@ export function ImageAgent(props: ImageAgentProps) {
             inputImageUrl = await uploadFileToR2(localImageFile()!);
             
             // Update agent with uploaded image URL for future use
-            await convexClient.mutation(convexApi.agents.updateAgentUploadedImage, {
+            await updateAgentUploadedImageMutation.mutateAsync({
               agentId: agentId as any,
               uploadedImageUrl: inputImageUrl,
             });
@@ -304,16 +316,10 @@ export function ImageAgent(props: ImageAgentProps) {
   };
 
   const handleSelectImage = async (imageUrl: string) => {
-    try {
-      await convexClient.mutation(convexApi.agents.updateAgentActiveImage, {
-        agentId: agentId as any,
-        activeImageUrl: imageUrl,
-      });
-      toast.success('Active image updated');
-    } catch (error) {
-      console.error('Failed to update active image:', error);
-      toast.error('Failed to update active image');
-    }
+    updateAgentActiveImageMutation.mutate({
+      agentId: agentId as any,
+      activeImageUrl: imageUrl,
+    });
   };
 
   const handleEditPrompt = () => {

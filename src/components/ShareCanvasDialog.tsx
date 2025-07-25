@@ -4,7 +4,7 @@ import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Icon } from '~/components/ui/icon';
 import { toast } from 'solid-sonner';
-import { convexClient, convexApi } from '~/lib/convex';
+import { useConvexMutation, convexApi } from '~/lib/convex';
 import { useCurrentUserName } from '~/lib/auth-actions';
 
 export interface ShareCanvasDialogProps {
@@ -20,70 +20,69 @@ export interface ShareCanvasDialogProps {
 export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
   const userName = useCurrentUserName();
   const [isOpen, setIsOpen] = createSignal(false);
-  const [isLoading, setIsLoading] = createSignal(false);
+  // Remove manual loading state - use mutation pending states
   const [shareId, setShareId] = createSignal(props.currentShareId || '');
   const [isCopied, setIsCopied] = createSignal(false);
-  
+
   // Update shareId when currentShareId prop changes
   createEffect(() => {
     setShareId(props.currentShareId || '');
   });
-  
+
   const shareUrl = createMemo(() => {
     if (!shareId()) return '';
     return `${window.location.origin}/dashboard/canvas?share=${shareId()}`;
   });
-  
-  const isOwner = createMemo(() => 
-    props.canvasOwnerId && props.currentUserId && 
+
+  const isOwner = createMemo(() =>
+    props.canvasOwnerId && props.currentUserId &&
     props.canvasOwnerId === props.currentUserId
   );
-  
-  const handleEnableSharing = async () => {
-    if (!props.canvasId) return;
-    
-    setIsLoading(true);
-    try {
-      const newShareId = await convexClient.mutation(convexApi.canvas.enableCanvasSharing, {
-        canvasId: props.canvasId as any,
-        userName: userName(),
-      });
-      
+
+  // Use mutation hooks for better UX
+  const enableSharingMutation = useConvexMutation(convexApi.canvas.enableCanvasSharing, {
+    onSuccess: (newShareId) => {
       setShareId(newShareId);
       toast.success('Canvas sharing enabled!');
-    } catch (error) {
-      console.error('Failed to enable sharing:', error);
+    },
+    onError: () => {
       toast.error('Failed to enable sharing');
-    } finally {
-      setIsLoading(false);
     }
-  };
-  
-  const handleDisableSharing = async () => {
-    if (!props.canvasId) return;
-    
-    setIsLoading(true);
-    try {
-      await convexClient.mutation(convexApi.canvas.disableCanvasSharing, {
-        canvasId: props.canvasId as any,
-      });
-      
+  });
+
+  const disableSharingMutation = useConvexMutation(convexApi.canvas.disableCanvasSharing, {
+    onSuccess: () => {
       setShareId('');
       toast.success('Canvas sharing disabled');
-    } catch (error) {
-      console.error('Failed to disable sharing:', error);
+    },
+    onError: () => {
       toast.error('Failed to disable sharing');
-    } finally {
-      setIsLoading(false);
     }
+  });
+
+  const handleEnableSharing = async () => {
+    if (!props.canvasId) return;
+
+    enableSharingMutation.mutate({
+      canvasId: props.canvasId as any,
+      userName: userName(),
+    });
   };
-  
+
+  const handleDisableSharing = async () => {
+    if (!props.canvasId) return;
+
+    disableSharingMutation.mutate({
+      canvasId: props.canvasId as any,
+    });
+  };
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl());
       setIsCopied(true);
       toast.success('Share link copied to clipboard!');
-      
+
       // Reset copy state after 2 seconds
       setTimeout(() => {
         setIsCopied(false);
@@ -93,7 +92,7 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
       toast.error('Failed to copy link');
     }
   };
-  
+
   return (
     <Dialog open={isOpen()} onOpenChange={setIsOpen}>
       <DialogTrigger>
@@ -106,7 +105,7 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
             Share Canvas
           </DialogTitle>
         </DialogHeader>
-        
+
         <div class="space-y-4">
           <div>
             <p class="text-sm text-muted-foreground mb-2">
@@ -116,9 +115,9 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
               </Show>
             </p>
           </div>
-          
-          <Show 
-            when={shareId()} 
+
+          <Show
+            when={shareId()}
             fallback={
               <div class="text-center space-y-4">
                 <p class="text-sm text-muted-foreground">
@@ -126,10 +125,10 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
                 </p>
                 <Button
                   onClick={handleEnableSharing}
-                  disabled={isLoading()}
+                  disabled={enableSharingMutation.isPending}
                   class="w-full"
                 >
-                  <Show when={isLoading()} fallback={<Icon name="share" class="h-4 w-4 mr-2" />}>
+                  <Show when={enableSharingMutation.isPending} fallback={<Icon name="share" class="h-4 w-4 mr-2" />}>
                     <Icon name="loader" class="h-4 w-4 mr-2 animate-spin" />
                   </Show>
                   Enable Sharing
@@ -141,12 +140,12 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
               <div>
                 <label class="text-sm font-medium mb-2 block">Share Link</label>
                 <div class="flex gap-2">
-                  <Input 
-                    value={shareUrl()} 
+                  <Input
+                    value={shareUrl()}
                     readOnly
                     class="flex-1 font-mono text-sm"
                   />
-                  <Button 
+                  <Button
                     onClick={handleCopyLink}
                     variant="outline"
                     size="sm"
@@ -164,7 +163,7 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
                   Anyone with this link can view and edit your canvas
                 </p>
               </div>
-              
+
               <div class="flex gap-2">
                 <Button
                   onClick={handleCopyLink}
@@ -182,11 +181,11 @@ export function ShareCanvasDialog(props: ShareCanvasDialogProps) {
                 <Show when={isOwner()}>
                   <Button
                     onClick={handleDisableSharing}
-                    disabled={isLoading()}
+                    disabled={disableSharingMutation.isPending}
                     variant="outline"
                     class="flex-1"
                   >
-                    <Show when={isLoading()} fallback={<Icon name="x" class="h-4 w-4 mr-2" />}>
+                    <Show when={disableSharingMutation.isPending} fallback={<Icon name="x" class="h-4 w-4 mr-2" />}>
                       <Icon name="loader" class="h-4 w-4 mr-2 animate-spin" />
                     </Show>
                     Disable

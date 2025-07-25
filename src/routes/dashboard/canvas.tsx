@@ -1,7 +1,7 @@
 import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
 import { createSignal, createEffect } from "solid-js";
-import { convexApi, useConvexMutation, useConvexQuery } from "~/lib/convex";
+import { convexApi, useConvexMutation, useConvexQuery, useConvexConnectionStatus } from "~/lib/convex";
 import { useCurrentUserId, useCurrentUserName } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
 import { CanvasSelector } from '~/components/CanvasSelector';
@@ -27,6 +27,9 @@ function ImagesPage() {
 
     // Mutation hooks
     const joinSharedCanvasMutation = useConvexMutation(convexApi.canvas.joinSharedCanvas);
+    
+    // Connection status for better UX
+    const connectionState = useConvexConnectionStatus();
 
     // Track active canvas ID (null = default canvas, string = specific canvas)
     const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
@@ -167,6 +170,20 @@ function ImagesPage() {
                                             }
                                         </Button>
                                     </ShareCanvasDialog>
+                                    
+                                    {/* Connection Status Indicator */}
+                                    <div class={cn(
+                                        "flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors",
+                                        connectionState().isWebSocketConnected 
+                                            ? "text-green-600 bg-green-50" 
+                                            : "text-amber-600 bg-amber-50"
+                                    )}>
+                                        <div class={cn(
+                                            "w-2 h-2 rounded-full",
+                                            connectionState().isWebSocketConnected ? "bg-green-500" : "bg-amber-500"
+                                        )} />
+                                        {connectionState().isWebSocketConnected ? "Connected" : "Reconnecting..."}
+                                    </div>
                                 </div>
                             </div>
                         </div>

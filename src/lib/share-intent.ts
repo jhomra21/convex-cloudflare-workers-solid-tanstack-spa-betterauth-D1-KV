@@ -18,7 +18,7 @@ export const storeShareIntent = (shareId: string) => {
     shareId,
     timestamp: Date.now()
   };
-  
+
   try {
     localStorage.setItem(SHARE_INTENT_KEY, JSON.stringify(intent));
   } catch (e) {
@@ -35,19 +35,19 @@ export const getAndClearShareIntent = (): string | null => {
     if (!stored) {
       return null;
     }
-    
+
     const intent: ShareIntent = JSON.parse(stored);
-    
+
     // Check if intent is still valid (within 10 minutes)
     const isExpired = Date.now() - intent.timestamp > 10 * 60 * 1000;
     if (isExpired) {
       localStorage.removeItem(SHARE_INTENT_KEY);
       return null;
     }
-    
+
     localStorage.removeItem(SHARE_INTENT_KEY);
     return intent.shareId;
-    
+
   } catch (e) {
     console.warn('Failed to retrieve share intent:', e);
     localStorage.removeItem(SHARE_INTENT_KEY);
@@ -64,10 +64,10 @@ export const hasShareIntent = (): boolean => {
     if (!stored) {
       return false;
     }
-    
+
     const intent: ShareIntent = JSON.parse(stored);
     const isExpired = Date.now() - intent.timestamp > 10 * 60 * 1000;
-    
+
     return !isExpired;
   } catch (e) {
     return false;

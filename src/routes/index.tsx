@@ -22,7 +22,7 @@ const HomePage: Component = () => {
             when={loaderData()?.session}
             fallback={(
               <Button
-                onClick={() => router.navigate({ to: "/auth" })}
+                onClick={() => router.navigate({ to: "/auth", search: { redirect: undefined, deleted: undefined } })}
                 variant="sf-compute"
                 class="justify-between w-full md:w-auto px-6 py-3"
               >
@@ -42,7 +42,7 @@ const HomePage: Component = () => {
             </Button>
           </Show>
         </div>
-      
+
         <Card>
           <CardHeader>
             <CardTitle>
@@ -65,7 +65,7 @@ const HomePage: Component = () => {
             </p>
           </CardFooter>
         </Card>
-        
+
         <Footer />
       </div>
     </div>

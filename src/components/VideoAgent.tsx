@@ -8,7 +8,7 @@ import { cn } from '~/lib/utils';
 import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
-import { convexClient, convexApi } from '~/lib/convex';
+import { useConvexMutation, convexApi } from '~/lib/convex';
 
 export interface VideoAgentProps {
     id?: string;
@@ -43,6 +43,9 @@ export function VideoAgent(props: VideoAgentProps) {
     // Use stable status to prevent flicker
     const stableStatus = useStableStatus(() => props.status);
 
+    // Convex mutation hook for better error handling
+    const updateAgentStatusMutation = useConvexMutation(convexApi.agents.updateAgentStatus);
+
     // Combined loading state: local generating OR backend processing
     const isLoading = () => isLocallyGenerating() || stableStatus().isProcessing;
     const hasFailed = () => stableStatus().isFailed;
@@ -59,7 +62,7 @@ export function VideoAgent(props: VideoAgentProps) {
         setIsLocallyGenerating(true);
 
         // Set status to 'processing' optimistically  
-        convexClient.mutation(convexApi.agents.updateAgentStatus, {
+        updateAgentStatusMutation.mutate({
             agentId: agentId as any,
             status: 'processing',
         });
