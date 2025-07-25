@@ -7,7 +7,7 @@
     "start": "vite --port 3000",
     "build": "vite build",
     "serve": "vite preview",
-    "test": "vitest run",
+    "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push:sqlite",
     "notes:db:generate": "drizzle-kit generate --config api/drizzle.config.ts",
