@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Run Convex tests
+      run: bun test src/lib/__tests__/convex.simple.test.ts
