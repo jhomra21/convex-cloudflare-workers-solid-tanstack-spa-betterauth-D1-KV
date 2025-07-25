@@ -1,10 +1,11 @@
+[![Convex Client Test](https://github.com/jhomra21/convex-cloudflare-workers-solid-tanstack-spa-betterauth-D1-KV/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/jhomra21/convex-cloudflare-workers-solid-tanstack-spa-betterauth-D1-KV/actions/workflows/test.yml)
 # Cloudflare Workers Vite Plugin + Vite + SolidJS and Tanstack Router + Hono + Better Auth + Convex
 
 > [!NOTE]
 > 🚀 **Live Demo:** Check out the deployed application here: **[test-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev](https://test-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev/)**
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/jhomra21/cloudflare-workers-solid-tanstack-spa-betterauth-D1-KV)
-[![Tests](https://github.com/jhomra21/convex-cloudflare-workers-solid-tanstack-spa-betterauth-D1-KV/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/jhomra21/convex-cloudflare-workers-solid-tanstack-spa-betterauth-D1-KV/actions/workflows/test.yml)
+
 
 > [!IMPORTANT]
 > After deploying with the button above, you must perform several crucial setup steps to make the application fully functional. Please follow our detailed **[Post-Deployment Setup Guide](#-post-deployment-setup-guide-for-deploy-to-cloudflare-users)** below.
