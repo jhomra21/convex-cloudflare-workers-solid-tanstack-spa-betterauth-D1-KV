@@ -78,6 +78,7 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         onSizeChange={props.onSizeChange}
         generatedImage={props.agent.generatedImage}
         isDragged={props.isDragged}
+        isResizing={props.isResizing}
         isRecentlyDragged={props.isRecentlyDragged}
         onPromptChange={props.onPromptChange}
         status={props.agent.status}

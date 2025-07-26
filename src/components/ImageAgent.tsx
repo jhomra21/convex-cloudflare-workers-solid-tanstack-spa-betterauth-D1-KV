@@ -24,6 +24,7 @@ export interface ImageAgentProps {
   onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   generatedImage?: string;
   isDragged?: boolean;
+  isResizing?: boolean;
   isRecentlyDragged?: boolean;
 
   onPromptChange?: (id: string, prompt: string) => void;
@@ -259,7 +260,7 @@ export function ImageAgent(props: ImageAgentProps) {
         if (localImageFile() && localImageUrl() === inputImageUrl) {
           try {
             inputImageUrl = await uploadFileToR2(localImageFile()!);
-            
+
             // Update agent with uploaded image URL for future use
             await updateAgentUploadedImageMutation.mutateAsync({
               agentId: agentId as any,
@@ -376,30 +377,30 @@ export function ImageAgent(props: ImageAgentProps) {
       const maxHeight = 480;
       const minWidth = 280;
       const minHeight = 200;
-      
+
       let { width, height } = imgDims;
-      
+
       // Scale down if too large
       if (width > maxWidth || height > maxHeight) {
         const scale = Math.min(maxWidth / width, maxHeight / height);
         width *= scale;
         height *= scale;
       }
-      
+
       // Scale up if too small
       if (width < minWidth || height < minHeight) {
         const scale = Math.max(minWidth / width, minHeight / height);
         width *= scale;
         height *= scale;
       }
-      
+
       // Add minimal padding for UI elements to ensure image fills most of the space
-      return { 
-        width: Math.round(width), 
+      return {
+        width: Math.round(width),
         height: Math.round(height + 60) // Conservative padding for drag handle + prompt overlay
       };
     }
-    
+
     return { width: 320, height: 384 };
   };
 
@@ -408,12 +409,12 @@ export function ImageAgent(props: ImageAgentProps) {
 
   // Track previous image URL to detect changes
   const [prevImageUrl, setPrevImageUrl] = createSignal<string | null>(null);
-  
+
   // Reset image dimensions when image changes
   createEffect(() => {
     const currentImage = props.generatedImage;
     const prevImage = prevImageUrl();
-    
+
     if (currentImage !== prevImage) {
       setPrevImageUrl(currentImage || null);
       if (currentImage && currentImage !== prevImage) {
@@ -421,7 +422,7 @@ export function ImageAgent(props: ImageAgentProps) {
         setImageDimensions(null);
       }
     }
-    
+
     if (!currentImage) {
       setImageDimensions(null);
     }
@@ -431,7 +432,7 @@ export function ImageAgent(props: ImageAgentProps) {
   createEffect(() => {
     const currentSize = agentSize();
     const imgDims = imageDimensions();
-    
+
     // Only notify parent if size changed due to image dimensions (not manual resize)
     if (imgDims && props.generatedImage && !props.size && props.onSizeChange) {
       props.onSizeChange(agentId, currentSize);
@@ -463,7 +464,9 @@ export function ImageAgent(props: ImageAgentProps) {
           props.class
         )}
         style={{
-          transition: "width 150ms ease, height 150ms ease"
+          width: `${agentSize().width}px`,
+          height: `${agentSize().height}px`,
+          transition: props.isResizing ? "none" : "width 100ms ease, height 100ms ease"
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -596,11 +599,11 @@ export function ImageAgent(props: ImageAgentProps) {
                   </div>
                 }>
                   {/* Edit agent empty state with input image upload */}
-                  <div class="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+                  <div class="flex flex-col items-center justify-center h-full text-muted-foreground p-4 overflow-y-auto">
                     <Show when={!getInputImage()}>
                       <div
                         class={cn(
-                          "w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center mb-3 transition-colors cursor-pointer",
+                          "w-full h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center mb-3 transition-colors cursor-pointer",
                           isDragOver()
                             ? "border-primary bg-primary/5"
                             : "border-muted-foreground/30 hover:border-muted-foreground/50"
@@ -639,7 +642,7 @@ export function ImageAgent(props: ImageAgentProps) {
 
                           <div class="w-full">
                             <p class="text-xs text-center mb-2">Connect to a generator agent:</p>
-                            <div class="space-y-1 max-h-24 overflow-y-auto">
+                            <div class="space-y-1 max-h-20 overflow-y-auto">
                               <For each={props.availableAgents?.filter(agent => agent.id !== agentId && agent.imageUrl)}>
                                 {(agent) => (
                                   <Button
@@ -665,7 +668,7 @@ export function ImageAgent(props: ImageAgentProps) {
                     </Show>
 
                     <Show when={getInputImage()}>
-                      <div class="w-full h-32 border-2 border-muted-foreground/30 rounded-lg overflow-hidden mb-3 relative">
+                      <div class="w-full h-24 border-2 border-muted-foreground/30 rounded-lg overflow-hidden mb-3 relative">
                         <img
                           src={getInputImage()!}
                           alt="Input image"
@@ -762,12 +765,8 @@ export function ImageAgent(props: ImageAgentProps) {
           </CardContent>
         }>
           {/* Full-image layout when image is present */}
-          <div 
-            class="relative overflow-hidden"
-            style={{
-              height: `${agentSize().height - 60}px`, // Exact height for image
-              width: `${agentSize().width}px`
-            }}
+          <div
+            class="relative overflow-hidden flex-1"
           >
             {/* Generated image fills container exactly */}
             <img
@@ -981,27 +980,27 @@ export function ImageAgent(props: ImageAgentProps) {
           </div>
         </Show>
 
-        {/* Resize Handles */}
+        {/* Resize Handles - Larger invisible areas for easier grabbing */}
         {props.onResizeStart && (
           <>
-            {/* Corner resize handles */}
+            {/* Corner resize handles - larger hit areas, invisible */}
             <div
-              class="absolute -top-1 -left-1 w-3 h-3 bg-primary/60 border border-primary rounded-full cursor-nw-resize opacity-0 hover:opacity-100 transition-opacity"
+              class="absolute -top-2 -left-2 w-6 h-6 cursor-nw-resize z-30 opacity-0"
               onMouseDown={(e) => props.onResizeStart?.(e, 'nw')}
               title="Resize"
             />
             <div
-              class="absolute -top-1 -right-1 w-3 h-3 bg-primary/60 border border-primary rounded-full cursor-ne-resize opacity-0 hover:opacity-100 transition-opacity"
+              class="absolute -top-2 -right-2 w-6 h-6 cursor-ne-resize z-30 opacity-0"
               onMouseDown={(e) => props.onResizeStart?.(e, 'ne')}
               title="Resize"
             />
             <div
-              class="absolute -bottom-1 -left-1 w-3 h-3 bg-primary/60 border border-primary rounded-full cursor-sw-resize opacity-0 hover:opacity-100 transition-opacity"
+              class="absolute -bottom-2 -left-2 w-6 h-6 cursor-sw-resize z-30 opacity-0"
               onMouseDown={(e) => props.onResizeStart?.(e, 'sw')}
               title="Resize"
             />
             <div
-              class="absolute -bottom-1 -right-1 w-3 h-3 bg-primary/60 border border-primary rounded-full cursor-se-resize opacity-0 hover:opacity-100 transition-opacity"
+              class="absolute -bottom-2 -right-2 w-6 h-6 cursor-se-resize z-30 opacity-0"
               onMouseDown={(e) => props.onResizeStart?.(e, 'se')}
               title="Resize"
             />

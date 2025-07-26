@@ -364,22 +364,22 @@ export function VoiceAgent(props: VoiceAgentProps) {
                     </Show>
                 </CardContent>
 
-                {/* Resize Handles - Following the same pattern as ImageAgent */}
+                {/* Resize Handles - Larger invisible areas for easier grabbing */}
                 <Show when={props.onResizeStart}>
                     <For each={[
-                        { position: 'nw', cursor: 'nw-resize', class: 'top-0 left-0 -mt-1 -ml-1' },
-                        { position: 'ne', cursor: 'ne-resize', class: 'top-0 right-0 -mt-1 -mr-1' },
-                        { position: 'sw', cursor: 'sw-resize', class: 'bottom-0 left-0 -mb-1 -ml-1' },
-                        { position: 'se', cursor: 'se-resize', class: 'bottom-0 right-0 -mb-1 -mr-1' },
-                        { position: 'n', cursor: 'n-resize', class: 'top-0 left-1/2 -mt-1 -ml-1' },
-                        { position: 's', cursor: 's-resize', class: 'bottom-0 left-1/2 -mb-1 -ml-1' },
-                        { position: 'w', cursor: 'w-resize', class: 'top-1/2 left-0 -mt-1 -ml-1' },
-                        { position: 'e', cursor: 'e-resize', class: 'top-1/2 right-0 -mt-1 -mr-1' },
+                        { position: 'nw', cursor: 'nw-resize', class: '-top-2 -left-2' },
+                        { position: 'ne', cursor: 'ne-resize', class: '-top-2 -right-2' },
+                        { position: 'sw', cursor: 'sw-resize', class: '-bottom-2 -left-2' },
+                        { position: 'se', cursor: 'se-resize', class: '-bottom-2 -right-2' },
+                        { position: 'n', cursor: 'n-resize', class: '-top-2 left-1/2 -translate-x-1/2' },
+                        { position: 's', cursor: 's-resize', class: '-bottom-2 left-1/2 -translate-x-1/2' },
+                        { position: 'w', cursor: 'w-resize', class: 'top-1/2 -left-2 -translate-y-1/2' },
+                        { position: 'e', cursor: 'e-resize', class: 'top-1/2 -right-2 -translate-y-1/2' },
                     ]}>
                         {(handle) => (
                             <div
                                 class={cn(
-                                    "absolute w-2 h-2 bg-primary/50 rounded-full opacity-0 hover:opacity-100 transition-opacity z-10",
+                                    "absolute w-6 h-6 opacity-0 z-30",
                                     handle.class
                                 )}
                                 style={{ cursor: handle.cursor }}
@@ -387,6 +387,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     e.stopPropagation();
                                     props.onResizeStart?.(e, handle.position);
                                 }}
+                                title="Resize"
                             />
                         )}
                     </For>

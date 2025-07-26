@@ -190,30 +190,48 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     });
   };
 
-  // Update agent size (debounced save for resize operations)
+  // Update agent size (use optimistic mutation like drag operations)
   const updateAgentSize = (id: string, size: Size) => {
     const agent = agents().find(a => a.id === id);
     if (!agent) return;
 
-    // Clear existing timeout
+    // Clear any existing debounced save for this agent
     const existingTimeout = debouncedSaves.get(id);
     if (existingTimeout) {
       window.clearTimeout(existingTimeout);
+      debouncedSaves.delete(id);
     }
 
-    // Set new timeout
-    const timeout = window.setTimeout(() => {
-      updateAgentTransformMutation.mutate({
-        agentId: id as any,
-        positionX: agent.position.x,
-        positionY: agent.position.y,
-        width: size.width,
-        height: size.height,
-      });
-      debouncedSaves.delete(id);
-    }, 180);
+    // Use optimistic mutation for immediate feedback (like drag operations)
+    updateAgentTransformMutation.mutate({
+      agentId: id as any,
+      positionX: agent.position.x,
+      positionY: agent.position.y,
+      width: size.width,
+      height: size.height,
+    });
+  };
 
-    debouncedSaves.set(id, timeout);
+  // Update agent size and position in a single mutation (for resize operations)
+  const updateAgentSizeAndPosition = (id: string, size: Size, position: Position) => {
+    const agent = agents().find(a => a.id === id);
+    if (!agent) return;
+
+    // Clear any existing debounced save for this agent
+    const existingTimeout = debouncedSaves.get(id);
+    if (existingTimeout) {
+      window.clearTimeout(existingTimeout);
+      debouncedSaves.delete(id);
+    }
+
+    // Single mutation to avoid conflicts between size and position updates
+    updateAgentTransformMutation.mutate({
+      agentId: id as any,
+      positionX: position.x,
+      positionY: position.y,
+      width: size.width,
+      height: size.height,
+    });
   };
 
   // Debounced prompt update to minimise writes
@@ -483,6 +501,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     clearCanvas,
     updateAgentPosition,
     updateAgentSize,
+    updateAgentSizeAndPosition,
     updateAgentPrompt,
   };
 }

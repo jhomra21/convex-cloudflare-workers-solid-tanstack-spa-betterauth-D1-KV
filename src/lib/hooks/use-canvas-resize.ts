@@ -1,13 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { type Position, type Size } from '~/lib/utils/canvas-coordinates';
 
-export interface ResizeState {
-  resizingAgent: string | null;
-  resizeHandle: string | null;
-  resizeStartSize: Size;
-  resizeStartPos: Position;
-}
-
 export interface UseResizeOptions {
   onResizeStart?: (agentId: string, handle: string) => void;
   onResizeMove?: (agentId: string, size: Size, position?: Position) => void;
@@ -37,7 +30,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
   const [resizeHandle, setResizeHandle] = createSignal<string | null>(null);
   const [resizeStartSize, setResizeStartSize] = createSignal<Size>({ width: 0, height: 0 });
   const [resizeStartPos, setResizeStartPos] = createSignal<Position>({ x: 0, y: 0 });
-  
+
   // Track active event listeners for cleanup
   let isListening = false;
 
@@ -47,7 +40,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
 
   // Cache the current scale suffix from transform (e.g., "scale(1)") so we can preserve it when updating position
   let transformSuffix = "";
-  
+
   // Store original transform values to calculate relative adjustments
   let originalTransformX = 0;
   let originalTransformY = 0;
@@ -67,12 +60,12 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
   ) => {
     e.preventDefault();
     e.stopPropagation(); // Prevent drag from starting
-    
+
     setResizingAgent(agentId);
     setResizeHandle(handle);
     setResizeStartSize(currentSize);
     setResizeStartPos({ x: e.clientX, y: e.clientY });
-    
+
     // Capture DOM elements for direct style updates
     resizedEl = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
     // The wrapper is the absolute positioned container one level up (Memoized*Agent wrapper)
@@ -124,7 +117,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
 
     const startSize = resizeStartSize();
     const startPos = resizeStartPos();
-    
+
     const deltaXScreen = e.clientX - startPos.x;
     const deltaYScreen = e.clientY - startPos.y;
 
@@ -165,7 +158,7 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     let positionAdjustment: Position | undefined;
     if (handle.includes('w') || handle.includes('n')) {
       positionAdjustment = { x: 0, y: 0 };
-      
+
       if (handle.includes('w')) {
         // Left side – move container left by width delta so the visual "west" edge follows cursor
         positionAdjustment.x = startSize.width - newWidth;
@@ -198,24 +191,29 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
 
   const handleResizeEnd = () => {
     const resizingId = resizingAgent();
-    
-    setResizingAgent(null);
-    setResizeHandle(null);
-    
-    // Commit final size/position once – avoid spamming reactive writes during move
-    if (resizingId && scheduledSize) {
-      onResizeMove?.(resizingId, scheduledSize, scheduledPositionAdjustment);
-    }
+    const finalSize = scheduledSize;
+    const finalPositionAdjustment = scheduledPositionAdjustment;
 
-    // Restore transitions BEFORE cleanup
+    // Clear DOM styles immediately to let reactive state take over (like drag hook)
     if (resizedEl) {
+      resizedEl.style.width = '';
+      resizedEl.style.height = '';
       resizedEl.style.transition = originalResizeTransition;
     }
     if (wrapperEl) {
+      // Clear the transform immediately - optimistic update will handle position
+      wrapperEl.style.transform = '';
       wrapperEl.style.transition = originalWrapperTransition;
     }
 
+    setResizingAgent(null);
+    setResizeHandle(null);
     removeEventListeners();
+
+    // Call mutation AFTER clearing DOM styles (like drag hook)
+    if (resizingId && finalSize) {
+      onResizeMove?.(resizingId, finalSize, finalPositionAdjustment);
+    }
 
     if (resizingId) {
       onResizeEnd?.(resizingId);
@@ -228,9 +226,9 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
       const resizingId = resizingAgent();
       setResizingAgent(null);
       setResizeHandle(null);
-      
+
       removeEventListeners();
-      
+
       if (resizingId) {
         onResizeEnd?.(resizingId);
       }
