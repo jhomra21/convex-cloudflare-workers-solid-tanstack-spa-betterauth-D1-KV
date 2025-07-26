@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, For } from 'solid-js';
+import { createSignal, createUniqueId, Show, For, onCleanup } from 'solid-js';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -6,12 +6,12 @@ import { Icon } from '~/components/ui/icon';
 import { Slider, SliderTrack, SliderFill, SliderThumb } from '~/components/ui/slider';
 import { toast } from 'solid-sonner';
 import { cn } from '~/lib/utils';
-import { useAgentPromptState, useAgentVoiceState, useAgentExaggerationState, useAgentCustomAudioState } from '~/lib/hooks/use-persistent-state';
+import { useAgentPromptState, useAgentVoiceState, useAgentExaggerationState, useAgentCustomAudioState, useAgentEditModeState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { VoiceSelector } from '~/components/VoiceSelector';
 import { useConvexMutation, convexApi } from '~/lib/convex';
-import type { VoiceOption } from '~/types/agents';
+import type { VoiceOption, AgentStatus } from '~/types/agents';
 
 export interface VoiceAgentProps {
     id?: string;
@@ -21,30 +21,39 @@ export interface VoiceAgentProps {
     onMouseDown?: (e: MouseEvent) => void;
     size?: { width: number; height: number };
     onResizeStart?: (e: MouseEvent, handle: string) => void;
+    onSizeChange?: (id: string, size: { width: number; height: number }) => void;
     generatedAudio?: string;
     voice?: VoiceOption;
     audioSampleUrl?: string;
 
     onPromptChange?: (id: string, prompt: string) => void;
-    status?: 'idle' | 'processing' | 'success' | 'failed';
+    status?: AgentStatus;
     model?: 'normal' | 'pro';
     type?: 'voice-generate';
     connectedAgentId?: string;
     class?: string;
 }
 
-// VOICE_OPTIONS moved to VoiceSelector component
-
 export function VoiceAgent(props: VoiceAgentProps) {
     const agentId = props.id || createUniqueId();
 
-    // Use persistent state hooks for prompt, voice, exaggeration, and custom audio
+    // Use persistent state hooks for agent settings
     const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
     const [selectedVoice, setSelectedVoice] = useAgentVoiceState(agentId, props.voice || 'Aurora');
     const [exaggeration, setExaggeration] = useAgentExaggerationState(agentId, 1.5);
     const [customAudioUrl, setCustomAudioUrl] = useAgentCustomAudioState(agentId, props.audioSampleUrl || '');
-    const [showPromptInput, setShowPromptInput] = createSignal(!props.prompt);
+    const [isInEditMode, setIsInEditMode] = useAgentEditModeState(agentId, false);
+
     const [isLocallyGenerating, setIsLocallyGenerating] = createSignal(false);
+    const [isResizingForEdit, setIsResizingForEdit] = createSignal(false);
+    let resizeTimeoutId: number | undefined;
+
+    // Cleanup timeout on component unmount
+    onCleanup(() => {
+        if (resizeTimeoutId) {
+            window.clearTimeout(resizeTimeoutId);
+        }
+    });
 
     // Use stable status to prevent flicker
     const stableStatus = useStableStatus(() => props.status);
@@ -52,8 +61,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
     // Convex mutation hook for better error handling
     const updateAgentStatusMutation = useConvexMutation(convexApi.agents.updateAgentStatus);
 
-    // Combined loading state: local generating OR backend processing
-    const isLoading = () => isLocallyGenerating() || stableStatus().isProcessing;
+    // Combined loading state: local generating OR backend processing OR resizing for edit
+    const isLoading = () => isLocallyGenerating() || stableStatus().isProcessing || isResizingForEdit();
     const hasFailed = () => stableStatus().isFailed;
     const isSuccess = () => stableStatus().isSuccess;
     const hasAudio = () => !!props.generatedAudio;
@@ -99,7 +108,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
             }
 
             toast.success('Voice generation started! Please wait...');
-            setShowPromptInput(false);
+            setIsInEditMode(false);
         } catch (error) {
             console.error('Voice generation error:', error as Error);
             toast.error((error as Error).message || 'Failed to generate voice');
@@ -107,8 +116,6 @@ export function VoiceAgent(props: VoiceAgentProps) {
             setIsLocallyGenerating(false);
         }
     };
-
-    // handlePromptSubmit removed - not needed since we use onKeyDown
 
     const handlePromptChange = (value: string) => {
         setLocalPrompt(value); // This automatically persists via the hook
@@ -119,12 +126,30 @@ export function VoiceAgent(props: VoiceAgentProps) {
         props.onPromptChange?.(agentId, localPrompt());
     };
 
-
-
-    // Voice change is now handled directly in VoiceSelector
-
     const handleEditPrompt = () => {
-        setShowPromptInput(true);
+        // Set edit mode first - this persists across re-renders
+        setIsInEditMode(true);
+        
+        // Check if current size is too small for edit mode and resize if needed
+        const currentSize = props.size || { width: 320, height: 384 };
+        const minEditWidth = 320;
+        const minEditHeight = 460; // Enough for all edit controls
+
+        const needsResize = props.onSizeChange && (currentSize.width < minEditWidth || currentSize.height < minEditHeight);
+        
+        if (needsResize) {
+            setIsResizingForEdit(true);
+            const newSize = {
+                width: Math.max(currentSize.width, minEditWidth),
+                height: Math.max(currentSize.height, minEditHeight)
+            };
+            props.onSizeChange?.(agentId, newSize);
+
+            // Clear the resizing state after animation
+            resizeTimeoutId = window.setTimeout(() => {
+                setIsResizingForEdit(false);
+            }, 500);
+        }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,19 +160,29 @@ export function VoiceAgent(props: VoiceAgentProps) {
     };
 
     // Agent size - use props.size directly to avoid circular dependency
-    const agentSize = () => props.size || { width: 320, height: 384 };
+    const agentSize = () => {
+        // Always use props.size if available (user has manually resized)
+        if (props.size) return props.size;
+
+        // Default size for new agents
+        const baseWidth = 320;
+        const baseHeight = 384;
+
+        return { width: baseWidth, height: baseHeight };
+    };
 
     return (
         <ErrorBoundary>
             <Card
                 class={cn(
-                    "flex flex-col relative transition-all duration-300 cursor-move",
+                    "flex flex-col relative transition-all duration-500 ease-out cursor-move",
                     isLoading() ? "border border-secondary/50" : "",
                     props.class
                 )}
                 style={{
                     width: `${agentSize().width}px`,
-                    height: `${agentSize().height}px`
+                    height: `${agentSize().height}px`,
+                    "min-height": isInEditMode() ? "460px" : "350px"
                 }}
             >
                 {/* Drag Handle - Larger clickable area */}
@@ -171,8 +206,8 @@ export function VoiceAgent(props: VoiceAgentProps) {
                 </div>
 
                 <CardContent class="p-4 flex flex-col h-full relative" style="pointer-events: auto;">
-                    {/* Action Buttons Overlay - Only show when there's no audio or we're in prompt input mode */}
-                    <Show when={!isLoading() && props.onRemove && (!hasAudio() || showPromptInput())}>
+                    {/* Action Buttons Overlay - Only show when there's no audio */}
+                    <Show when={!isLoading() && props.onRemove && !hasAudio()}>
                         <div class="absolute top-2 right-2 flex gap-1 z-10">
                             <Button
                                 variant="destructive"
@@ -184,13 +219,27 @@ export function VoiceAgent(props: VoiceAgentProps) {
                         </div>
                     </Show>
 
-                    {/* Prompt Section */}
-                    <div class="flex-shrink-0 mb-4">
-                        <Show when={showPromptInput() || !hasAudio()}>
-                            <div class="space-y-2">
-                                {/* Voice Selection */}
+                    {/* Prompt Section - Only show when no audio OR explicitly in edit mode */}
+                    <Show when={!hasAudio() || isInEditMode()}>
+                        <div class="flex-1 flex flex-col relative">
+                            {/* Delete button in bottom right corner */}
+                            <Show when={props.onRemove}>
+                                <div class="absolute bottom-2 right-0 z-10">
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => props.onRemove?.(agentId)}
+                                        disabled={isLoading()}
+                                    >
+                                        <Icon name="x" class="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            </Show>
+                            
+                            <div class="space-y-2 flex-1">
+                                {/* Voice Selection - More compact */}
                                 <div class="flex items-center gap-2">
-                                    <div class="text-xs text-muted-foreground">Voice:</div>
+                                    <div class="text-xs text-muted-foreground min-w-[40px]">Voice:</div>
                                     <VoiceSelector
                                         selectedVoice={selectedVoice() as VoiceOption}
                                         onVoiceChange={(voice) => setSelectedVoice(voice)}
@@ -199,17 +248,17 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     />
                                 </div>
 
-                                {/* Custom Audio URL (Optional) */}
+                                {/* Custom Audio URL (Optional) - More compact */}
                                 <Input
                                     value={customAudioUrl()}
                                     onChange={setCustomAudioUrl}
                                     placeholder="Optional: Custom voice audio URL"
-                                    class="text-xs"
+                                    class="text-xs h-8"
                                     disabled={isLoading()}
                                 />
 
-                                {/* Exaggeration Slider */}
-                                <div class="space-y-2">
+                                {/* Exaggeration Slider - More compact */}
+                                <div class="space-y-1">
                                     <div class="flex items-center justify-between">
                                         <label class="text-xs text-muted-foreground">Exaggeration:</label>
                                         <span class="text-xs text-muted-foreground font-mono">{exaggeration().toFixed(2)}</span>
@@ -229,11 +278,12 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                         <SliderThumb />
                                     </Slider>
                                     <div class="flex justify-between text-xs text-muted-foreground/60">
-                                        <span>Subtle (0.25)</span>
-                                        <span>Dramatic (2.0)</span>
+                                        <span>Subtle</span>
+                                        <span>Dramatic</span>
                                     </div>
                                 </div>
 
+                                {/* Text Input - More compact */}
                                 <Input
                                     multiline
                                     value={localPrompt()}
@@ -241,31 +291,48 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     onBlur={handleBlur}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Enter text to convert to speech..."
-                                    inputClass="min-h-[60px] resize-none"
+                                    inputClass="min-h-[45px] resize-none text-sm"
                                     disabled={isLoading()}
                                 />
 
-                                <Button
-                                    onClick={handleGenerateVoice}
-                                    class="w-full"
-                                    disabled={isLoading() || !localPrompt().trim()}
-                                >
-                                    <Show when={isLoading()} fallback={
-                                        <>
-                                            <Icon name="mic" class="w-4 h-4 mr-2" />
-                                            Generate Speech
-                                        </>
-                                    }>
-                                        <Icon name="loader" class="w-4 h-4 mr-2 animate-spin" />
-                                        Generating...
-                                    </Show>
-                                </Button>
-                            </div>
-                        </Show>
-                    </div>
+                                {/* Action buttons - Generate, Cancel, and Delete */}
+                                <div class="flex gap-2">
+                                    <Button
+                                        onClick={handleGenerateVoice}
+                                        class="flex-1 h-9"
+                                        disabled={isLoading() || !localPrompt().trim()}
+                                    >
+                                        <Show when={isLoading()} fallback={
+                                            <>
+                                                <Icon name="mic" class="w-4 h-4 mr-2" />
+                                                Generate Speech
+                                            </>
+                                        }>
+                                            <Icon name="loader" class="w-4 h-4 mr-2 animate-spin" />
+                                            Generating...
+                                        </Show>
+                                    </Button>
 
-                    {/* Generated Audio Display */}
-                    <Show when={hasAudio() && isSuccess()}>
+                                    {/* Cancel button - only show if we have existing audio */}
+                                    <Show when={hasAudio()}>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsInEditMode(false)}
+                                            class="h-9 px-3"
+                                            disabled={isLoading()}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </Show>
+
+
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Generated Audio Display - Hide when in edit mode */}
+                    <Show when={hasAudio() && isSuccess() && !isInEditMode()}>
                         <div class="flex-1 flex flex-col relative">
                             {/* Audio Info */}
                             <div class="mb-3">
@@ -291,7 +358,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     Your browser does not support the audio element.
                                 </audio>
 
-                                {/* Action Buttons Overlay - removed to prevent overlap */}
+
                             </div>
 
                             {/* Action Buttons */}
@@ -358,7 +425,9 @@ export function VoiceAgent(props: VoiceAgentProps) {
                         <div class="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20">
                             <Icon name="loader" class="w-8 h-8 animate-spin text-muted-foreground mb-2" />
                             <p class="text-sm text-muted-foreground">
-                                Generating voice...
+                                {isResizingForEdit() ? "Preparing edit mode..." :
+                                    isLocallyGenerating() ? "Starting..." :
+                                        stableStatus().isProcessing ? "Generating voice..." : "Loading..."}
                             </p>
                         </div>
                     </Show>

@@ -9,6 +9,7 @@ import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { useConvexMutation, convexApi } from '~/lib/convex';
+import type { AgentStatus } from '~/types/agents';
 
 export interface VideoAgentProps {
     id?: string;
@@ -20,7 +21,7 @@ export interface VideoAgentProps {
     onResizeStart?: (e: MouseEvent, handle: string) => void;
     generatedVideo?: string;
     onPromptChange?: (id: string, prompt: string) => void;
-    status?: 'idle' | 'processing' | 'success' | 'failed';
+    status?: AgentStatus;
     model?: 'normal' | 'pro';
     type?: 'video-generate';
     connectedAgentId?: string;

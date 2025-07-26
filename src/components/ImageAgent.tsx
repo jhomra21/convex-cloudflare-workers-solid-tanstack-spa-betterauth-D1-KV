@@ -337,13 +337,20 @@ export function ImageAgent(props: ImageAgentProps) {
     }, 10);
   };
 
-  const handleSaveInlineEdit = () => {
+  const handleSaveInlineEdit = async () => {
     const newPrompt = editingPromptValue().trim();
     if (newPrompt) {
       setLocalPrompt(newPrompt);
       props.onPromptChange?.(agentId, newPrompt);
+      setIsEditingPrompt(false);
+      
+      // If we have an existing image and the prompt changed, regenerate
+      if (hasImage() && newPrompt !== props.prompt?.trim()) {
+        await handleGenerate();
+      }
+    } else {
+      setIsEditingPrompt(false);
     }
-    setIsEditingPrompt(false);
   };
 
   const handleCancelInlineEdit = () => {
@@ -351,10 +358,10 @@ export function ImageAgent(props: ImageAgentProps) {
     setIsEditingPrompt(false);
   };
 
-  const handleInlineEditKeyDown = (e: KeyboardEvent) => {
+  const handleInlineEditKeyDown = async (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSaveInlineEdit();
+      await handleSaveInlineEdit();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       handleCancelInlineEdit();
@@ -926,10 +933,19 @@ export function ImageAgent(props: ImageAgentProps) {
                       variant="ghost"
                       size="sm"
                       onClick={handleSaveInlineEdit}
-                      class="flex items-center justify-center !text-white bg-inherit hover:bg-background/10 h-8 w-8 p-0 font-mono text-lg leading-none"
+                      disabled={isLoading()}
+                      class={cn(
+                        "flex items-center justify-center h-8 w-8 p-0 font-mono text-lg leading-none transition-all duration-200 shadow-sm",
+                        isLoading() 
+                          ? "!text-green-300 bg-green-500/5 border border-green-500/20 cursor-not-allowed"
+                          : "!text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 hover:border-green-400/50 hover:scale-105 hover:shadow-green-500/20"
+                      )}
                       style={{ "font-feature-settings": '"liga" off' }}
+                      title={hasImage() && editingPromptValue().trim() !== props.prompt?.trim() ? "Save and regenerate image" : "Save prompt"}
                     >
-                      ✓
+                      <Show when={isLoading()} fallback="✓">
+                        <Icon name="loader" class="h-4 w-4 animate-spin" />
+                      </Show>
                     </Button>
                     <Button
                       variant="ghost"

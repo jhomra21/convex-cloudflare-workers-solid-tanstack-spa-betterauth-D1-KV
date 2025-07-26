@@ -77,3 +77,13 @@ export function useAgentCustomAudioState(agentId: string, initialUrl: string = '
   
   return usePersistentState(`customAudio-${agentId}`, initialUrl, agentContext);
 }
+
+// Specific hook for agent edit mode state
+export function useAgentEditModeState(agentId: string, initialEditMode: boolean = false) {
+  if (!agentContexts.has(agentId)) {
+    agentContexts.set(agentId, { agentId });
+  }
+  const agentContext = agentContexts.get(agentId)!;
+  
+  return usePersistentState(`editMode-${agentId}`, initialEditMode, agentContext);
+}

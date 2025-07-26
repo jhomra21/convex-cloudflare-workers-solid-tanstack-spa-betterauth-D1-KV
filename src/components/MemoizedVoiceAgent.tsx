@@ -17,6 +17,7 @@ interface MemoizedVoiceAgentProps {
   onRemove: (id: string) => void;
   onMouseDown: (e: MouseEvent) => void;
   onResizeStart: (e: MouseEvent, handle: string) => void;
+  onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   onPromptChange: (id: string, prompt: string) => void;
   class?: string;
 }
@@ -70,6 +71,7 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
         onRemove={props.onRemove}
         size={props.agent.size}
         onResizeStart={props.onResizeStart}
+        onSizeChange={props.onSizeChange}
         generatedAudio={props.agent.generatedAudio}
         voice={props.agent.voice}
         audioSampleUrl={props.agent.audioSampleUrl}
