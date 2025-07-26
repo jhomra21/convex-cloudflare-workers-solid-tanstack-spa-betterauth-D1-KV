@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, createEffect } from 'solid-js';
-import { convexApi, useConvexMutation, useConvexQuery, useConvexConnectionStatus } from '~/lib/convex';
+import { convexApi, useConvexMutation, useConvexQuery } from '~/lib/convex';
 import {
   getLocalViewport,
   saveLocalViewport,
@@ -25,8 +25,7 @@ export function useViewport(props: UseViewportProps) {
     zoom: 0.25,
   });
 
-  // Monitor connection status for better UX
-  const connectionState = useConvexConnectionStatus();
+
 
   // Zoom constraints
   const MIN_ZOOM = 0.01; // 1%
@@ -205,10 +204,7 @@ export function useViewport(props: UseViewportProps) {
     // Always save to localStorage immediately (local-first)
     saveLocalViewport(newViewport, canvasId, userId);
 
-    // Only attempt Convex save if connected
-    if (!connectionState().isWebSocketConnected) {
-      return; // Skip Convex save when disconnected
-    }
+
 
     // Debounce Convex save for 20 seconds
     if (convexSaveTimeout) {
@@ -216,10 +212,7 @@ export function useViewport(props: UseViewportProps) {
     }
 
     convexSaveTimeout = setTimeout(async () => {
-      // Double-check connection before saving
-      if (!connectionState().isWebSocketConnected) {
-        return; // Skip if disconnected
-      }
+
 
       // Check if viewport actually changed to avoid unnecessary saves
       const currentData = viewportData.data;
@@ -499,7 +492,7 @@ export function useViewport(props: UseViewportProps) {
     restoreViewport,
     saveViewportState,
     forceConvexSync, // For cases where immediate Convex sync is needed
-    connectionState, // Expose connection status for UI feedback
+
     MIN_ZOOM,
     MAX_ZOOM,
   };

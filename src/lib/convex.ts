@@ -1,6 +1,6 @@
 import { ConvexClient } from "convex/browser";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/solid-query";
-import { createEffect, onCleanup, createSignal } from "solid-js";
+import { createEffect, onCleanup } from "solid-js";
 import { api } from "../../convex/_generated/api";
 import type {
   FunctionReference,
@@ -104,7 +104,7 @@ export function useConvexMutation<
       if (options?.optimisticUpdate) {
         options.optimisticUpdate(queryClient, variables);
       }
-      
+
       // Call user's onMutate
       return await options?.onMutate?.(variables);
     },
@@ -117,7 +117,7 @@ export function useConvexMutation<
       }
       options?.onSuccess?.(data, variables);
     },
-    onError: (error, variables, context) => {
+    onError: (error, variables) => {
       // Revert optimistic updates on error by invalidating affected queries
       if (options?.optimisticUpdate && options?.invalidateQueries) {
         options.invalidateQueries.forEach(queryKey => {
@@ -190,35 +190,19 @@ export function invalidateConvexQueries(
   });
 }
 
-// Connection status hook for monitoring Convex connection
-export function useConvexConnectionStatus() {
-  const [connectionState, setConnectionState] = createSignal(convex.connectionState());
 
-  createEffect(() => {
-    // Poll connection state periodically since Convex doesn't expose connection events
-    const interval = setInterval(() => {
-      setConnectionState(convex.connectionState());
-    }, 1000);
-
-    onCleanup(() => {
-      clearInterval(interval);
-    });
-  });
-
-  return connectionState;
-}
 
 // Utility for batch operations
 export function useBatchConvexMutations() {
   const queryClient = useQueryClient();
-  
+
   return {
     batch: async (operations: Array<() => Promise<any>>) => {
       const results = await Promise.allSettled(operations.map(op => op()));
-      
+
       // Invalidate all Convex queries after batch operations
       queryClient.invalidateQueries({ queryKey: ['convex'] });
-      
+
       return results;
     }
   };
