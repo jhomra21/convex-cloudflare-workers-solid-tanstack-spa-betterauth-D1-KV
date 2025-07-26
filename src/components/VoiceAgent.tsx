@@ -206,7 +206,7 @@ export function VoiceAgent(props: VoiceAgentProps) {
                 </div>
 
                 <CardContent class="p-4 flex flex-col h-full relative" style="pointer-events: auto;">
-                    {/* Action Buttons Overlay - Only show when there's no audio */}
+                    {/* Single Delete Button - Top right when no audio, with action buttons when audio exists */}
                     <Show when={!isLoading() && props.onRemove && !hasAudio()}>
                         <div class="absolute top-2 right-2 flex gap-1 z-10">
                             <Button
@@ -222,19 +222,6 @@ export function VoiceAgent(props: VoiceAgentProps) {
                     {/* Prompt Section - Only show when no audio OR explicitly in edit mode */}
                     <Show when={!hasAudio() || isInEditMode()}>
                         <div class="flex-1 flex flex-col relative">
-                            {/* Delete button in bottom right corner */}
-                            <Show when={props.onRemove}>
-                                <div class="absolute bottom-2 right-0 z-10">
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => props.onRemove?.(agentId)}
-                                        disabled={isLoading()}
-                                    >
-                                        <Icon name="x" class="w-3 h-3" />
-                                    </Button>
-                                </div>
-                            </Show>
                             
                             <div class="space-y-2 flex-1">
                                 {/* Voice Selection - More compact */}
@@ -388,7 +375,6 @@ export function VoiceAgent(props: VoiceAgentProps) {
                                     <Icon name="download" class="w-3 h-3 mr-2" />
                                     Download
                                 </Button>
-                                {/* Add delete button here when audio is shown */}
                                 <Show when={props.onRemove}>
                                     <Button
                                         variant="destructive"

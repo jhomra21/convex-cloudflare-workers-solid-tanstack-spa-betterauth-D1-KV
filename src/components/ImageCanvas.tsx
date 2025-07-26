@@ -150,6 +150,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
     updateAgentSize,
     updateAgentSizeAndPosition,
     updateAgentPrompt,
+    handleAnimationEnd,
   } = agentManagement;
 
   // Get Z-index functions from hook
@@ -343,6 +344,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                       onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                       onSizeChange={updateAgentSize}
                       onPromptChange={updateAgentPrompt}
+                      onAnimationEnd={handleAnimationEnd}
                     />
                   );
                 } else if (agent.type === 'video-generate') {
@@ -357,6 +359,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                       onMouseDown={(e) => handleMouseDown(e, agent.id)}
                       onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                       onPromptChange={updateAgentPrompt}
+                      onAnimationEnd={handleAnimationEnd}
                       class={cn(
                         "shadow-lg border-2 transition-all duration-200",
                         isDragged() ? "border-primary/50 shadow-xl" : "border-border/50"
@@ -381,6 +384,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                     onPromptChange={updateAgentPrompt}
                     onConnectAgent={connectAgents}
                     onDisconnectAgent={disconnectAgent}
+                    onAnimationEnd={handleAnimationEnd}
                   />
                 );
               }}

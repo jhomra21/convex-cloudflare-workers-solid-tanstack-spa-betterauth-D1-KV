@@ -316,6 +316,6 @@ code {
 }
 
 .animate-scale-out {
-  animation: agent-scale-out 100ms ease-in forwards;
+  animation: agent-scale-out 40ms ease-in forwards;
   transform-origin: center center;
 }

@@ -19,6 +19,7 @@ interface MemoizedVoiceAgentProps {
   onResizeStart: (e: MouseEvent, handle: string) => void;
   onSizeChange?: (id: string, size: { width: number; height: number }) => void;
   onPromptChange: (id: string, prompt: string) => void;
+  onAnimationEnd?: (id: string) => void;
   class?: string;
 }
 
@@ -61,6 +62,12 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
 
         if (!isInteractiveElement) {
           props.onMouseDown(e);
+        }
+      }}
+      onAnimationEnd={(e) => {
+        // Only handle our scale-out animation, not child animations
+        if (e.animationName === 'agent-scale-out' && props.onAnimationEnd) {
+          props.onAnimationEnd(props.agent.id);
         }
       }}
     >

@@ -42,6 +42,15 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Agent tracking for new agent z-index management
   const [previousAgentIds, setPreviousAgentIds] = createSignal<Set<string>>(new Set());
 
+  // Track agents pending deletion (waiting for animation to complete)
+  const [pendingDeletions, setPendingDeletions] = createSignal<Set<string>>(new Set());
+  const [pendingBatchDeletion, setPendingBatchDeletion] = createSignal<{
+    shouldClearAll: boolean;
+    agentsToRemove: string[];
+    canvasId: string;
+    userId?: string;
+  } | null>(null);
+
   // Mutations with optimistic updates using new cleaner API
   const createAgentMutation = useConvexMutation(convexApi.agents.createAgent, {
     optimisticUpdate: (queryClient, variables) => {
@@ -358,18 +367,37 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         agentId: id as any,
       });
 
-      // Step 2: Wait for animation to complete, then actually delete
-      setTimeout(async () => {
-        try {
-          await deleteAgentMutation.mutate({
-            agentId: id as any,
-          });
-        } catch (error) {
-          console.error('Failed to delete agent:', error);
-        }
-      }, 100); // Match animation duration
+      // Step 2: Track this agent as pending deletion
+      setPendingDeletions(prev => new Set([...prev, id]));
     } catch (error) {
       console.error('Failed to mark agent for deletion:', error);
+    }
+  };
+
+  // Handle animation completion for single agent deletion
+  const handleAgentAnimationEnd = async (id: string) => {
+    // Only proceed if this agent is actually pending deletion
+    if (!pendingDeletions().has(id)) return;
+
+    try {
+      await deleteAgentMutation.mutate({
+        agentId: id as any,
+      });
+
+      // Remove from pending deletions
+      setPendingDeletions(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (error) {
+      console.error('Failed to delete agent:', error);
+      // Remove from pending even on error to prevent stuck state
+      setPendingDeletions(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -422,37 +450,71 @@ export function useAgentManagement(props: UseAgentManagementProps) {
         userId: shouldClearAll ? undefined : props.userId()!,
       });
 
-      // Step 2: Wait for animations to complete, then batch delete for better performance
-      setTimeout(async () => {
-        try {
-          if (shouldClearAll) {
-            // Clear all agents (owner or own canvas) - single operation
-            await clearCanvasAgentsMutation.mutate({
-              canvasId: props.canvas()!._id,
-            });
-          } else {
-            // For individual agent deletion, use batch operations for better performance
-            if (agentsToRemove.length > 5) {
-              // Use batch for many agents
-              const deleteOperations = agentsToRemove.map(agent =>
-                () => deleteAgentMutation.mutateAsync({ agentId: agent.id as any })
-              );
-              await batchMutations(deleteOperations);
-            } else {
-              // Use single operation for few agents
-              await clearUserAgentsMutation.mutate({
-                canvasId: props.canvas()!._id,
-                userId: props.userId()!,
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Failed to clear canvas:', error);
-        }
-      }, 100); // Match animation duration
+      // Step 2: Set up batch deletion state to handle when all animations complete
+      setPendingBatchDeletion({
+        shouldClearAll,
+        agentsToRemove: agentsToRemove.map(a => a.id),
+        canvasId: props.canvas()!._id,
+        userId: props.userId()!,
+      });
+
+      // Track all agents as pending deletion
+      setPendingDeletions(prev => new Set([...prev, ...agentsToRemove.map(a => a.id)]));
 
     } catch (error) {
       console.error('Failed to mark agents for deletion:', error);
+    }
+  };
+
+  // Handle batch deletion when all animations complete
+  const handleBatchAnimationEnd = async (completedAgentId: string) => {
+    const batchInfo = pendingBatchDeletion();
+    if (!batchInfo) return;
+
+    // Remove this agent from pending deletions
+    setPendingDeletions(prev => {
+      const next = new Set(prev);
+      next.delete(completedAgentId);
+      return next;
+    });
+
+    // Check if all agents in this batch have completed their animations
+    const remainingPendingInBatch = batchInfo.agentsToRemove.filter(id =>
+      pendingDeletions().has(id) && id !== completedAgentId
+    );
+
+    // If this was the last agent in the batch, perform the batch deletion
+    if (remainingPendingInBatch.length === 0) {
+      try {
+        if (batchInfo.shouldClearAll) {
+          // Clear all agents (owner or own canvas) - single operation
+          await clearCanvasAgentsMutation.mutate({
+            canvasId: batchInfo.canvasId as any,
+          });
+        } else {
+          // For individual agent deletion, use batch operations for better performance
+          if (batchInfo.agentsToRemove.length > 5) {
+            // Use batch for many agents
+            const deleteOperations = batchInfo.agentsToRemove.map(agentId =>
+              () => deleteAgentMutation.mutateAsync({ agentId: agentId as any })
+            );
+            await batchMutations(deleteOperations);
+          } else {
+            // Use single operation for few agents
+            await clearUserAgentsMutation.mutate({
+              canvasId: batchInfo.canvasId as any,
+              userId: batchInfo.userId!,
+            });
+          }
+        }
+
+        // Clear batch deletion state
+        setPendingBatchDeletion(null);
+      } catch (error) {
+        console.error('Failed to clear canvas:', error);
+        // Clear batch state even on error to prevent stuck state
+        setPendingBatchDeletion(null);
+      }
     }
   };
 
@@ -477,6 +539,17 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     setPreviousAgentIds(currentAgentIds as Set<string>);
   });
 
+  // Unified animation end handler
+  const handleAnimationEnd = async (agentId: string) => {
+    // Handle batch deletion first (it also removes from pending)
+    await handleBatchAnimationEnd(agentId);
+
+    // Handle single agent deletion if not part of batch
+    if (pendingDeletions().has(agentId) && !pendingBatchDeletion()) {
+      await handleAgentAnimationEnd(agentId);
+    }
+  };
+
   // Cleanup timeouts on unmount
   onCleanup(() => {
     // Clear all debounced save timeouts
@@ -486,6 +559,10 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     if (promptDebounceHandle) {
       clearTimeout(promptDebounceHandle);
     }
+
+    // Clear pending deletion state
+    setPendingDeletions(new Set<string>());
+    setPendingBatchDeletion(null);
   });
 
   return {
@@ -503,5 +580,6 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     updateAgentSize,
     updateAgentSizeAndPosition,
     updateAgentPrompt,
+    handleAnimationEnd, // Expose animation end handler
   };
 }

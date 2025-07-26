@@ -18,6 +18,7 @@ interface MemoizedVideoAgentProps {
   onMouseDown: (e: MouseEvent) => void;
   onResizeStart: (e: MouseEvent, handle: string) => void;
   onPromptChange: (id: string, prompt: string) => void;
+  onAnimationEnd?: (id: string) => void;
   class?: string;
 }
 
@@ -60,6 +61,12 @@ export function MemoizedVideoAgent(props: MemoizedVideoAgentProps) {
 
         if (!isInteractiveElement) {
           props.onMouseDown(e);
+        }
+      }}
+      onAnimationEnd={(e) => {
+        // Only handle our scale-out animation, not child animations
+        if (e.animationName === 'agent-scale-out' && props.onAnimationEnd) {
+          props.onAnimationEnd(props.agent.id);
         }
       }}
     >

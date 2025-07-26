@@ -23,6 +23,7 @@ interface MemoizedImageAgentProps {
   onPromptChange: (id: string, prompt: string) => void;
   onConnectAgent: (sourceId: string, targetId: string) => void;
   onDisconnectAgent: (id: string) => void;
+  onAnimationEnd?: (id: string) => void;
   class?: string;
 }
 
@@ -65,6 +66,12 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
 
         if (!isInteractiveElement) {
           props.onMouseDown(e);
+        }
+      }}
+      onAnimationEnd={(e) => {
+        // Only handle our scale-out animation, not child animations
+        if (e.animationName === 'agent-scale-out' && props.onAnimationEnd) {
+          props.onAnimationEnd(props.agent.id);
         }
       }}
     >
