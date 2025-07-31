@@ -408,7 +408,7 @@ const SidebarGroup: Component<ComponentProps<"div">> = (props) => {
   return (
     <div
       data-sidebar="group"
-      class={cn("relative flex w-full min-w-0 flex-col p-2", local.class)}
+      class={cn("relative flex w-full min-w-0 flex-col p-2 !-mt-2", local.class)}
       {...others}
     />
   )
