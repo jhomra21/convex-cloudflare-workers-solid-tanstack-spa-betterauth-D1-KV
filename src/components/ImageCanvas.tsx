@@ -4,6 +4,7 @@ import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { MemoizedVideoAgent } from './MemoizedVideoAgent';
 import { AgentConnection } from './AgentConnection';
 import { AgentToolbar } from './AgentToolbar';
+import { FloatingChatInterface } from './FloatingChatInterface';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
@@ -16,6 +17,7 @@ import { useAgentManagement } from '~/lib/hooks/use-agent-management';
 import { useZIndexManagement } from '~/lib/hooks/use-z-index-management';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
+import type { ChatMessage } from '~/types/agents';
 
 export interface ImageCanvasProps {
   class?: string;
@@ -233,9 +235,81 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
   const handleAddVideoAgent = () => addAgent('', 'video-generate');
 
+  // AI Chat management for floating interface
+  const [isChatProcessing, setIsChatProcessing] = createSignal(false);
+
+  // Query chat history from Convex
+  const chatHistoryQuery = useConvexQuery(
+    convexApi.agents.getChatHistory,
+    () => (canvas()?._id && userId()) ? {
+      canvasId: canvas()!._id,
+      userId: userId()!
+    } : null,
+    () => ['chat-history', canvas()?._id, userId()]
+  );
+
+  // Get chat history from query or empty array
+  const chatHistory = () => chatHistoryQuery.data || [];
+
+  // Handle chat message sending
+  const handleSendChatMessage = async (message: string) => {
+    if (!canvas()?._id || !userId()) return;
+
+    setIsChatProcessing(true);
+
+    try {
+      const response = await fetch('/api/ai-chat/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          chatAgentId: `floating-chat-${userId()}`, // Use a consistent ID for floating chat
+          canvasId: canvas()!._id,
+          referencedAgents: [],
+          uploadedFiles: []
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process message');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Create enhanced response with agent status
+        let enhancedResponse = result.response;
+
+        if (result.createdAgents?.length > 0) {
+          const agentStatusText = result.createdAgents.map((agentId: string, index: number) => {
+            const operation = result.operations?.[index];
+            if (operation) {
+              return `🔄 ${operation.type.replace('-', ' ')} agent: "${operation.prompt.substring(0, 50)}${operation.prompt.length > 50 ? '...' : ''}"`;
+            }
+            return `🔄 Agent ${index + 1}: Processing...`;
+          }).join('\n');
+
+          enhancedResponse += `\n\n**Created Agents:**\n${agentStatusText}`;
+          toast.success(`Created ${result.createdAgents.length} agent(s) - generating in parallel`);
+        }
+
+        // Chat history will be updated automatically via the Convex query
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast.error('Failed to send message');
+
+      // Error handling - could add error message to database if needed
+    } finally {
+      setIsChatProcessing(false);
+    }
+  };
+
   return (
     <ErrorBoundary>
-      <div class={cn("flex flex-col h-full overflow-hidden", props.class)}>
+      <div class={cn("flex flex-col h-full overflow-hidden relative", props.class)}>
         {/* Toolbar */}
         <AgentToolbar
           activeAgentType={activeAgentType()}
@@ -460,6 +534,19 @@ export function ImageCanvas(props: ImageCanvasProps) {
             </Button>
           </div>
         </div>
+      </Show>
+
+
+      {/* Floating Chat Interface - positioned above canvas content */}
+      <Show when={canvas()?._id && userId()}>
+        <FloatingChatInterface
+          canvasId={canvas()!._id}
+          userId={userId()!}
+          userName={userName()}
+          chatHistory={chatHistory()}
+          isProcessing={isChatProcessing()}
+          onSendMessage={handleSendChatMessage}
+        />
       </Show>
     </ErrorBoundary>
   );

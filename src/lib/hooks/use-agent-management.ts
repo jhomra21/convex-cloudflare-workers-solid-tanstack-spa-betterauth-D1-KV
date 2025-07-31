@@ -130,9 +130,13 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     const rawAgentData = dbAgents.data;
     if (!rawAgentData) return [];
 
-    // Convert and validate agent data, filtering out agents marked for deletion
+    // Convert and validate agent data, filtering out agents marked for deletion and chat agents
     return rawAgentData
-      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent) && rawAgent.status !== 'deleting')
+      .filter((rawAgent: AgentData): rawAgent is AgentData => 
+        isAgentData(rawAgent) && 
+        rawAgent.status !== 'deleting' && 
+        rawAgent.type !== 'ai-chat'
+      )
       .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
   });
 
@@ -141,9 +145,13 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     const rawAgentData = dbAgents.data;
     if (!rawAgentData) return [];
 
-    // Only include agents marked for deletion
+    // Only include agents marked for deletion, excluding chat agents
     return rawAgentData
-      .filter((rawAgent: AgentData): rawAgent is AgentData => isAgentData(rawAgent) && rawAgent.status === 'deleting')
+      .filter((rawAgent: AgentData): rawAgent is AgentData => 
+        isAgentData(rawAgent) && 
+        rawAgent.status === 'deleting' && 
+        rawAgent.type !== 'ai-chat'
+      )
       .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
   });
 
@@ -256,7 +264,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   };
 
   // Create a new agent
-  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' = 'image-generate') => {
+  const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' | 'ai-chat' = 'image-generate') => {
     if (!props.canvas()?._id || !props.userId()) return;
 
     // Set the active agent type for UI cues only
@@ -271,6 +279,8 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     const canvasEl = getCanvasElement();
     const agentSize: Size = type === 'video-generate'
       ? { width: 320, height: 450 } // Video agents need more height for controls
+      : type === 'ai-chat'
+      ? { width: 400, height: 300 } // Chat agents are wider but shorter
       : { width: 320, height: 384 }; // Default size for other agents
     const padding = 20;
 

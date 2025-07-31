@@ -51,10 +51,28 @@ export default defineSchema({
     requestId: v.optional(v.string()),
     model: v.union(v.literal("normal"), v.literal("pro")),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
     connectedAgentId: v.optional(v.id("agents")),
     uploadedImageUrl: v.optional(v.string()),
     activeImageUrl: v.optional(v.string()), // For edit agents: which image to use as input (original or generated)
+    // AI Chat Agent specific fields
+    chatHistory: v.optional(v.array(v.object({
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      timestamp: v.number(),
+      metadata: v.optional(v.object({
+        referencedAgents: v.optional(v.array(v.id("agents"))),
+        uploadedFiles: v.optional(v.array(v.string())),
+        createdAgents: v.optional(v.array(v.id("agents")))
+      }))
+    }))),
+    activeOperations: v.optional(v.array(v.object({
+      id: v.string(),
+      type: v.string(), // "create_agents", "modify_agents"
+      status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+      createdAgents: v.optional(v.array(v.id("agents"))),
+      error: v.optional(v.string())
+    }))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

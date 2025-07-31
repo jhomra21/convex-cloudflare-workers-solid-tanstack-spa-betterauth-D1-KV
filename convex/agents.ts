@@ -33,10 +33,28 @@ export const getCanvasAgents = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
+      // AI Chat Agent specific fields
+      chatHistory: v.optional(v.array(v.object({
+        role: v.union(v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+        timestamp: v.number(),
+        metadata: v.optional(v.object({
+          referencedAgents: v.optional(v.array(v.id("agents"))),
+          uploadedFiles: v.optional(v.array(v.string())),
+          createdAgents: v.optional(v.array(v.id("agents")))
+        }))
+      }))),
+      activeOperations: v.optional(v.array(v.object({
+        id: v.string(),
+        type: v.string(), // "create_agents", "modify_agents"
+        status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+        createdAgents: v.optional(v.array(v.id("agents"))),
+        error: v.optional(v.string())
+      }))),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -46,6 +64,37 @@ export const getCanvasAgents = query({
       .query("agents")
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
       .collect();
+  },
+});
+
+// Get chat history for a canvas and user
+export const getChatHistory = query({
+  args: { 
+    canvasId: v.id("canvases"),
+    userId: v.string()
+  },
+  returns: v.array(v.object({
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    timestamp: v.number(),
+    metadata: v.optional(v.object({
+      referencedAgents: v.optional(v.array(v.id("agents"))),
+      uploadedFiles: v.optional(v.array(v.string())),
+      createdAgents: v.optional(v.array(v.id("agents")))
+    }))
+  })),
+  handler: async (ctx, { canvasId, userId }) => {
+    // Find the chat agent for this user on this canvas
+    const chatAgent = await ctx.db
+      .query("agents")
+      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .filter((q) => q.and(
+        q.eq(q.field("type"), "ai-chat"),
+        q.eq(q.field("userId"), userId)
+      ))
+      .first();
+
+    return chatAgent?.chatHistory || [];
   },
 });
 
@@ -61,7 +110,7 @@ export const createAgent = mutation({
     width: v.number(),
     height: v.number(),
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
-    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"))),
+    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat"))),
     voice: v.optional(v.union(
       v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
       v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
@@ -412,7 +461,7 @@ export const disconnectAgents = mutation({
 export const updateAgentType = mutation({
   args: {
     agentId: v.id("agents"),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
   },
   returns: v.null(),
   handler: async (ctx, { agentId, type }) => {
@@ -483,7 +532,7 @@ export const getConnectedAgent = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -641,7 +690,7 @@ export const getAgentByRequestId = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -669,6 +718,151 @@ export const updateAgentVideo = mutation({
     await ctx.db.patch(agentId, {
       videoUrl,
       status: "success",
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// AI Chat Agent specific mutations
+
+// Get or create the single chat agent for a user on a canvas
+export const createOrGetChatAgent = mutation({
+  args: { 
+    canvasId: v.id("canvases"), 
+    userId: v.string(), 
+    userName: v.string() 
+  },
+  returns: v.id("agents"),
+  handler: async (ctx, { canvasId, userId, userName }) => {
+    // Check if chat agent already exists
+    const existing = await ctx.db
+      .query("agents")
+      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .filter((q) => q.and(
+        q.eq(q.field("type"), "ai-chat"),
+        q.eq(q.field("userId"), userId)
+      ))
+      .unique();
+
+    if (existing) {
+      return existing._id; // Return existing chat agent
+    }
+
+    // Create new chat agent if none exists
+    return await ctx.db.insert("agents", {
+      canvasId,
+      userId,
+      userName,
+      type: "ai-chat",
+      prompt: "", // Chat agents don't have prompts
+      status: "idle",
+      model: "normal",
+      chatHistory: [],
+      activeOperations: [],
+      // Position in bottom-right corner, out of the way
+      positionX: 50,
+      positionY: 50,
+      width: 400,
+      height: 300,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// Get the chat agent for a user on a canvas
+export const getChatAgent = query({
+  args: { canvasId: v.id("canvases"), userId: v.string() },
+  returns: v.union(
+    v.object({
+      _id: v.id("agents"),
+      _creationTime: v.number(),
+      canvasId: v.id("canvases"),
+      userId: v.string(),
+      userName: v.optional(v.string()),
+      prompt: v.string(),
+      positionX: v.number(),
+      positionY: v.number(),
+      width: v.number(),
+      height: v.number(),
+      imageUrl: v.optional(v.string()),
+      audioUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
+      voice: v.optional(v.union(
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
+        v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+      )),
+      audioSampleUrl: v.optional(v.string()),
+      requestId: v.optional(v.string()),
+      model: v.union(v.literal("normal"), v.literal("pro")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+      connectedAgentId: v.optional(v.id("agents")),
+      uploadedImageUrl: v.optional(v.string()),
+      activeImageUrl: v.optional(v.string()),
+      chatHistory: v.optional(v.array(v.object({
+        role: v.union(v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+        timestamp: v.number(),
+        metadata: v.optional(v.object({
+          referencedAgents: v.optional(v.array(v.id("agents"))),
+          uploadedFiles: v.optional(v.array(v.string())),
+          createdAgents: v.optional(v.array(v.id("agents")))
+        }))
+      }))),
+      activeOperations: v.optional(v.array(v.object({
+        id: v.string(),
+        type: v.string(),
+        status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+        createdAgents: v.optional(v.array(v.id("agents"))),
+        error: v.optional(v.string())
+      }))),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { canvasId, userId }) => {
+    return await ctx.db
+      .query("agents")
+      .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .filter((q) => q.and(
+        q.eq(q.field("type"), "ai-chat"),
+        q.eq(q.field("userId"), userId)
+      ))
+      .unique(); // Should only return one chat agent per user per canvas
+  },
+});
+
+// Update chat history for an AI chat agent
+export const updateChatHistory = mutation({
+  args: {
+    chatAgentId: v.id("agents"),
+    messages: v.array(v.object({
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      timestamp: v.number(),
+      metadata: v.optional(v.object({
+        referencedAgents: v.optional(v.array(v.id("agents"))),
+        uploadedFiles: v.optional(v.array(v.string())),
+        createdAgents: v.optional(v.array(v.id("agents")))
+      }))
+    })),
+  },
+  returns: v.null(),
+  handler: async (ctx, { chatAgentId, messages }) => {
+    const agent = await ctx.db.get(chatAgentId);
+    if (!agent || agent.type !== "ai-chat") {
+      throw new Error("Agent not found or not a chat agent");
+    }
+
+    const currentHistory = agent.chatHistory || [];
+    const updatedHistory = [...currentHistory, ...messages];
+
+    await ctx.db.patch(chatAgentId, {
+      chatHistory: updatedHistory,
       updatedAt: Date.now(),
     });
     return null;
