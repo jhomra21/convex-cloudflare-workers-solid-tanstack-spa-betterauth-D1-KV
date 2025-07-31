@@ -10,13 +10,7 @@ export default defineSchema({
     steps: v.optional(v.number()),
     userId: v.string(),
   }).index("by_userId", ["userId"]),
-  tasks: defineTable({
-    isCompleted: v.boolean(),
-    text: v.string(),
-    userId: v.string(),
-  })
-    .index("by_text", ["text"])
-    .index("by_userId", ["userId"]),
+
   canvases: defineTable({
     name: v.string(),
     userId: v.string(),

@@ -15,8 +15,6 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
-import { Route as DashboardTasksRouteImport } from './routes/dashboard/tasks'
-import { Route as DashboardNotesRouteImport } from './routes/dashboard/notes'
 import { Route as DashboardCanvasRouteImport } from './routes/dashboard/canvas'
 import { Route as DashboardAccountRouteImport } from './routes/dashboard/account'
 
@@ -45,16 +43,6 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardTasksRoute = DashboardTasksRouteImport.update({
-  id: '/tasks',
-  path: '/tasks',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardNotesRoute = DashboardNotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardCanvasRoute = DashboardCanvasRouteImport.update({
@@ -90,8 +78,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
-  '/dashboard/notes': typeof DashboardNotesRoute
-  '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -101,8 +87,6 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
-  '/dashboard/notes': typeof DashboardNotesRoute
-  '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -114,8 +98,6 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
-  '/dashboard/notes': typeof DashboardNotesRoute
-  '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -128,8 +110,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/account'
     | '/dashboard/canvas'
-    | '/dashboard/notes'
-    | '/dashboard/tasks'
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -139,8 +119,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard/account'
     | '/dashboard/canvas'
-    | '/dashboard/notes'
-    | '/dashboard/tasks'
     | '/dashboard'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -151,8 +129,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/account'
     | '/dashboard/canvas'
-    | '/dashboard/notes'
-    | '/dashboard/tasks'
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -196,20 +172,6 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/tasks': {
-      id: '/dashboard/tasks'
-      path: '/tasks'
-      fullPath: '/dashboard/tasks'
-      preLoaderRoute: typeof DashboardTasksRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/notes': {
-      id: '/dashboard/notes'
-      path: '/notes'
-      fullPath: '/dashboard/notes'
-      preLoaderRoute: typeof DashboardNotesRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/dashboard/canvas': {
       id: '/dashboard/canvas'
       path: '/canvas'
@@ -244,16 +206,12 @@ declare module '@tanstack/solid-router' {
 interface DashboardRouteChildren {
   DashboardAccountRoute: typeof DashboardAccountRoute
   DashboardCanvasRoute: typeof DashboardCanvasRoute
-  DashboardNotesRoute: typeof DashboardNotesRoute
-  DashboardTasksRoute: typeof DashboardTasksRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAccountRoute: DashboardAccountRoute,
   DashboardCanvasRoute: DashboardCanvasRoute,
-  DashboardNotesRoute: DashboardNotesRoute,
-  DashboardTasksRoute: DashboardTasksRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 

@@ -16,7 +16,6 @@ import type {
 import type * as agents from "../agents.js";
 import type * as canvas from "../canvas.js";
 import type * as images from "../images.js";
-import type * as tasks from "../tasks.js";
 import type * as viewports from "../viewports.js";
 
 /**
@@ -31,7 +30,6 @@ declare const fullApi: ApiFromModules<{
   agents: typeof agents;
   canvas: typeof canvas;
   images: typeof images;
-  tasks: typeof tasks;
   viewports: typeof viewports;
 }>;
 export declare const api: FilterApi<

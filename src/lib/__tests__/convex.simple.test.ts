@@ -14,15 +14,14 @@ mock.module('convex/browser', () => ({
 
 mock.module('../../convex/_generated/api', () => ({
   api: {
-    tasks: {
-      getTasks: { _type: 'query', _visibility: 'public' },
-      createTask: { _type: 'mutation', _visibility: 'public' },
-      updateTask: { _type: 'mutation', _visibility: 'public' }
-    },
     agents: {
       getCanvasAgents: { _type: 'query', _visibility: 'public' },
       createAgent: { _type: 'mutation', _visibility: 'public' },
       updateAgentStatus: { _type: 'mutation', _visibility: 'public' }
+    },
+    images: {
+      getImages: { _type: 'query', _visibility: 'public' },
+      createImage: { _type: 'mutation', _visibility: 'public' }
     }
   }
 }));
@@ -110,19 +109,19 @@ describe('Convex Client - Core Functionality', () => {
   it('should validate convex integration patterns', () => {
     // Test patterns that our convex integration should follow
     const mockConvexApi = {
-      tasks: {
-        getTasks: { _type: 'query' },
-        createTask: { _type: 'mutation' },
-        updateTask: { _type: 'mutation' }
+      agents: {
+        getCanvasAgents: { _type: 'query' },
+        createAgent: { _type: 'mutation' },
+        updateAgentStatus: { _type: 'mutation' }
       }
     };
 
     // Validate API structure
-    expect(mockConvexApi.tasks.getTasks._type).toBe('query');
-    expect(mockConvexApi.tasks.createTask._type).toBe('mutation');
+    expect(mockConvexApi.agents.getCanvasAgents._type).toBe('query');
+    expect(mockConvexApi.agents.createAgent._type).toBe('mutation');
 
     // Validate query key patterns
-    const queryKey = ['convex', 'tasks', 'user-123'];
+    const queryKey = ['convex', 'agents', 'canvas-123'];
     expect(queryKey[0]).toBe('convex');
     expect(queryKey.length).toBeGreaterThan(1);
   });
@@ -153,9 +152,9 @@ describe('Convex Client - Core Functionality', () => {
     // Test scenario: Real-time updates should integrate with TanStack Query cache
 
     // Mock new data from real-time update
-    const updatedTasks = [
-      { _id: '1', text: 'Old task', isCompleted: false },
-      { _id: '2', text: 'New task', isCompleted: false }
+    const updatedAgents = [
+      { _id: '1', prompt: 'Generate image', status: 'idle' },
+      { _id: '2', prompt: 'Edit image', status: 'processing' }
     ];
 
     // Import the mocked TanStack Query modules (they're already mocked at module level)
@@ -170,11 +169,11 @@ describe('Convex Client - Core Functionality', () => {
     const convexClient = new ConvexClient('https://test.convex.cloud');
 
     // Test the integration pattern that our real convex.ts would use
-    const queryKey = ['convex', 'tasks'];
+    const queryKey = ['convex', 'agents'];
 
     // Set up the subscription (this would happen in useConvexQuery)
-    const args = { userId: 'test-user' };
-    const unsubscribe = convexClient.onUpdate(api.tasks.getTasks, args, (newData: any) => {
+    const args = { canvasId: 'canvas-123' as any }; // Cast to any for test mocking
+    const unsubscribe = convexClient.onUpdate(api.agents.getCanvasAgents, args, (newData: any) => {
       // This is what our real convex integration should do:
       // Update the TanStack Query cache when real-time data arrives
       queryClient.setQueryData(queryKey, newData);
@@ -185,7 +184,7 @@ describe('Convex Client - Core Functionality', () => {
 
     // Verify the subscription was created
     expect(convexClient.onUpdate).toHaveBeenCalledWith(
-      api.tasks.getTasks,
+      api.agents.getCanvasAgents,
       args,
       expect.any(Function)
     );
@@ -193,10 +192,10 @@ describe('Convex Client - Core Functionality', () => {
     // Simulate a real-time update arriving by calling the callback directly
     // (In reality, this would come from Convex server)
     const onUpdateCallback = (convexClient.onUpdate as any).mock.calls[0][2];
-    onUpdateCallback(updatedTasks);
+    onUpdateCallback(updatedAgents);
 
     // Verify that the TanStack Query cache was updated
-    expect(queryClient.setQueryData).toHaveBeenCalledWith(queryKey, updatedTasks);
+    expect(queryClient.setQueryData).toHaveBeenCalledWith(queryKey, updatedAgents);
 
     // This proves that:
     // 1. Real-time subscriptions integrate with TanStack Query

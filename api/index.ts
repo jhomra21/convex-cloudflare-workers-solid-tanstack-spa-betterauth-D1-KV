@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { getAuth } from '../auth'
 import type { Env, HonoVariables } from './types'
-import notesApi from './notes'
 import imagesApi from './images'
 import voiceApi from './voice'
 import videoApi from './video'
@@ -56,9 +55,6 @@ app.get('/api/', (c) => {
 app.all('/api/auth/*', (c) => {
   return getAuth(c.env).handler(c.req.raw);
 });
-
-// Mount the notes API routes
-app.route('/api/notes/', notesApi);
 
 // Mount the images API routes
 app.route('/api/images', imagesApi);

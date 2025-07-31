@@ -30,20 +30,7 @@ export function DashboardIndex() {
       path: '/dashboard/account',
       color: 'border-green-200 dark:border-green-800'
     },
-    {
-      title: 'Notes',
-      description: 'Create and manage your notes from D1 database',
-      icon: '📝',
-      path: '/dashboard/notes',
-      color: 'border-purple-200 dark:border-purple-800'
-    },
-    {
-      title: 'Tasks',
-      description: 'Create and manage your tasks from Convex database',
-      icon: '🔄',
-      path: '/dashboard/tasks',
-      color: 'border-blue-200 dark:border-blue-800'
-    },
+
     {
       title: 'Gen-AI Canvas',
       description: 'Interactive canvas for media generation and editing backed by Fal.ai and Convex',
@@ -182,10 +169,7 @@ export function DashboardIndex() {
                 <div class="h-1 w-1 rounded-full bg-muted-foreground"></div>
                 Shadcn components converted to SolidJS [<a href="https://www.solid-ui.com/" class="text-blue-500">solid-ui</a>, <a href="https://shadcn-solid.com/" class="text-blue-500">shadcn-solid</a>]
               </li>
-              <li class="flex items-center gap-2">
-                <div class="h-1 w-1 rounded-full bg-muted-foreground"></div>
-                Notes CRUD with D1
-              </li>  
+  
             </ul>
           </CardContent>
           <CardFooter>

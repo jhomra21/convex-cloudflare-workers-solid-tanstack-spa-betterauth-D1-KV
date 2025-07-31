@@ -242,64 +242,7 @@ code {
   transition-timing-function: ease-out;
 }
 
-/* Task Edit/Delete Button Animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
 
-@keyframes fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slide-out-right {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-}
-
-.task-edit-enter {
-  animation: fade-in 250ms ease-out forwards;
-}
-
-.task-edit-exit {
-  animation: fade-out 100ms ease-out forwards;
-}
-
-.task-delete-confirm-enter {
-  animation: slide-in-right 150ms ease-out forwards;
-  transform-origin: left center;
-}
-
-.task-delete-confirm-exit {
-  animation: slide-out-right 150ms ease-out forwards;
-  transform-origin: left center;
-}
 
 /* Agent Exit Animations */
 @keyframes agent-scale-out {
