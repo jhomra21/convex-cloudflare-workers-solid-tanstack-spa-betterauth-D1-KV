@@ -34,7 +34,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
   let fileInputRef: HTMLInputElement | undefined;
   let addContextButtonRef: HTMLButtonElement | undefined;
 
-  // Update available context items when agents change
+  // Update available context items when agents change - only image agents
   createMemo(() => {
     const allItems = getAllContextItems(props.availableAgents);
     contextSelection.updateAvailableItems(allItems);

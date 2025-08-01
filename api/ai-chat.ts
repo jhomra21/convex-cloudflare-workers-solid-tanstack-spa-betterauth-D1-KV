@@ -45,24 +45,28 @@ Available agent types:
 - voice-generate: Creates speech from text (standalone)
 - video-generate: Creates videos from text prompts (standalone)
 
+Context limitations:
+- Only image agents (image-generate and image-edit) can be referenced in context
+- Only image files can be uploaded for context
+- Voice and video agents cannot be used as context references
+
 Connection rules:
 - Only image agents can connect to each other
 - image-edit agents can connect to image-generate or other image-edit agents
 - image-generate agents cannot connect to anything (they don't need input)
-- voice and video agents are standalone
 
 Context handling:
-- When users reference existing agents, create image-edit agents that connect to those agents
-- When users upload images, create image-edit agents with those uploaded images
+- When users reference existing image agents, create image-edit agents that connect to those agents
+- When users upload image files, create image-edit agents with those uploaded images
 - For bulk operations like "remove background from 5 images", create multiple image-edit agents
 - For chaining like "create landscape then add fog", create connected agents
 
 Current context:
-- Referenced agents: ${JSON.stringify(referencedAgents)} (${referencedAgents.length} agents)
-- Uploaded files: ${uploadedFiles.length} files${uploadedFiles.length > 0 ? `\n- Uploaded file URLs: ${JSON.stringify(uploadedFiles)}` : ''}
+- Referenced image agents: ${JSON.stringify(referencedAgents)} (${referencedAgents.length} agents)
+- Uploaded image files: ${uploadedFiles.length} files${uploadedFiles.length > 0 ? `\n- Uploaded file URLs: ${JSON.stringify(uploadedFiles)}` : ''}
 - User message: "${message}"
 
-If the user has referenced agents or uploaded files, prioritize creating image-edit agents that work with this context.
+If the user has referenced image agents or uploaded image files, prioritize creating image-edit agents that work with this context.
 When creating image-edit agents for uploaded files, use the exact URLs provided in the uploaded file URLs list.`;
 
   try {
@@ -334,7 +338,7 @@ async function processFileUploads(files: File[], env: Env): Promise<string[]> {
   return uploadedUrls;
 }
 
-// Get referenced agent data from Convex
+// Get referenced agent data from Convex - only image agents
 async function getReferencedAgents(agentIds: string[], canvasId: string, convexUrl: string): Promise<any[]> {
   if (!agentIds || agentIds.length === 0) return [];
 
@@ -342,7 +346,10 @@ async function getReferencedAgents(agentIds: string[], canvasId: string, convexU
     const convex = new ConvexHttpClient(convexUrl);
     // Get all agents from the canvas and filter by referenced IDs
     const allAgents = await convex.query(api.agents.getCanvasAgents, { canvasId: canvasId as any });
-    const referencedAgents = allAgents.filter(agent => agentIds.includes(agent._id));
+    const referencedAgents = allAgents.filter(agent =>
+      agentIds.includes(agent._id) &&
+      (agent.type === 'image-generate' || agent.type === 'image-edit')
+    );
     return referencedAgents;
   } catch (error) {
     console.error('Failed to get referenced agents:', error);
