@@ -702,7 +702,7 @@ export async function generateImageInternal(
   }
 }
 
-// Internal function for image editing (no HTTP layer, uses queue like voice/video)
+// Internal function for image editing (no HTTP layer, uses async queue with webhooks)
 export async function editImageInternal(
   env: Env,
   userId: string,

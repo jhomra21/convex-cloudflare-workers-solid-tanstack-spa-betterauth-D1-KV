@@ -581,47 +581,33 @@ aiChatApi.post('/process', async (c) => {
 
         try {
           if (operation.type === 'image-generate') {
-            // Use HTTP endpoint for local development, internal function for production
-            if (c.env.NODE_ENV === 'development') {
-              const baseUrl = new URL(c.req.url).origin;
-              const response = await fetch(`${baseUrl}/api/images`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...Object.fromEntries(c.req.raw.headers.entries())
-                },
-                body: JSON.stringify({
-                  prompt: operation.prompt,
-                  model: (operation.model === 'pro')
-                    ? 'fal-ai/flux-kontext-lora/text-to-image'
-                    : '@cf/black-forest-labs/flux-1-schnell',
-                  agentId
-                })
-              });
-
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Failed to trigger image generation:', errorText);
-              }
-            } else {
-              await generateImageInternal(
-                c.env,
-                user.id,
-                operation.prompt,
-                (operation.model === 'pro')
+            // Always use HTTP endpoints - they work in both local and production
+            const baseUrl = new URL(c.req.url).origin;
+            const response = await fetch(`${baseUrl}/api/images`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...Object.fromEntries(c.req.raw.headers.entries())
+              },
+              body: JSON.stringify({
+                prompt: operation.prompt,
+                model: (operation.model === 'pro')
                   ? 'fal-ai/flux-kontext-lora/text-to-image'
                   : '@cf/black-forest-labs/flux-1-schnell',
-                4, // steps
-                undefined, // seed
                 agentId
-              );
+              })
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Failed to trigger image generation:', errorText);
             }
             console.log('✅ Successfully triggered image generation for agent:', agentId);
           } else if (operation.type === 'image-edit') {
             console.log('🔄 Processing image-edit operation');
             console.log('🔄 Operation inputSource:', operation.inputSource);
             console.log('🔄 Referenced agent data:', referencedAgentData.map(a => ({ id: a._id, imageUrl: a.imageUrl })));
-            
+
             let inputImageUrl = operation.inputSource?.fileUrl;
 
             // If it's an agent connection, get the image URL from the referenced agent
@@ -657,103 +643,65 @@ aiChatApi.post('/process', async (c) => {
             }
 
             console.log('🔄 Starting image edit for agent:', agentId, 'with inputImageUrl:', inputImageUrl);
-            // Use HTTP endpoint for local development, internal function for production
-            if (c.env.NODE_ENV === 'development') {
-              const baseUrl = new URL(c.req.url).origin;
-              const response = await fetch(`${baseUrl}/api/images/edit`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...Object.fromEntries(c.req.raw.headers.entries())
-                },
-                body: JSON.stringify({
-                  prompt: operation.prompt,
-                  inputImageUrl,
-                  agentId
-                })
-              });
-
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Failed to trigger image edit:', errorText);
-              }
-            } else {
-              await editImageInternal(
-                c.env,
-                user.id,
-                operation.prompt,
+            // Always use HTTP endpoints - they work in both local and production
+            const baseUrl = new URL(c.req.url).origin;
+            const response = await fetch(`${baseUrl}/api/images/edit`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...Object.fromEntries(c.req.raw.headers.entries())
+              },
+              body: JSON.stringify({
+                prompt: operation.prompt,
                 inputImageUrl,
-                "fal-ai/flux-kontext/dev",
-                28, // steps
                 agentId
-              );
+              })
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Failed to trigger image edit:', errorText);
             }
             console.log('✅ Successfully triggered image edit for agent:', agentId);
           } else if (operation.type === 'voice-generate') {
-            // Use HTTP endpoint for local development, internal function for production
+            // Always use HTTP endpoints - they work in both local and production
             const baseUrl = new URL(c.req.url).origin;
-            if (c.env.NODE_ENV === 'development') {
-              const response = await fetch(`${baseUrl}/api/voice`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...Object.fromEntries(c.req.raw.headers.entries())
-                },
-                body: JSON.stringify({
-                  prompt: operation.prompt,
-                  voice: 'Aurora',
-                  agentId
-                })
-              });
+            const response = await fetch(`${baseUrl}/api/voice`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...Object.fromEntries(c.req.raw.headers.entries())
+              },
+              body: JSON.stringify({
+                prompt: operation.prompt,
+                voice: 'Aurora',
+                agentId
+              })
+            });
 
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Failed to trigger voice generation:', errorText);
-              }
-            } else {
-              await generateVoiceInternal(
-                c.env,
-                user.id,
-                operation.prompt,
-                'Aurora' as const,
-                undefined, // audioSampleUrl
-                operation.model || 'normal',
-                agentId,
-                baseUrl
-              );
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Failed to trigger voice generation:', errorText);
             }
             console.log('✅ Successfully triggered voice generation for agent:', agentId);
           } else if (operation.type === 'video-generate') {
-            // Use HTTP endpoint for local development, internal function for production
+            // Always use HTTP endpoints - they work in both local and production
             const baseUrl = new URL(c.req.url).origin;
-            if (c.env.NODE_ENV === 'development') {
-              const response = await fetch(`${baseUrl}/api/video`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...Object.fromEntries(c.req.raw.headers.entries())
-                },
-                body: JSON.stringify({
-                  prompt: operation.prompt,
-                  agentId
-                })
-              });
+            const response = await fetch(`${baseUrl}/api/video`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...Object.fromEntries(c.req.raw.headers.entries())
+              },
+              body: JSON.stringify({
+                prompt: operation.prompt,
+                agentId
+              })
+            });
 
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Failed to trigger video generation:', errorText);
-              }
-            } else {
-              await generateVideoInternal(
-                c.env,
-                user.id,
-                operation.prompt,
-                operation.model || 'normal',
-                '16:9', // aspectRatio
-                '8s', // duration
-                agentId,
-                baseUrl
-              );
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Failed to trigger video generation:', errorText);
             }
             console.log('✅ Successfully triggered video generation for agent:', agentId);
           }
