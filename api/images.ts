@@ -52,7 +52,7 @@ imagesApi.post('/edit', async (c) => {
 
   try {
     const data = await c.req.json();
-    const { prompt, inputImageUrl, model = "fal-ai/flux-kontext-lora", steps = 30 } = data;
+    const { prompt, inputImageUrl, model = "fal-ai/flux-kontext/dev", steps = 28 } = data;
     agentId = data.agentId; // Assign to outer scope variable
 
     if (!prompt) {
@@ -84,7 +84,10 @@ imagesApi.post('/edit', async (c) => {
     let base64Image;
 
     try {
-      const falResponse = await fetch('https://fal.run/' + model, {
+      // Use FLUX Kontext model for image editing - specialized for context-aware editing
+      const editModel = 'fal-ai/flux-kontext/dev';
+
+      const falResponse = await fetch('https://fal.run/' + editModel, {
         method: 'POST',
         headers: {
           'Authorization': `Key ${c.env.FAL_KEY}`,
@@ -93,12 +96,14 @@ imagesApi.post('/edit', async (c) => {
         body: JSON.stringify({
           prompt,
           image_url: inputImageUrl,
-          enable_safety_checker: false,
-          sync_mode: true,
-          num_inference_steps: steps,
+          num_inference_steps: steps || 28,
           guidance_scale: 2.5,
-          resolution_mode: "match_input",
+          sync_mode: true,
           num_images: 1,
+          enable_safety_checker: false,
+          output_format: "png",
+          acceleration: "none",
+          resolution_mode: "match_input"
         }),
       });
 
@@ -117,24 +122,35 @@ imagesApi.post('/edit', async (c) => {
       const falResult = await falResponse.json() as any;
 
       // Extract image data from FAL response
+
       if (falResult.images && falResult.images.length > 0) {
-        const imageDataUri = falResult.images[0].url;
+        const imageData = falResult.images[0];
+        const imageDataUri = imageData.url;
+
+        console.log('🔍 Image Data URI type:', typeof imageDataUri);
+        console.log('🔍 Image Data URI preview:', imageDataUri.substring(0, 100) + '...');
 
         // Check if it's a data URI (base64)
         if (imageDataUri.startsWith('data:image/')) {
           // Extract base64 data from data URI
           const base64Data = imageDataUri.split(',')[1];
+          if (!base64Data) {
+            throw new Error('Invalid base64 data in data URI');
+          }
           base64Image = base64Data;
           imageBuffer = Buffer.from(base64Data, 'base64');
+          console.log('✅ Processed base64 image, buffer size:', imageBuffer.length);
         } else {
           // Fallback: download from URL (in case it's still a remote URL)
+          console.log('🔄 Downloading image from URL:', imageDataUri);
           const imageResponse = await fetch(imageDataUri);
           if (!imageResponse.ok) {
-            throw new Error('Failed to download edited image from FAL');
+            throw new Error(`Failed to download edited image from FAL: ${imageResponse.status} ${imageResponse.statusText}`);
           }
 
           imageBuffer = await imageResponse.arrayBuffer();
           base64Image = Buffer.from(imageBuffer).toString('base64');
+          console.log('✅ Downloaded image, buffer size:', imageBuffer.byteLength);
         }
       } else {
         console.error('❌ No images in FAL editing response:', falResult);
