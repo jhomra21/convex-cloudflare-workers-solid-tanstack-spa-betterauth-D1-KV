@@ -23,15 +23,14 @@ export function ContextSelector(props: ContextSelectorProps) {
     setSelectedIds(ids);
   });
 
-  // Filter items - only show image agents for context selection
+  // Filter items - only show agents for context selection
   const filteredItems = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
-    // Only show image agents (already filtered in context-scanner)
-    const imageAgentsOnly = props.availableItems.filter(item => item.type === 'agent');
+    const agentsOnly = props.availableItems.filter(item => item.type === 'agent');
     
-    if (!query) return imageAgentsOnly;
+    if (!query) return agentsOnly;
     
-    return imageAgentsOnly.filter(item => 
+    return agentsOnly.filter(item => 
       item.name.toLowerCase().includes(query) ||
       item.description?.toLowerCase().includes(query)
     );
@@ -91,7 +90,7 @@ export function ContextSelector(props: ContextSelectorProps) {
               type="text"
               value={searchQuery()}
               onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              placeholder="Search image agents..."
+              placeholder="Search agents..."
               class="w-full pl-7 pr-3 py-1.5 text-sm bg-muted/50 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent"
               autofocus
             />
@@ -103,7 +102,7 @@ export function ContextSelector(props: ContextSelectorProps) {
           <Show when={filteredItems().length > 0} fallback={
             <div class="flex flex-col items-center justify-center py-4 text-center">
               <Icon name="search-x" class="h-5 w-5 text-muted-foreground mb-1" />
-              <p class="text-xs text-muted-foreground">No image agents found</p>
+              <p class="text-xs text-muted-foreground">No agents found</p>
             </div>
           }>
             <div class="py-1">

@@ -155,40 +155,34 @@ export function scanFileSystem(): ContextItem[] {
   }));
 }
 
-// Convert agents to context items - only include image agents
+// Convert agents to context items
 export function convertAgentsToContextItems(agents: Array<{
   id: string;
   prompt: string;
   imageUrl?: string;
   type: string;
 }>): ContextItem[] {
-  // Filter to only include image agents (image-generate and image-edit)
-  const imageAgents = agents.filter(agent => 
-    agent.type === 'image-generate' || agent.type === 'image-edit'
-  );
-  
-  return imageAgents.map(agent => ({
+  return agents.map(agent => ({
     id: `agent:${agent.id}`,
     name: agent.type.replace('-', ' '),
     type: 'agent' as const,
     description: agent.prompt,
     imageUrl: agent.imageUrl,
-    icon: 'image',
-    agentType: agent.type,
+    icon: 'bot',
   }));
 }
 
-// Get all available context items - only image agents for now
+// Get all available context items
 export function getAllContextItems(agents: Array<{
   id: string;
   prompt: string;
   imageUrl?: string;
   type: string;
 }> = []): ContextItem[] {
-  // Only return image agents, no file system items
+  const fileItems = scanFileSystem();
   const agentItems = convertAgentsToContextItems(agents);
   
-  return agentItems;
+  return [...fileItems, ...agentItems];
 }
 
 // Filter context items by search query

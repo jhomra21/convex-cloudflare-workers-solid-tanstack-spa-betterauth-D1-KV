@@ -6,6 +6,4 @@ export interface ContextItem {
   description?: string;
   icon?: string;
   imageUrl?: string;
-  // For agents, this indicates the agent type (image-generate, image-edit, etc.)
-  agentType?: string;
 }
