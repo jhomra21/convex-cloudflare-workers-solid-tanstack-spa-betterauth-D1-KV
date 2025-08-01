@@ -18,6 +18,7 @@ app.use('/api/*', cors({
       'http://localhost:5173',
       'http://127.0.0.1:5173',
       'http://127.0.0.1:3000',
+      'https://convex-workers-solid-tanstack-spa-betterauth-d1-kv.jhonra121.workers.dev', // Production domain
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       return origin || '*';
