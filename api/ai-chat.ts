@@ -643,25 +643,38 @@ aiChatApi.post('/process', async (c) => {
             }
 
             console.log('🔄 Starting image edit for agent:', agentId, 'with inputImageUrl:', inputImageUrl);
-            // Always use HTTP endpoints - they work in both local and production
+            // Fire and forget - don't wait for the response to avoid hanging
             const baseUrl = new URL(c.req.url).origin;
-            const response = await fetch(`${baseUrl}/api/images/edit`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify({
-                prompt: operation.prompt,
-                inputImageUrl,
-                agentId
+            console.log('🔄 About to make fetch request to:', `${baseUrl}/api/images/edit`);
+            
+            // Use c.executionCtx.waitUntil to ensure the request completes even after response is sent
+            c.executionCtx.waitUntil(
+              fetch(`${baseUrl}/api/images/edit`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify({
+                  prompt: operation.prompt,
+                  inputImageUrl,
+                  agentId
+                })
+              }).then(response => {
+                console.log('✅ Fetch request completed, status:', response.status);
+                if (!response.ok) {
+                  return response.text().then(errorText => {
+                    console.error('❌ Failed to trigger image edit:', errorText);
+                  });
+                } else {
+                  console.log('✅ Successfully triggered image edit');
+                }
+              }).catch(error => {
+                console.error('❌ Fetch request failed:', error);
               })
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('❌ Failed to trigger image edit:', errorText);
-            }
+            );
+            
+            console.log('🔄 Image edit request fired, continuing...');
             console.log('✅ Successfully triggered image edit for agent:', agentId);
           } else if (operation.type === 'voice-generate') {
             // Always use HTTP endpoints - they work in both local and production
