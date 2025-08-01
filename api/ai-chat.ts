@@ -591,9 +591,17 @@ aiChatApi.post('/process', async (c) => {
       });
 
       const generationPromises = createdAgents.map(async (agentId, index) => {
+        console.log('🔍 Checking operation for agent:', {
+          agentId,
+          index,
+          hasOperations: !!analysisResult.operations,
+          operationsLength: analysisResult.operations?.length || 0,
+          operation: analysisResult.operations?.[index] || 'UNDEFINED'
+        });
+
         const operation = analysisResult.operations?.[index];
         if (!operation) {
-          console.log('❌ No operation found for agent index:', index);
+          console.log('❌ No operation found for agent index:', index, 'returning early');
           return;
         }
 
@@ -615,6 +623,7 @@ aiChatApi.post('/process', async (c) => {
               body: requestBody
             });
 
+            console.log('📡 About to make fetch request...');
             const response = await fetch(requestUrl, {
               method: 'POST',
               headers: {
@@ -624,6 +633,7 @@ aiChatApi.post('/process', async (c) => {
               },
               body: JSON.stringify(requestBody)
             });
+            console.log('📡 Fetch request completed, processing response...');
 
             if (!response.ok) {
               const errorText = await response.text();
