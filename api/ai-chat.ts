@@ -45,29 +45,19 @@ Available agent types:
 - voice-generate: Creates speech from text (standalone)
 - video-generate: Creates videos from text prompts (standalone)
 
-Context limitations:
-- Only image agents (image-generate and image-edit) can be referenced in context
-- Only image files can be uploaded for context
-- Voice and video agents cannot be used as context references
-
 Connection rules:
 - Only image agents can connect to each other
 - image-edit agents can connect to image-generate or other image-edit agents
 - image-generate agents cannot connect to anything (they don't need input)
+- voice and video agents are standalone
 
-Context handling:
-- When users reference existing image agents, create image-edit agents that connect to those agents
-- When users upload image files, create image-edit agents with those uploaded images
-- For bulk operations like "remove background from 5 images", create multiple image-edit agents
-- For chaining like "create landscape then add fog", create connected agents
+For bulk operations like "remove background from 5 images", create multiple image-edit agents.
+For chaining like "create landscape then add fog", create connected agents.
 
-Current context:
-- Referenced image agents: ${JSON.stringify(referencedAgents)} (${referencedAgents.length} agents)
-- Uploaded image files: ${uploadedFiles.length} files${uploadedFiles.length > 0 ? `\n- Uploaded file URLs: ${JSON.stringify(uploadedFiles)}` : ''}
-- User message: "${message}"
-
-If the user has referenced image agents or uploaded image files, prioritize creating image-edit agents that work with this context.
-When creating image-edit agents for uploaded files, use the exact URLs provided in the uploaded file URLs list.`;
+Context:
+- Referenced agents: ${JSON.stringify(referencedAgents)}
+- Uploaded files: ${uploadedFiles.length} files
+- User message: "${message}"`;
 
   try {
     const result = await ai.run('@cf/meta/llama-4-scout-17b-16e-instruct', {
@@ -105,7 +95,7 @@ When creating image-edit agents for uploaded files, use the exact URLs provided 
                       type: 'object',
                       properties: {
                         type: { type: 'string', enum: ['uploaded_file', 'agent_connection'] },
-                        fileUrl: { type: 'string', description: 'For uploaded_file type, use the exact URL from the uploaded file URLs list provided in context' },
+                        fileUrl: { type: 'string' },
                         sourceAgentId: { type: 'string' }
                       }
                     },
@@ -159,149 +149,72 @@ When creating image-edit agents for uploaded files, use the exact URLs provided 
   } catch (error) {
     console.error('AI analysis failed:', error);
 
-    // Skip fallback AI model and go directly to rule-based parsing
-    // This avoids additional AI quota usage when the service is having issues
-    console.log('Falling back to rule-based intent parsing due to AI service issues');
-    return parseIntentWithRules(message, uploadedFiles.length, referencedAgents.length, uploadedFiles, referencedAgents.map(agent => agent._id));
+    // Try fallback model
+    try {
+      const fallbackResult = await ai.run('@hf/nousresearch/hermes-2-pro-mistral-7b', {
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.3,
+        max_tokens: 1024
+      });
+
+      // Simple rule-based parsing for fallback
+      return parseIntentWithRules(message, uploadedFiles.length);
+    } catch (fallbackError) {
+      console.error('Fallback AI model also failed:', fallbackError);
+      return parseIntentWithRules(message, uploadedFiles.length);
+    }
   }
 }
 
 // Rule-based intent parsing as final fallback
-function parseIntentWithRules(message: string, uploadedFileCount: number, referencedAgentCount: number = 0, uploadedFileUrls: string[] = [], referencedAgentIds: string[] = []): IntentAnalysisResult {
+function parseIntentWithRules(message: string, uploadedFileCount: number): IntentAnalysisResult {
   const lowerMessage = message.toLowerCase();
 
-  // Handle uploaded files - create edit agents
-  if (uploadedFileCount > 0) {
+  // Simple keyword-based detection
+  if (lowerMessage.includes('create') || lowerMessage.includes('generate') || lowerMessage.includes('make')) {
+    if (lowerMessage.includes('image') || lowerMessage.includes('picture') || lowerMessage.includes('photo')) {
+      return {
+        intent: 'create_agents',
+        confidence: 0.7,
+        operations: [{
+          type: 'image-generate',
+          prompt: message,
+          model: 'normal'
+        }],
+        response: "I'll create an image generator for you.",
+        autoGenerate: true
+      };
+    }
+  }
+
+  if (lowerMessage.includes('edit') && uploadedFileCount > 0) {
     return {
       intent: 'create_agents',
-      confidence: 0.8,
+      confidence: 0.7,
       operations: Array(uploadedFileCount).fill(null).map((_, i) => ({
         type: 'image-edit' as const,
         prompt: message,
         model: 'normal' as const,
         inputSource: {
           type: 'uploaded_file' as const,
-          fileUrl: uploadedFileUrls[i] || `uploaded-file-${i}`
+          fileUrl: `uploaded-file-${i}`
         }
       })),
-      response: `I'll create ${uploadedFileCount} image editing agent(s) to process your uploaded images with the prompt: "${message}"`,
+      response: `I'll create ${uploadedFileCount} image editing agents for your uploaded files.`,
       autoGenerate: true
     };
-  }
-
-  // Handle referenced agents - create edit agents that connect to them
-  if (referencedAgentCount > 0) {
-    return {
-      intent: 'create_agents',
-      confidence: 0.8,
-      operations: Array(referencedAgentCount).fill(null).map((_, i) => ({
-        type: 'image-edit' as const,
-        prompt: message,
-        model: 'normal' as const,
-        inputSource: {
-          type: 'agent_connection' as const,
-          sourceAgentId: referencedAgentIds[i] || `referenced-agent-${i}` // Use actual agent ID if available
-        }
-      })),
-      response: `I'll create ${referencedAgentCount} image editing agent(s) to modify your referenced agents with: "${message}"`,
-      autoGenerate: true
-    };
-  }
-
-  // Enhanced keyword-based detection for new agents
-  const imageKeywords = ['image', 'picture', 'photo', 'drawing', 'artwork', 'visual', 'graphic'];
-  const voiceKeywords = ['voice', 'speech', 'audio', 'sound', 'speak', 'say', 'talk'];
-  const videoKeywords = ['video', 'movie', 'clip', 'animation', 'motion'];
-  const createKeywords = ['create', 'generate', 'make', 'build', 'produce', 'design'];
-  const editKeywords = ['edit', 'modify', 'change', 'alter', 'adjust', 'transform', 'convert'];
-
-  const hasCreateKeyword = createKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasEditKeyword = editKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasVoiceKeyword = voiceKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasVideoKeyword = videoKeywords.some(keyword => lowerMessage.includes(keyword));
-
-  // Determine agent type based on keywords
-  if (hasCreateKeyword || hasEditKeyword) {
-    if (hasImageKeyword) {
-      return {
-        intent: 'create_agents',
-        confidence: 0.7,
-        operations: [{
-          type: 'image-generate',
-          prompt: message,
-          model: 'normal'
-        }],
-        response: `I'll create an image generation agent for: "${message}"`,
-        autoGenerate: true
-      };
-    } else if (hasVoiceKeyword) {
-      return {
-        intent: 'create_agents',
-        confidence: 0.7,
-        operations: [{
-          type: 'voice-generate',
-          prompt: message,
-          model: 'normal'
-        }],
-        response: `I'll create a voice generation agent for: "${message}"`,
-        autoGenerate: true
-      };
-    } else if (hasVideoKeyword) {
-      return {
-        intent: 'create_agents',
-        confidence: 0.7,
-        operations: [{
-          type: 'video-generate',
-          prompt: message,
-          model: 'normal'
-        }],
-        response: `I'll create a video generation agent for: "${message}"`,
-        autoGenerate: true
-      };
-    } else {
-      // Default to image if no specific type is mentioned
-      return {
-        intent: 'create_agents',
-        confidence: 0.6,
-        operations: [{
-          type: 'image-generate',
-          prompt: message,
-          model: 'normal'
-        }],
-        response: `I'll create an image generation agent for: "${message}"`,
-        autoGenerate: true
-      };
-    }
   }
 
   return {
     intent: 'general_chat',
     confidence: 0.5,
     operations: [],
-    response: "I can help you create AI agents for image generation, image editing, voice generation, and video generation. You can also reference existing agents or upload images to create editing agents. What would you like to create?",
+    response: "I can help you create AI agents for image generation, image editing, voice generation, and video generation. What would you like to create?",
     autoGenerate: false
   };
-}
-
-// Check if a file is already a public URL that doesn't need re-uploading
-function isPublicUrl(filename: string): boolean {
-  const publicDomains = [
-    'pub-1d414b448981415486cf93fcfcaf636d.r2.dev', // Our R2 bucket
-    'fal.media', // FAL AI generated images
-    'storage.googleapis.com', // Google Cloud Storage
-    'amazonaws.com', // AWS S3
-    'cloudflare.com', // Cloudflare domains
-    'cdn.', // Common CDN patterns
-  ];
-
-  try {
-    const url = new URL(filename);
-    return publicDomains.some(domain => url.hostname.includes(domain));
-  } catch {
-    // If it's not a valid URL, it's probably a filename that needs uploading
-    return false;
-  }
 }
 
 // Process file uploads to R2
@@ -312,13 +225,6 @@ async function processFileUploads(files: File[], env: Env): Promise<string[]> {
 
   for (const file of files) {
     try {
-      // Check if the file name is already a public URL
-      if (isPublicUrl(file.name)) {
-        console.log('Skipping upload for existing public URL:', file.name);
-        uploadedUrls.push(file.name);
-        continue;
-      }
-
       const filename = `ai-chat-uploads/${Date.now()}-${file.name}`;
       const buffer = await file.arrayBuffer();
 
@@ -326,10 +232,9 @@ async function processFileUploads(files: File[], env: Env): Promise<string[]> {
         httpMetadata: { contentType: file.type }
       });
 
-      // Create the public R2 URL
+      // For now, use a placeholder URL - in production, this should be the actual R2 public URL
       const url = `https://pub-1d414b448981415486cf93fcfcaf636d.r2.dev/${filename}`;
       uploadedUrls.push(url);
-      console.log('✅ Successfully uploaded file to R2:', filename);
     } catch (error) {
       console.error('Failed to upload file:', error);
     }
@@ -338,19 +243,16 @@ async function processFileUploads(files: File[], env: Env): Promise<string[]> {
   return uploadedUrls;
 }
 
-// Get referenced agent data from Convex - only image agents
-async function getReferencedAgents(agentIds: string[], canvasId: string, convexUrl: string): Promise<any[]> {
+// Get referenced agent data from Convex
+async function getReferencedAgents(agentIds: string[], convexUrl: string): Promise<any[]> {
   if (!agentIds || agentIds.length === 0) return [];
 
   try {
     const convex = new ConvexHttpClient(convexUrl);
-    // Get all agents from the canvas and filter by referenced IDs
-    const allAgents = await convex.query(api.agents.getCanvasAgents, { canvasId: canvasId as any });
-    const referencedAgents = allAgents.filter(agent =>
-      agentIds.includes(agent._id) &&
-      (agent.type === 'image-generate' || agent.type === 'image-edit')
+    const agents = await Promise.all(
+      agentIds.map(id => convex.query(api.agents.getCanvasAgents, { canvasId: id as any }))
     );
-    return referencedAgents;
+    return agents.flat().filter(Boolean);
   } catch (error) {
     console.error('Failed to get referenced agents:', error);
     return [];
@@ -411,8 +313,7 @@ async function createAgentsFromAnalysis(
 
 // Update chat history in Convex
 async function updateChatHistory(
-  canvasId: string,
-  userId: string,
+  chatAgentId: string,
   userMessage: string,
   assistantResponse: string,
   convexUrl: string,
@@ -420,17 +321,8 @@ async function updateChatHistory(
 ): Promise<void> {
   try {
     const convex = new ConvexHttpClient(convexUrl);
-
-    // First, get or create the chat agent for this canvas/user
-    const chatAgent = await convex.mutation(api.agents.createOrGetChatAgent, {
-      canvasId: canvasId as any,
-      userId,
-      userName: 'User' // Default name, could be improved
-    });
-
-    // Then update the chat history
     await convex.mutation(api.agents.updateChatHistory, {
-      chatAgentId: chatAgent,
+      chatAgentId: chatAgentId as any,
       messages: [
         {
           role: 'user' as const,
@@ -456,57 +348,13 @@ aiChatApi.post('/process', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   try {
-    let message: string;
-    let referencedAgents: string[] = [];
-    let uploadedFiles: File[] = [];
-    let chatAgentId: string;
-    let canvasId: string;
-
-    // Handle both JSON and FormData requests
-    const contentType = c.req.header('content-type') || '';
-
-    if (contentType.includes('multipart/form-data')) {
-      // Handle FormData (with file uploads)
-      const formData = await c.req.formData();
-      message = formData.get('message') as string;
-      chatAgentId = formData.get('chatAgentId') as string;
-      canvasId = formData.get('canvasId') as string;
-
-      const referencedAgentsStr = formData.get('referencedAgents') as string;
-      if (referencedAgentsStr) {
-        referencedAgents = JSON.parse(referencedAgentsStr);
-      }
-
-      // Get uploaded files - handle the fact that Cloudflare Workers may return different types
-      const files = formData.getAll('uploadedFiles');
-      const fileEntries: File[] = [];
-
-      // Type guard function to check if entry is a File-like object
-      const isFileEntry = (entry: any): entry is File => {
-        return entry != null &&
-          typeof entry === 'object' &&
-          'name' in entry &&
-          'size' in entry &&
-          'type' in entry &&
-          typeof entry.arrayBuffer === 'function';
-      };
-
-      for (const entry of files) {
-        if (isFileEntry(entry)) {
-          fileEntries.push(entry);
-        }
-      }
-
-      uploadedFiles = fileEntries;
-    } else {
-      // Handle JSON (text-only messages)
-      const jsonData = await c.req.json();
-      message = jsonData.message;
-      referencedAgents = jsonData.referencedAgents || [];
-      uploadedFiles = []; // JSON requests don't contain actual File objects
-      chatAgentId = jsonData.chatAgentId;
-      canvasId = jsonData.canvasId;
-    }
+    const {
+      message,
+      referencedAgents = [],
+      uploadedFiles = [],
+      chatAgentId,
+      canvasId
+    } = await c.req.json();
 
     if (!message || !chatAgentId || !canvasId) {
       return c.json({ error: 'Missing required fields' }, 400);
@@ -516,7 +364,7 @@ aiChatApi.post('/process', async (c) => {
     const uploadedUrls = await processFileUploads(uploadedFiles, c.env);
 
     // 2. Get referenced agent data from Convex
-    const referencedAgentData = await getReferencedAgents(referencedAgents, canvasId, c.env.CONVEX_URL);
+    const referencedAgentData = await getReferencedAgents(referencedAgents, c.env.CONVEX_URL);
 
     // 3. AI Intent Analysis using Workers AI
     const analysisResult = await analyzeUserIntent({
@@ -537,13 +385,12 @@ aiChatApi.post('/process', async (c) => {
 
     // 5. Update chat history
     await updateChatHistory(
-      canvasId,
-      user.id,
+      chatAgentId,
       message,
       analysisResult.response,
       c.env.CONVEX_URL,
       {
-        referencedAgents: referencedAgents as any[], // These are already the correct agent IDs
+        referencedAgents,
         uploadedFiles: uploadedUrls,
         createdAgents: createdAgents as any[]
       }
@@ -568,140 +415,36 @@ aiChatApi.post('/process', async (c) => {
       await Promise.all(statusUpdatePromises);
 
       // Then trigger generation for all agents in parallel
-      let baseUrl: string;
-      try {
-        baseUrl = new URL(c.req.url).origin;
-      } catch (error) {
-        // Fallback for production environments where URL might be different
-        const host = c.req.header('host') || c.req.header('x-forwarded-host');
-        const protocol = c.req.header('x-forwarded-proto') || 'https';
-        baseUrl = `${protocol}://${host}`;
-        console.log('⚠️ Using fallback baseUrl construction:', baseUrl);
-      }
-
-      console.log('🔧 Auto-generation setup:', {
-        baseUrl,
-        requestUrl: c.req.url,
-        host: c.req.header('host'),
-        forwardedHost: c.req.header('x-forwarded-host'),
-        protocol: c.req.header('x-forwarded-proto'),
-        createdAgentsCount: createdAgents.length,
-        operationsCount: analysisResult.operations?.length || 0,
-        autoGenerate: analysisResult.autoGenerate
-      });
-
+      const baseUrl = new URL(c.req.url).origin;
       const generationPromises = createdAgents.map(async (agentId, index) => {
-        console.log('🔍 Checking operation for agent:', {
-          agentId,
-          index,
-          hasOperations: !!analysisResult.operations,
-          operationsLength: analysisResult.operations?.length || 0,
-          operation: analysisResult.operations?.[index] || 'UNDEFINED'
-        });
-
         const operation = analysisResult.operations?.[index];
-        if (!operation) {
-          console.log('❌ No operation found for agent index:', index, 'returning early');
-          return;
-        }
-
-        console.log('🚀 Processing agent:', { agentId, index, operationType: operation.type });
+        if (!operation) return;
 
         try {
           if (operation.type === 'image-generate') {
-            const requestUrl = `${baseUrl}/api/images`;
-            const requestBody = {
-              prompt: operation.prompt,
-              model: (operation.model === 'pro')
-                ? 'fal-ai/flux-kontext-lora/text-to-image'
-                : '@cf/black-forest-labs/flux-1-schnell',
-              agentId
-            };
-
-            console.log('🔥 Making image generation request:', {
-              url: requestUrl,
-              body: requestBody
-            });
-
-            console.log('📡 About to make fetch request...');
-            let response: Response;
-            try {
-              response = await fetch(requestUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  // Forward all original headers for proper authentication
-                  ...Object.fromEntries(c.req.raw.headers.entries())
-                },
-                body: JSON.stringify(requestBody)
-              });
-              console.log('📡 Fetch request completed, processing response...');
-            } catch (fetchError) {
-              console.error('❌ Fetch request failed:', {
-                error: fetchError.message,
-                stack: fetchError.stack,
+            const response = await fetch(`${baseUrl}/api/images`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                // Forward all original headers for proper authentication
+                ...Object.fromEntries(c.req.raw.headers.entries())
+              },
+              body: JSON.stringify({
+                prompt: operation.prompt,
+                model: (operation.model === 'pro')
+                  ? 'fal-ai/flux-kontext-lora/text-to-image'
+                  : '@cf/black-forest-labs/flux-1-schnell',
                 agentId
-              });
-              throw fetchError; // Re-throw to be caught by outer catch
-            }
+              })
+            });
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Failed to trigger image generation:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText,
-                agentId
-              });
+              console.error('Failed to trigger image generation:', errorText);
             } else {
               console.log('✅ Successfully triggered image generation for agent:', agentId);
             }
           } else if (operation.type === 'image-edit') {
-            console.log('🎨 Starting image-edit processing for agent:', agentId);
-            let inputImageUrl = operation.inputSource?.fileUrl;
-            console.log('🎨 Initial inputImageUrl:', inputImageUrl);
-
-            // If it's an agent connection, get the image URL from the referenced agent
-            if (operation.inputSource?.type === 'agent_connection' && operation.inputSource?.sourceAgentId) {
-              console.log('🎨 Looking for referenced agent:', operation.inputSource.sourceAgentId);
-              console.log('🎨 Available referencedAgentData:', referencedAgentData.map(a => ({ id: a._id, hasImage: !!a.imageUrl })));
-
-              const referencedAgent = referencedAgentData.find(agent => agent._id === operation.inputSource?.sourceAgentId);
-              console.log('🎨 Found referenced agent:', !!referencedAgent);
-
-              if (referencedAgent && referencedAgent.imageUrl) {
-                inputImageUrl = referencedAgent.imageUrl;
-                console.log('🎨 Using referenced agent image URL:', inputImageUrl);
-              } else {
-                console.log('🎨 Referenced agent not found or has no image, setting to failed');
-                // Set agent to failed status
-                const convex = new ConvexHttpClient(c.env.CONVEX_URL);
-                await convex.mutation(api.agents.updateAgentStatus, {
-                  agentId: agentId as any,
-                  status: 'failed'
-                });
-                return; // Skip this agent
-              }
-            }
-
-            if (!inputImageUrl) {
-              console.log('🎨 No inputImageUrl available, setting to failed');
-              // Set agent to failed status
-              const convex = new ConvexHttpClient(c.env.CONVEX_URL);
-              await convex.mutation(api.agents.updateAgentStatus, {
-                agentId: agentId as any,
-                status: 'failed'
-              });
-              return; // Skip this agent
-            }
-
-            console.log('🎨 Making image-edit fetch request:', {
-              url: `${baseUrl}/api/images/edit`,
-              inputImageUrl,
-              agentId
-            });
-
-            console.log('📡 About to make image-edit fetch request...');
             const response = await fetch(`${baseUrl}/api/images/edit`, {
               method: 'POST',
               headers: {
@@ -711,23 +454,19 @@ aiChatApi.post('/process', async (c) => {
               },
               body: JSON.stringify({
                 prompt: operation.prompt,
-                inputImageUrl,
+                inputImageUrl: operation.inputSource?.fileUrl,
                 agentId
               })
             });
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Failed to trigger image edit:', errorText);
-              console.error('❌ Response status:', response.status);
+              console.error('Failed to trigger image edit:', errorText);
             } else {
               console.log('✅ Successfully triggered image edit for agent:', agentId);
             }
           } else if (operation.type === 'voice-generate') {
-            const requestUrl = `${baseUrl}/api/voice`;
-            console.log('🔥 Making voice generation request:', { url: requestUrl, agentId });
-
-            const response = await fetch(requestUrl, {
+            const response = await fetch(`${baseUrl}/api/voice`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -742,20 +481,12 @@ aiChatApi.post('/process', async (c) => {
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Failed to trigger voice generation:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText,
-                agentId
-              });
+              console.error('Failed to trigger voice generation:', errorText);
             } else {
               console.log('✅ Successfully triggered voice generation for agent:', agentId);
             }
           } else if (operation.type === 'video-generate') {
-            const requestUrl = `${baseUrl}/api/video`;
-            console.log('🔥 Making video generation request:', { url: requestUrl, agentId });
-
-            const response = await fetch(requestUrl, {
+            const response = await fetch(`${baseUrl}/api/video`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -769,36 +500,21 @@ aiChatApi.post('/process', async (c) => {
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Failed to trigger video generation:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText,
-                agentId
-              });
+              console.error('Failed to trigger video generation:', errorText);
             } else {
               console.log('✅ Successfully triggered video generation for agent:', agentId);
             }
           }
         } catch (error) {
-          console.error('❌ Exception during generation trigger:', {
-            agentId,
-            error: error.message,
-            stack: error.stack
-          });
+          console.error('Failed to trigger generation for agent:', agentId, error);
         }
       });
 
       // Fire all generation requests in parallel (don't wait for them to complete)
       // This allows the chat response to return immediately while generations happen in background
       // Each agent will update its status independently as generation completes
-      console.log('🚀 Starting all generation promises...');
-      Promise.all(generationPromises).then(() => {
-        console.log('✅ All generation requests completed');
-      }).catch(error => {
-        console.error('❌ Some generation requests failed:', {
-          error: error.message,
-          stack: error.stack
-        });
+      Promise.all(generationPromises).catch(error => {
+        console.error('Some generation requests failed:', error);
       });
     }
 
@@ -820,6 +536,29 @@ aiChatApi.post('/process', async (c) => {
   }
 });
 
+// Status polling endpoint
+aiChatApi.get('/status/:chatAgentId', async (c) => {
+  const user = c.get('user');
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  try {
+    const chatAgentId = c.req.param('chatAgentId');
+    const convex = new ConvexHttpClient(c.env.CONVEX_URL);
+
+    const chatAgent = await convex.query(api.agents.getChatAgent, {
+      canvasId: chatAgentId as any, // This should be the canvas ID, not agent ID
+      userId: user.id
+    });
+
+    return c.json({
+      success: true,
+      activeOperations: chatAgent?.activeOperations || [],
+      chatHistory: chatAgent?.chatHistory || []
+    });
+  } catch (error) {
+    console.error('Failed to get chat status:', error);
+    return c.json({ error: 'Failed to get status' }, 500);
+  }
+});
 
 export default aiChatApi;

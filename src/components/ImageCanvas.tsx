@@ -252,51 +252,22 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const chatHistory = () => chatHistoryQuery.data || [];
 
   // Handle chat message sending
-  const handleSendChatMessage = async (message: string, contextItems: any[] = [], uploadedFiles: File[] = []) => {
+  const handleSendChatMessage = async (message: string) => {
     if (!canvas()?._id || !userId()) return;
 
     setIsChatProcessing(true);
 
     try {
-      // Extract actual agent IDs from context items
-      // Context items for agents have IDs in format "agent:${actualAgentId}"
-      const referencedAgentIds = contextItems
-        .filter(item => item.id?.startsWith('agent:'))
-        .map(item => item.id.replace('agent:', ''));
-
-      // Process uploaded files to FormData if any
-      let body: string | FormData;
-      let headers: Record<string, string> = {};
-
-      if (uploadedFiles.length > 0) {
-        // Use FormData for file uploads
-        const formData = new FormData();
-        formData.append('message', message);
-        formData.append('chatAgentId', `floating-chat-${userId()}`);
-        formData.append('canvasId', canvas()!._id);
-        formData.append('referencedAgents', JSON.stringify(referencedAgentIds));
-        
-        uploadedFiles.forEach((file, index) => {
-          formData.append(`uploadedFiles`, file);
-        });
-        
-        body = formData;
-      } else {
-        // Use JSON for text-only messages
-        headers['Content-Type'] = 'application/json';
-        body = JSON.stringify({
-          message,
-          chatAgentId: `floating-chat-${userId()}`,
-          canvasId: canvas()!._id,
-          referencedAgents: referencedAgentIds,
-          uploadedFiles: []
-        });
-      }
-
       const response = await fetch('/api/ai-chat/process', {
         method: 'POST',
-        headers,
-        body
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          chatAgentId: `floating-chat-${userId()}`, // Use a consistent ID for floating chat
+          canvasId: canvas()!._id,
+          referencedAgents: [],
+          uploadedFiles: []
+        })
       });
 
       if (!response.ok) {
@@ -574,7 +545,6 @@ export function ImageCanvas(props: ImageCanvasProps) {
           userName={userName()}
           chatHistory={chatHistory()}
           isProcessing={isChatProcessing()}
-          availableAgents={availableAgents()}
           onSendMessage={handleSendChatMessage}
         />
       </Show>
