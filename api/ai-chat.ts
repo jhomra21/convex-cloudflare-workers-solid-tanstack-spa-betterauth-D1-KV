@@ -568,32 +568,71 @@ aiChatApi.post('/process', async (c) => {
       await Promise.all(statusUpdatePromises);
 
       // Then trigger generation for all agents in parallel
-      const baseUrl = new URL(c.req.url).origin;
+      let baseUrl: string;
+      try {
+        baseUrl = new URL(c.req.url).origin;
+      } catch (error) {
+        // Fallback for production environments where URL might be different
+        const host = c.req.header('host') || c.req.header('x-forwarded-host');
+        const protocol = c.req.header('x-forwarded-proto') || 'https';
+        baseUrl = `${protocol}://${host}`;
+        console.log('⚠️ Using fallback baseUrl construction:', baseUrl);
+      }
+
+      console.log('🔧 Auto-generation setup:', {
+        baseUrl,
+        requestUrl: c.req.url,
+        host: c.req.header('host'),
+        forwardedHost: c.req.header('x-forwarded-host'),
+        protocol: c.req.header('x-forwarded-proto'),
+        createdAgentsCount: createdAgents.length,
+        operationsCount: analysisResult.operations?.length || 0,
+        autoGenerate: analysisResult.autoGenerate
+      });
+
       const generationPromises = createdAgents.map(async (agentId, index) => {
         const operation = analysisResult.operations?.[index];
-        if (!operation) return;
+        if (!operation) {
+          console.log('❌ No operation found for agent index:', index);
+          return;
+        }
+
+        console.log('🚀 Processing agent:', { agentId, index, operationType: operation.type });
 
         try {
           if (operation.type === 'image-generate') {
-            const response = await fetch(`${baseUrl}/api/images`, {
+            const requestUrl = `${baseUrl}/api/images`;
+            const requestBody = {
+              prompt: operation.prompt,
+              model: (operation.model === 'pro')
+                ? 'fal-ai/flux-kontext-lora/text-to-image'
+                : '@cf/black-forest-labs/flux-1-schnell',
+              agentId
+            };
+
+            console.log('🔥 Making image generation request:', {
+              url: requestUrl,
+              body: requestBody
+            });
+
+            const response = await fetch(requestUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 // Forward all original headers for proper authentication
                 ...Object.fromEntries(c.req.raw.headers.entries())
               },
-              body: JSON.stringify({
-                prompt: operation.prompt,
-                model: (operation.model === 'pro')
-                  ? 'fal-ai/flux-kontext-lora/text-to-image'
-                  : '@cf/black-forest-labs/flux-1-schnell',
-                agentId
-              })
+              body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('Failed to trigger image generation:', errorText);
+              console.error('❌ Failed to trigger image generation:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                agentId
+              });
             } else {
               console.log('✅ Successfully triggered image generation for agent:', agentId);
             }
@@ -649,7 +688,10 @@ aiChatApi.post('/process', async (c) => {
               console.log('✅ Successfully triggered image edit for agent:', agentId);
             }
           } else if (operation.type === 'voice-generate') {
-            const response = await fetch(`${baseUrl}/api/voice`, {
+            const requestUrl = `${baseUrl}/api/voice`;
+            console.log('🔥 Making voice generation request:', { url: requestUrl, agentId });
+
+            const response = await fetch(requestUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -664,12 +706,20 @@ aiChatApi.post('/process', async (c) => {
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('Failed to trigger voice generation:', errorText);
+              console.error('❌ Failed to trigger voice generation:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                agentId
+              });
             } else {
               console.log('✅ Successfully triggered voice generation for agent:', agentId);
             }
           } else if (operation.type === 'video-generate') {
-            const response = await fetch(`${baseUrl}/api/video`, {
+            const requestUrl = `${baseUrl}/api/video`;
+            console.log('🔥 Making video generation request:', { url: requestUrl, agentId });
+
+            const response = await fetch(requestUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -683,21 +733,36 @@ aiChatApi.post('/process', async (c) => {
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('Failed to trigger video generation:', errorText);
+              console.error('❌ Failed to trigger video generation:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                agentId
+              });
             } else {
               console.log('✅ Successfully triggered video generation for agent:', agentId);
             }
           }
         } catch (error) {
-          console.error('Failed to trigger generation for agent:', agentId, error);
+          console.error('❌ Exception during generation trigger:', {
+            agentId,
+            error: error.message,
+            stack: error.stack
+          });
         }
       });
 
       // Fire all generation requests in parallel (don't wait for them to complete)
       // This allows the chat response to return immediately while generations happen in background
       // Each agent will update its status independently as generation completes
-      Promise.all(generationPromises).catch(error => {
-        console.error('Some generation requests failed:', error);
+      console.log('🚀 Starting all generation promises...');
+      Promise.all(generationPromises).then(() => {
+        console.log('✅ All generation requests completed');
+      }).catch(error => {
+        console.error('❌ Some generation requests failed:', {
+          error: error.message,
+          stack: error.stack
+        });
       });
     }
 
