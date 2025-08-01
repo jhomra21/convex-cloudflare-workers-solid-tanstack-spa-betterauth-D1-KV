@@ -624,16 +624,26 @@ aiChatApi.post('/process', async (c) => {
             });
 
             console.log('📡 About to make fetch request...');
-            const response = await fetch(requestUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // Forward all original headers for proper authentication
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify(requestBody)
-            });
-            console.log('📡 Fetch request completed, processing response...');
+            let response: Response;
+            try {
+              response = await fetch(requestUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  // Forward all original headers for proper authentication
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify(requestBody)
+              });
+              console.log('📡 Fetch request completed, processing response...');
+            } catch (fetchError) {
+              console.error('❌ Fetch request failed:', {
+                error: fetchError.message,
+                stack: fetchError.stack,
+                agentId
+              });
+              throw fetchError; // Re-throw to be caught by outer catch
+            }
 
             if (!response.ok) {
               const errorText = await response.text();
