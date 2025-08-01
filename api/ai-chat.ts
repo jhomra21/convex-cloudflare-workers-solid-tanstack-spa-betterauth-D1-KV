@@ -3,6 +3,11 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../convex/_generated/api';
 import type { Env, HonoVariables } from './types';
 
+// Import internal generation functions
+import { generateImageInternal, editImageInternal } from './images';
+import { generateVoiceInternal } from './voice';
+import { generateVideoInternal } from './video';
+
 export const aiChatApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Interface for AI intent analysis result
@@ -543,7 +548,9 @@ aiChatApi.post('/process', async (c) => {
     );
 
     // 6. Auto-trigger media generation if enabled
+    console.log('🔄 Checking auto-generation:', { autoGenerate: analysisResult.autoGenerate, createdAgentsCount: createdAgents.length });
     if (analysisResult.autoGenerate && createdAgents.length > 0) {
+      console.log('✅ Starting auto-generation for', createdAgents.length, 'agents');
       // First, set all agents to "processing" status in parallel
       const convex = new ConvexHttpClient(c.env.CONVEX_URL);
       const statusUpdatePromises = createdAgents.map(async (agentId) => {
@@ -559,47 +566,75 @@ aiChatApi.post('/process', async (c) => {
 
       // Wait for all status updates to complete
       await Promise.all(statusUpdatePromises);
+      console.log('✅ All agent statuses updated to processing');
 
-      // Then trigger generation for all agents in parallel
-      const baseUrl = new URL(c.req.url).origin;
+      // Then trigger generation for all agents in parallel using internal functions
+      console.log('🔄 Creating generation promises for', createdAgents.length, 'agents');
       const generationPromises = createdAgents.map(async (agentId, index) => {
         const operation = analysisResult.operations?.[index];
-        if (!operation) return;
+        if (!operation) {
+          console.log('❌ No operation found for agent:', agentId, 'at index:', index);
+          return;
+        }
+
+        console.log('🔄 Processing operation for agent:', agentId, 'type:', operation.type);
 
         try {
           if (operation.type === 'image-generate') {
-            const response = await fetch(`${baseUrl}/api/images`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // Forward all original headers for proper authentication
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify({
-                prompt: operation.prompt,
-                model: (operation.model === 'pro')
+            // Use HTTP endpoint for local development, internal function for production
+            if (c.env.NODE_ENV === 'development') {
+              const baseUrl = new URL(c.req.url).origin;
+              const response = await fetch(`${baseUrl}/api/images`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify({
+                  prompt: operation.prompt,
+                  model: (operation.model === 'pro')
+                    ? 'fal-ai/flux-kontext-lora/text-to-image'
+                    : '@cf/black-forest-labs/flux-1-schnell',
+                  agentId
+                })
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Failed to trigger image generation:', errorText);
+              }
+            } else {
+              await generateImageInternal(
+                c.env,
+                user.id,
+                operation.prompt,
+                (operation.model === 'pro')
                   ? 'fal-ai/flux-kontext-lora/text-to-image'
                   : '@cf/black-forest-labs/flux-1-schnell',
+                4, // steps
+                undefined, // seed
                 agentId
-              })
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('Failed to trigger image generation:', errorText);
-            } else {
-              console.log('✅ Successfully triggered image generation for agent:', agentId);
+              );
             }
+            console.log('✅ Successfully triggered image generation for agent:', agentId);
           } else if (operation.type === 'image-edit') {
+            console.log('🔄 Processing image-edit operation');
+            console.log('🔄 Operation inputSource:', operation.inputSource);
+            console.log('🔄 Referenced agent data:', referencedAgentData.map(a => ({ id: a._id, imageUrl: a.imageUrl })));
+            
             let inputImageUrl = operation.inputSource?.fileUrl;
 
             // If it's an agent connection, get the image URL from the referenced agent
             if (operation.inputSource?.type === 'agent_connection' && operation.inputSource?.sourceAgentId) {
+              console.log('🔄 Looking for referenced agent with ID:', operation.inputSource.sourceAgentId);
               const referencedAgent = referencedAgentData.find(agent => agent._id === operation.inputSource?.sourceAgentId);
+              console.log('🔄 Found referenced agent:', referencedAgent ? { id: referencedAgent._id, imageUrl: referencedAgent.imageUrl } : 'NOT FOUND');
 
               if (referencedAgent && referencedAgent.imageUrl) {
                 inputImageUrl = referencedAgent.imageUrl;
+                console.log('✅ Using referenced agent image URL:', inputImageUrl);
               } else {
+                console.log('❌ Referenced agent not found or has no image URL');
                 // Set agent to failed status
                 const convex = new ConvexHttpClient(c.env.CONVEX_URL);
                 await convex.mutation(api.agents.updateAgentStatus, {
@@ -611,6 +646,7 @@ aiChatApi.post('/process', async (c) => {
             }
 
             if (!inputImageUrl) {
+              console.log('❌ No input image URL found');
               // Set agent to failed status
               const convex = new ConvexHttpClient(c.env.CONVEX_URL);
               await convex.mutation(api.agents.updateAgentStatus, {
@@ -620,77 +656,120 @@ aiChatApi.post('/process', async (c) => {
               return; // Skip this agent
             }
 
-            const response = await fetch(`${baseUrl}/api/images/edit`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                // Forward all original headers for proper authentication
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify({
-                prompt: operation.prompt,
+            console.log('🔄 Starting image edit for agent:', agentId, 'with inputImageUrl:', inputImageUrl);
+            // Use HTTP endpoint for local development, internal function for production
+            if (c.env.NODE_ENV === 'development') {
+              const baseUrl = new URL(c.req.url).origin;
+              const response = await fetch(`${baseUrl}/api/images/edit`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify({
+                  prompt: operation.prompt,
+                  inputImageUrl,
+                  agentId
+                })
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Failed to trigger image edit:', errorText);
+              }
+            } else {
+              await editImageInternal(
+                c.env,
+                user.id,
+                operation.prompt,
                 inputImageUrl,
+                "fal-ai/flux-kontext/dev",
+                28, // steps
                 agentId
-              })
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('❌ Failed to trigger image edit:', errorText);
-              console.error('❌ Response status:', response.status);
-            } else {
-              console.log('✅ Successfully triggered image edit for agent:', agentId);
+              );
             }
+            console.log('✅ Successfully triggered image edit for agent:', agentId);
           } else if (operation.type === 'voice-generate') {
-            const response = await fetch(`${baseUrl}/api/voice`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify({
-                prompt: operation.prompt,
-                voice: 'Aurora', // Default voice, could be made configurable
-                agentId
-              })
-            });
+            // Use HTTP endpoint for local development, internal function for production
+            const baseUrl = new URL(c.req.url).origin;
+            if (c.env.NODE_ENV === 'development') {
+              const response = await fetch(`${baseUrl}/api/voice`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify({
+                  prompt: operation.prompt,
+                  voice: 'Aurora',
+                  agentId
+                })
+              });
 
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('Failed to trigger voice generation:', errorText);
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Failed to trigger voice generation:', errorText);
+              }
             } else {
-              console.log('✅ Successfully triggered voice generation for agent:', agentId);
+              await generateVoiceInternal(
+                c.env,
+                user.id,
+                operation.prompt,
+                'Aurora' as const,
+                undefined, // audioSampleUrl
+                operation.model || 'normal',
+                agentId,
+                baseUrl
+              );
             }
+            console.log('✅ Successfully triggered voice generation for agent:', agentId);
           } else if (operation.type === 'video-generate') {
-            const response = await fetch(`${baseUrl}/api/video`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...Object.fromEntries(c.req.raw.headers.entries())
-              },
-              body: JSON.stringify({
-                prompt: operation.prompt,
-                agentId
-              })
-            });
+            // Use HTTP endpoint for local development, internal function for production
+            const baseUrl = new URL(c.req.url).origin;
+            if (c.env.NODE_ENV === 'development') {
+              const response = await fetch(`${baseUrl}/api/video`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...Object.fromEntries(c.req.raw.headers.entries())
+                },
+                body: JSON.stringify({
+                  prompt: operation.prompt,
+                  agentId
+                })
+              });
 
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error('Failed to trigger video generation:', errorText);
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Failed to trigger video generation:', errorText);
+              }
             } else {
-              console.log('✅ Successfully triggered video generation for agent:', agentId);
+              await generateVideoInternal(
+                c.env,
+                user.id,
+                operation.prompt,
+                operation.model || 'normal',
+                '16:9', // aspectRatio
+                '8s', // duration
+                agentId,
+                baseUrl
+              );
             }
+            console.log('✅ Successfully triggered video generation for agent:', agentId);
           }
         } catch (error) {
-          console.error('Failed to trigger generation for agent:', agentId, error);
+          console.error('❌ Failed to trigger generation for agent:', agentId, error);
+          console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
+          console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         }
       });
 
       // Fire all generation requests in parallel (don't wait for them to complete)
       // This allows the chat response to return immediately while generations happen in background
       // Each agent will update its status independently as generation completes
+      console.log('🔄 Firing', generationPromises.length, 'generation promises');
       Promise.all(generationPromises).catch(error => {
-        console.error('Some generation requests failed:', error);
+        console.error('❌ Some generation requests failed:', error);
       });
     }
 

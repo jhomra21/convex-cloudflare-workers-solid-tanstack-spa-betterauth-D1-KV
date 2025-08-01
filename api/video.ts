@@ -7,8 +7,8 @@ const videoApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Helper function to update agent status
 async function updateAgentStatus(
-  convexUrl: string, 
-  agentId: string, 
+  convexUrl: string,
+  agentId: string,
   status: 'idle' | 'processing' | 'success' | 'failed'
 ) {
   try {
@@ -25,8 +25,8 @@ async function updateAgentStatus(
 
 // Helper function to update both agent video and status in one call
 async function updateAgentVideoAndStatus(
-  convexUrl: string, 
-  agentId: string, 
+  convexUrl: string,
+  agentId: string,
   videoUrl: string,
   status: 'success' | 'failed'
 ) {
@@ -50,11 +50,11 @@ videoApi.post('/', async (c) => {
   }
 
   let agentId; // Declare agentId in outer scope
-  
+
   try {
     const data = await c.req.json();
-    const { 
-      prompt, 
+    const {
+      prompt,
       model = 'normal',
       aspectRatio = '16:9',
       duration = '8s',
@@ -116,12 +116,12 @@ videoApi.post('/', async (c) => {
     if (!falResponse.ok) {
       const errorText = await falResponse.text();
       console.error('❌ FAL AI queue error:', errorText);
-      
+
       // Set agent status to failed if agentId is provided
       if (agentId && c.env.CONVEX_URL) {
         await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
       }
-      
+
       return c.json({ error: 'FAL AI video queue submission failed' }, 500);
     }
 
@@ -144,14 +144,14 @@ videoApi.post('/', async (c) => {
     });
   } catch (error) {
     console.error('❌ Video generation error:', error);
-    
+
     // Set agent status to failed if agentId is provided
     if (agentId && c.env.CONVEX_URL) {
       await updateAgentStatus(c.env.CONVEX_URL, agentId, 'failed');
     }
 
-    return c.json({ 
-      error: 'Failed to generate video', 
+    return c.json({
+      error: 'Failed to generate video',
       details: error.message,
       type: error.constructor.name
     }, 500);
@@ -163,7 +163,7 @@ videoApi.post('/webhook', async (c) => {
   try {
     const webhookData = await c.req.json();
     const { request_id, status, payload, error } = webhookData;
-    
+
     console.log(`🎬 Webhook received for request_id: ${request_id}, status: ${status}`);
 
     if (!c.env.CONVEX_URL) {
@@ -173,10 +173,10 @@ videoApi.post('/webhook', async (c) => {
 
     // Find agent by request_id
     const convex = new ConvexHttpClient(c.env.CONVEX_URL);
-    const agent = await convex.query(api.agents.getAgentByRequestId, { 
-      requestId: request_id 
+    const agent = await convex.query(api.agents.getAgentByRequestId, {
+      requestId: request_id
     });
-    
+
     if (!agent) {
       console.error(`❌ No agent found for request_id: ${request_id}`);
       return c.json({ error: 'Agent not found' }, 404);
@@ -186,12 +186,12 @@ videoApi.post('/webhook', async (c) => {
       // Use fal.ai URL directly - no need to store in R2
       const videoUrl = payload.video.url;
       console.log(`✅ Video completed successfully: ${videoUrl}`);
-      
+
       // Update agent with success and video URL
       await updateAgentVideoAndStatus(c.env.CONVEX_URL, agent._id, videoUrl, 'success');
     } else {
       console.error(`❌ Video failed for agent ${agent._id}:`, error || 'Unknown error');
-      
+
       // Update agent with failure
       await updateAgentStatus(c.env.CONVEX_URL, agent._id, 'failed');
     }
@@ -199,11 +199,100 @@ videoApi.post('/webhook', async (c) => {
     return c.json({ received: true });
   } catch (error) {
     console.error('❌ Webhook processing error:', error);
-    return c.json({ 
-      error: 'Failed to process webhook', 
-      details: error.message 
+    return c.json({
+      error: 'Failed to process webhook',
+      details: error.message
     }, 500);
   }
 });
+
+// Internal function for video generation (no HTTP layer, but still uses webhooks)
+export async function generateVideoInternal(
+  env: Env,
+  userId: string,
+  prompt: string,
+  model: string = 'normal',
+  aspectRatio: string = '16:9',
+  duration: string = '8s',
+  agentId?: string,
+  baseUrl?: string
+) {
+  try {
+    if (!env.FAL_KEY) {
+      throw new Error('FAL AI service not configured');
+    }
+
+    if (!env.CONVEX_URL) {
+      throw new Error('Database service not configured');
+    }
+
+    // We need the base URL to construct the webhook URL
+    if (!baseUrl) {
+      throw new Error('Base URL required for webhook construction');
+    }
+
+    const webhookUrl = `${baseUrl}/api/video/webhook`;
+
+    // Update agent status to 'processing'
+    if (agentId) {
+      await updateAgentStatus(env.CONVEX_URL, agentId, 'processing');
+    }
+
+    // Submit to fal.ai queue with webhook (same as the original endpoint)
+    const falResponse = await fetch(
+      `https://queue.fal.run/fal-ai/veo3/fast?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${env.FAL_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          aspect_ratio: aspectRatio,
+          duration,
+          enhance_prompt: true,
+          generate_audio: true,
+        }),
+      }
+    );
+
+    if (!falResponse.ok) {
+      const errorText = await falResponse.text();
+      console.error('❌ FAL AI queue error:', errorText);
+
+      // Set agent status to failed if agentId is provided
+      if (agentId) {
+        await updateAgentStatus(env.CONVEX_URL, agentId, 'failed');
+      }
+
+      throw new Error('FAL AI video queue submission failed');
+    }
+
+    const queueResult = await falResponse.json() as { request_id: string; gateway_request_id: string };
+    console.log(`✅ Video queued with request_id: ${queueResult.request_id}`);
+
+    // Store request_id with agent for webhook matching
+    if (agentId) {
+      const convex = new ConvexHttpClient(env.CONVEX_URL);
+      await convex.mutation(api.agents.updateAgentRequestId, {
+        agentId: agentId as any,
+        requestId: queueResult.request_id,
+      });
+    }
+
+    return {
+      success: true,
+      request_id: queueResult.request_id,
+      status: 'processing'
+    };
+  } catch (error) {
+    // Update agent status to failed if provided
+    if (agentId && env.CONVEX_URL) {
+      await updateAgentStatus(env.CONVEX_URL, agentId, 'failed');
+    }
+    throw error;
+  }
+}
 
 export default videoApi;

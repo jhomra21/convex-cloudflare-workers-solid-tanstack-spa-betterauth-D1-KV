@@ -54,7 +54,7 @@ voiceApi.post('/', async (c) => {
     const data = await c.req.json();
     const { 
       prompt, 
-      voice = "Aurora",
+      voice = "Aurora" as VoiceType,
       audioSampleUrl,
       exaggeration = 1.5,
       model = 'normal',
@@ -212,5 +212,106 @@ voiceApi.post('/webhook', async (c) => {
     }, 500);
   }
 });
+
+// Define the valid voice types
+type VoiceType = "Aurora" | "Blade" | "Britney" | "Carl" | "Cliff" | "Richard" | "Rico" | "Siobhan" | "Vicky";
+
+// Internal function for voice generation (no HTTP layer, but still uses webhooks)
+export async function generateVoiceInternal(
+  env: Env,
+  userId: string,
+  prompt: string,
+  voice: VoiceType = "Aurora",
+  audioSampleUrl?: string,
+  model: string = 'normal',
+  agentId?: string,
+  baseUrl?: string
+) {
+  try {
+    if (!env.FAL_KEY) {
+      throw new Error('FAL AI service not configured');
+    }
+
+    if (!env.CONVEX_URL) {
+      throw new Error('Database service not configured');
+    }
+
+    // We need the base URL to construct the webhook URL
+    if (!baseUrl) {
+      throw new Error('Base URL required for webhook construction');
+    }
+
+    const webhookUrl = `${baseUrl}/api/voice/webhook`;
+
+    // Update agent status to 'processing' and voice settings
+    if (agentId) {
+      const convex = new ConvexHttpClient(env.CONVEX_URL);
+      await convex.mutation(api.agents.startVoiceGeneration, {
+        agentId: agentId as any,
+        status: "processing",
+        voice: audioSampleUrl ? undefined : voice,
+        audioSampleUrl: audioSampleUrl || undefined,
+      });
+    }
+
+    // Submit to fal.ai queue with webhook (same as the original endpoint)
+    const falResponse = await fetch(
+      `https://queue.fal.run/resemble-ai/chatterboxhd/text-to-speech?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${env.FAL_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: prompt,
+          voice: audioSampleUrl ? undefined : voice,
+          audio_url: audioSampleUrl,
+          exaggeration: 1.5,
+          cfg: 0.5,
+          temperature: 0.8,
+          high_quality_audio: model === 'pro',
+          seed: undefined,
+        }),
+      }
+    );
+
+    if (!falResponse.ok) {
+      const errorText = await falResponse.text();
+      console.error('❌ FAL AI queue error:', errorText);
+      
+      // Set agent status to failed if agentId is provided
+      if (agentId) {
+        await updateAgentStatus(env.CONVEX_URL, agentId, 'failed');
+      }
+      
+      throw new Error('FAL AI TTS queue submission failed');
+    }
+
+    const queueResult = await falResponse.json() as { request_id: string; gateway_request_id: string };
+    console.log(`✅ TTS queued with request_id: ${queueResult.request_id}`);
+
+    // Store request_id with agent for webhook matching
+    if (agentId) {
+      const convex = new ConvexHttpClient(env.CONVEX_URL);
+      await convex.mutation(api.agents.updateAgentRequestId, {
+        agentId: agentId as any,
+        requestId: queueResult.request_id,
+      });
+    }
+
+    return {
+      success: true,
+      request_id: queueResult.request_id,
+      status: 'processing'
+    };
+  } catch (error) {
+    // Update agent status to failed if provided
+    if (agentId && env.CONVEX_URL) {
+      await updateAgentStatus(env.CONVEX_URL, agentId, 'failed');
+    }
+    throw error;
+  }
+}
 
 export default voiceApi;
