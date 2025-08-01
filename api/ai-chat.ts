@@ -647,15 +647,23 @@ aiChatApi.post('/process', async (c) => {
               console.log('✅ Successfully triggered image generation for agent:', agentId);
             }
           } else if (operation.type === 'image-edit') {
+            console.log('🎨 Starting image-edit processing for agent:', agentId);
             let inputImageUrl = operation.inputSource?.fileUrl;
+            console.log('🎨 Initial inputImageUrl:', inputImageUrl);
 
             // If it's an agent connection, get the image URL from the referenced agent
             if (operation.inputSource?.type === 'agent_connection' && operation.inputSource?.sourceAgentId) {
+              console.log('🎨 Looking for referenced agent:', operation.inputSource.sourceAgentId);
+              console.log('🎨 Available referencedAgentData:', referencedAgentData.map(a => ({ id: a._id, hasImage: !!a.imageUrl })));
+
               const referencedAgent = referencedAgentData.find(agent => agent._id === operation.inputSource?.sourceAgentId);
+              console.log('🎨 Found referenced agent:', !!referencedAgent);
 
               if (referencedAgent && referencedAgent.imageUrl) {
                 inputImageUrl = referencedAgent.imageUrl;
+                console.log('🎨 Using referenced agent image URL:', inputImageUrl);
               } else {
+                console.log('🎨 Referenced agent not found or has no image, setting to failed');
                 // Set agent to failed status
                 const convex = new ConvexHttpClient(c.env.CONVEX_URL);
                 await convex.mutation(api.agents.updateAgentStatus, {
@@ -667,6 +675,7 @@ aiChatApi.post('/process', async (c) => {
             }
 
             if (!inputImageUrl) {
+              console.log('🎨 No inputImageUrl available, setting to failed');
               // Set agent to failed status
               const convex = new ConvexHttpClient(c.env.CONVEX_URL);
               await convex.mutation(api.agents.updateAgentStatus, {
@@ -676,6 +685,13 @@ aiChatApi.post('/process', async (c) => {
               return; // Skip this agent
             }
 
+            console.log('🎨 Making image-edit fetch request:', {
+              url: `${baseUrl}/api/images/edit`,
+              inputImageUrl,
+              agentId
+            });
+
+            console.log('📡 About to make image-edit fetch request...');
             const response = await fetch(`${baseUrl}/api/images/edit`, {
               method: 'POST',
               headers: {
