@@ -610,10 +610,10 @@ aiChatApi.post('/process', async (c) => {
 
         try {
           if (operation.type === 'image-generate') {
-            // Use internal function for image generation - more reliable than HTTP requests
+            // Use internal function for image generation - use async execution like image editing
             console.log('🔄 Starting internal image generation for agent:', agentId);
-            try {
-              await generateImageInternal(
+            c.executionCtx.waitUntil(
+              generateImageInternal(
                 c.env,
                 user.id,
                 operation.prompt,
@@ -623,12 +623,13 @@ aiChatApi.post('/process', async (c) => {
                 4, // steps
                 undefined, // seed
                 agentId
-              );
-              console.log('✅ Successfully completed image generation for agent:', agentId);
-            } catch (error) {
-              console.error('❌ Failed to generate image internally:', error);
-              // The internal function already handles setting agent status to failed
-            }
+              ).then(() => {
+                console.log('✅ Successfully completed image generation for agent:', agentId);
+              }).catch(error => {
+                console.error('❌ Failed to generate image internally:', error);
+                // The internal function already handles setting agent status to failed
+              })
+            );
           } else if (operation.type === 'image-edit') {
             console.log('🔄 Processing image-edit operation');
             console.log('🔄 Operation inputSource:', operation.inputSource);
@@ -690,12 +691,11 @@ aiChatApi.post('/process', async (c) => {
 
             console.log('🔄 Image edit request fired, continuing...');
           } else if (operation.type === 'voice-generate') {
-            // Use internal function for voice generation - more reliable than HTTP requests
-            // The internal function still uses webhooks for FAL AI callbacks
+            // Use internal function for voice generation - use async execution like image editing
             console.log('🔄 Starting internal voice generation for agent:', agentId);
-            try {
-              const baseUrl = new URL(c.req.url).origin;
-              await generateVoiceInternal(
+            const baseUrl = new URL(c.req.url).origin;
+            c.executionCtx.waitUntil(
+              generateVoiceInternal(
                 c.env,
                 user.id,
                 operation.prompt,
@@ -704,19 +704,19 @@ aiChatApi.post('/process', async (c) => {
                 'normal', // model
                 agentId,
                 baseUrl // needed for webhook URL construction
-              );
-              console.log('✅ Successfully triggered voice generation for agent:', agentId);
-            } catch (error) {
-              console.error('❌ Failed to generate voice internally:', error);
-              // The internal function already handles setting agent status to failed
-            }
+              ).then(() => {
+                console.log('✅ Successfully triggered voice generation for agent:', agentId);
+              }).catch(error => {
+                console.error('❌ Failed to generate voice internally:', error);
+                // The internal function already handles setting agent status to failed
+              })
+            );
           } else if (operation.type === 'video-generate') {
-            // Use internal function for video generation - more reliable than HTTP requests
-            // The internal function still uses webhooks for FAL AI callbacks
+            // Use internal function for video generation - use async execution like image editing
             console.log('🔄 Starting internal video generation for agent:', agentId);
-            try {
-              const baseUrl = new URL(c.req.url).origin;
-              await generateVideoInternal(
+            const baseUrl = new URL(c.req.url).origin;
+            c.executionCtx.waitUntil(
+              generateVideoInternal(
                 c.env,
                 user.id,
                 operation.prompt,
@@ -725,12 +725,13 @@ aiChatApi.post('/process', async (c) => {
                 '8s', // duration
                 agentId,
                 baseUrl // needed for webhook URL construction
-              );
-              console.log('✅ Successfully triggered video generation for agent:', agentId);
-            } catch (error) {
-              console.error('❌ Failed to generate video internally:', error);
-              // The internal function already handles setting agent status to failed
-            }
+              ).then(() => {
+                console.log('✅ Successfully triggered video generation for agent:', agentId);
+              }).catch(error => {
+                console.error('❌ Failed to generate video internally:', error);
+                // The internal function already handles setting agent status to failed
+              })
+            );
           }
         } catch (error) {
           console.error('❌ Failed to trigger generation for agent:', agentId, error);
