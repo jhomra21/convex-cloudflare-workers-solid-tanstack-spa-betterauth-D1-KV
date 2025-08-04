@@ -343,7 +343,7 @@ export function ImageAgent(props: ImageAgentProps) {
       setLocalPrompt(newPrompt);
       props.onPromptChange?.(agentId, newPrompt);
       setIsEditingPrompt(false);
-      
+
       // If we have an existing image and the prompt changed, regenerate
       if (hasImage() && newPrompt !== props.prompt?.trim()) {
         await handleGenerate();
@@ -368,15 +368,17 @@ export function ImageAgent(props: ImageAgentProps) {
     }
   };
 
-
-
   // Image dimensions state for dynamic sizing
   const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(null);
-  
-  // Agent size - use image dimensions when available, otherwise default size
+
+  // Agent size - prioritize existing size, only auto-size for new images
   const agentSize = () => {
-    if (props.size) return props.size;
-    
+    // Always use existing size if available (from manual resize or previous auto-size)
+    if (props.size) {
+      return props.size;
+    }
+
+    // Only auto-size if there's no existing size and we have image dimensions
     const imgDims = imageDimensions();
     if (imgDims && props.generatedImage) {
       // Calculate size based on image aspect ratio with constraints
@@ -401,13 +403,14 @@ export function ImageAgent(props: ImageAgentProps) {
         height *= scale;
       }
 
-      // Add minimal padding for UI elements to ensure image fills most of the space
+      // Add padding for UI elements
       return {
         width: Math.round(width),
-        height: Math.round(height + 60) // Conservative padding for drag handle + prompt overlay
+        height: Math.round(height + 60) // Padding for drag handle + prompt overlay
       };
     }
 
+    // Default size
     return { width: 320, height: 384 };
   };
 
@@ -435,12 +438,15 @@ export function ImageAgent(props: ImageAgentProps) {
     }
   });
 
-  // Update parent when agent size changes due to image dimensions
+  // Update parent when agent size changes due to image dimensions (only for new agents)
   createEffect(() => {
     const currentSize = agentSize();
     const imgDims = imageDimensions();
 
-    // Only notify parent if size changed due to image dimensions (not manual resize)
+    // Don't auto-resize during manual resize operations
+    if (props.isResizing) return;
+
+    // Only auto-resize when we have image dimensions, a generated image, and no existing size
     if (imgDims && props.generatedImage && !props.size && props.onSizeChange) {
       props.onSizeChange(agentId, currentSize);
     }
@@ -680,6 +686,7 @@ export function ImageAgent(props: ImageAgentProps) {
                           src={getInputImage()!}
                           alt="Input image"
                           class="w-full h-full object-contain"
+                          loading='lazy'
                         />
                         {/* Show indicator for local files that haven't been uploaded */}
                         <Show when={localImageFile()}>
@@ -780,6 +787,7 @@ export function ImageAgent(props: ImageAgentProps) {
               src={props.generatedImage}
               alt="Generated image"
               class="w-full h-full object-cover"
+              loading='lazy'
               style={{
                 opacity: isLoading() ? 0.3 : 1,
                 transition: "opacity 300ms ease"
@@ -936,7 +944,7 @@ export function ImageAgent(props: ImageAgentProps) {
                       disabled={isLoading()}
                       class={cn(
                         "flex items-center justify-center h-8 w-8 p-0 font-mono text-lg leading-none transition-all duration-200 shadow-sm",
-                        isLoading() 
+                        isLoading()
                           ? "!text-green-300 bg-green-500/5 border border-green-500/20 cursor-not-allowed"
                           : "!text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 hover:border-green-400/50 hover:scale-105 hover:shadow-green-500/20"
                       )}
@@ -1002,22 +1010,30 @@ export function ImageAgent(props: ImageAgentProps) {
             {/* Corner resize handles - larger hit areas, invisible */}
             <div
               class="absolute -top-2 -left-2 w-6 h-6 cursor-nw-resize z-30 opacity-0"
-              onMouseDown={(e) => props.onResizeStart?.(e, 'nw')}
+              onMouseDown={(e) => {
+                props.onResizeStart?.(e, 'nw');
+              }}
               title="Resize"
             />
             <div
               class="absolute -top-2 -right-2 w-6 h-6 cursor-ne-resize z-30 opacity-0"
-              onMouseDown={(e) => props.onResizeStart?.(e, 'ne')}
+              onMouseDown={(e) => {
+                props.onResizeStart?.(e, 'ne');
+              }}
               title="Resize"
             />
             <div
               class="absolute -bottom-2 -left-2 w-6 h-6 cursor-sw-resize z-30 opacity-0"
-              onMouseDown={(e) => props.onResizeStart?.(e, 'sw')}
+              onMouseDown={(e) => {
+                props.onResizeStart?.(e, 'sw');
+              }}
               title="Resize"
             />
             <div
               class="absolute -bottom-2 -right-2 w-6 h-6 cursor-se-resize z-30 opacity-0"
-              onMouseDown={(e) => props.onResizeStart?.(e, 'se')}
+              onMouseDown={(e) => {
+                props.onResizeStart?.(e, 'se');
+              }}
               title="Resize"
             />
           </>
