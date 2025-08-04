@@ -41,24 +41,34 @@ export function useConvexQuery<
   // Set up Convex real-time subscription to invalidate TanStack Query cache
   createEffect(() => {
     const currentArgs = args();
-    if (currentArgs === null || currentArgs === undefined) {
+    const currentQueryKey = queryKey();
+
+    // Guard: Only proceed if we have valid args and query key
+    if (currentArgs === null || currentArgs === undefined || !currentQueryKey) {
       return;
     }
 
     let unsubscribe: (() => void) | undefined;
+    let isSubscriptionActive = true;
 
     try {
       unsubscribe = convex.onUpdate(
         query as any,
         currentArgs as any,
         (newData: any) => {
+          // Guard: Only update if subscription is still active
+          if (!isSubscriptionActive) return;
+
           // Update TanStack Query cache with new data from Convex
-          queryClient.setQueryData(['convex', ...queryKey()], newData);
+          queryClient.setQueryData(['convex', ...currentQueryKey], newData);
         },
         (error: Error) => {
+          // Guard: Only handle errors if subscription is still active
+          if (!isSubscriptionActive) return;
+
           // Handle subscription errors by invalidating the query
           console.warn('Convex subscription error:', error);
-          queryClient.invalidateQueries({ queryKey: ['convex', ...queryKey()] });
+          queryClient.invalidateQueries({ queryKey: ['convex', ...currentQueryKey] });
         }
       );
     } catch (error) {
@@ -66,6 +76,7 @@ export function useConvexQuery<
     }
 
     onCleanup(() => {
+      isSubscriptionActive = false;
       if (unsubscribe) {
         try {
           unsubscribe();

@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, onCleanup, onMount } from 'solid-js';
+import { createSignal, For, Show, createEffect, onCleanup, onMount, batch } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { MemoizedVideoAgent } from './MemoizedVideoAgent';
@@ -17,7 +17,6 @@ import { useAgentManagement } from '~/lib/hooks/use-agent-management';
 import { useZIndexManagement } from '~/lib/hooks/use-z-index-management';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
-import type { ChatMessage } from '~/types/agents';
 
 export interface ImageCanvasProps {
   class?: string;
@@ -34,13 +33,21 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Canvas data - choose query based on activeCanvasId
   const defaultCanvas = useConvexQuery(
     convexApi.canvas.getCanvas,
-    () => (!props.activeCanvasId && userId()) ? { userId: userId()! } : null,
+    () => {
+      const currentUserId = userId();
+      const isSharedCanvas = !!props.activeCanvasId;
+      return (!isSharedCanvas && currentUserId) ? { userId: currentUserId } : null;
+    },
     () => ['canvas', 'default', userId()]
   );
 
   const specificCanvas = useConvexQuery(
     convexApi.canvas.getCanvasById,
-    () => (props.activeCanvasId && userId()) ? { canvasId: props.activeCanvasId as any, userId: userId()! } : null,
+    () => {
+      const currentUserId = userId();
+      const activeId = props.activeCanvasId;
+      return (activeId && currentUserId) ? { canvasId: activeId as any, userId: currentUserId } : null;
+    },
     () => ['canvas', 'specific', props.activeCanvasId, userId()]
   );
 
@@ -104,36 +111,85 @@ export function ImageCanvas(props: ImageCanvasProps) {
   // Create canvas if it doesn't exist (but not when shared canvas becomes inaccessible)
   // Add a flag to prevent duplicate creation attempts
   const [isCreatingCanvas, setIsCreatingCanvas] = createSignal(false);
+  const [hasAttemptedCanvasCreation, setHasAttemptedCanvasCreation] = createSignal(false);
 
-  createEffect(async () => {
-    if (userId() && canvas() === null && !props.activeCanvasId && !isCreatingCanvas()) {
+  createEffect(() => {
+    const currentUserId = userId();
+    const currentCanvas = canvas();
+    const isSharedCanvas = !!props.activeCanvasId;
+    const creatingCanvas = isCreatingCanvas();
+    const hasAttempted = hasAttemptedCanvasCreation();
+
+    // Guard: Only create canvas for authenticated users on their own canvas (not shared)
+    if (!currentUserId || isSharedCanvas || creatingCanvas || hasAttempted) {
+      return;
+    }
+
+    // Guard: Only proceed if canvas is explicitly null (not undefined/loading)
+    // Also check if the default canvas query has actually completed
+    if (currentCanvas !== null || defaultCanvas.isLoading || defaultCanvas.isFetching) {
+      return;
+    }
+
+    // Additional guard: Only proceed if we're sure the query has completed and returned null
+    if (defaultCanvas.data === undefined) {
+      return;
+    }
+
+    // Mark that we've attempted creation to prevent re-runs
+    batch(() => {
+      setHasAttemptedCanvasCreation(true);
       setIsCreatingCanvas(true);
+    });
+
+    // Use async function to avoid effect returning promise
+    (async () => {
       try {
         await createCanvasMutation.mutate({
-          userId: userId()!,
+          userId: currentUserId,
           userName: userName(),
         });
+        // Success: canvas created, reset creating flag
+        setIsCreatingCanvas(false);
       } catch (error) {
         console.error('Failed to create canvas:', error);
-      } finally {
-        setIsCreatingCanvas(false);
+        // Reset both flags on error to allow retry
+        batch(() => {
+          setHasAttemptedCanvasCreation(false);
+          setIsCreatingCanvas(false);
+        });
       }
-    }
+    })();
   });
 
   // Watch for when a shared canvas becomes inaccessible and fallback to user's own canvas
   createEffect(() => {
-    // Only handle this for shared canvases (when activeCanvasId is provided)
-    if (props.activeCanvasId && userId() && !hasRedirected()) {
-      const canvasData = specificCanvas.data;
-      // If we were trying to access a specific canvas but it's now null,
-      // it means sharing was disabled or access was revoked
-      if (canvasData === null) {
-        setHasRedirected(true); // Prevent multiple calls
-        toast.error('Canvas sharing has been disabled by the owner. Switched to your canvas.');
-        props.onCanvasDisabled?.();
-      }
+    const activeCanvasId = props.activeCanvasId;
+    const currentUserId = userId();
+    const hasAlreadyRedirected = hasRedirected();
+
+    // Guard: Only handle this for shared canvases (when activeCanvasId is provided)
+    if (!activeCanvasId || !currentUserId || hasAlreadyRedirected) {
+      return;
     }
+
+    const canvasData = specificCanvas.data;
+
+    // Guard: Only act when we have a definitive null result (not loading/undefined)
+    if (canvasData !== null) {
+      return;
+    }
+
+    // Guard: Only redirect if the query has actually completed (not still loading)
+    if (specificCanvas.isLoading || specificCanvas.isFetching) {
+      return;
+    }
+
+    // If we were trying to access a specific canvas but it's now null,
+    // it means sharing was disabled or access was revoked
+    setHasRedirected(true); // Prevent multiple calls
+    toast.error('Canvas sharing has been disabled by the owner. Switched to your canvas.');
+    props.onCanvasDisabled?.();
   });
 
   // Use destructured values from agent management hook
@@ -275,11 +331,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
         formData.append('chatAgentId', `floating-chat-${userId()}`);
         formData.append('canvasId', canvas()!._id);
         formData.append('referencedAgents', JSON.stringify(referencedAgentIds));
-        
+
         uploadedFiles.forEach((file, index) => {
           formData.append(`uploadedFiles`, file);
         });
-        
+
         body = formData;
       } else {
         // Use JSON for text-only messages
@@ -395,11 +451,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
             }}
           >
             {/* Loading State */}
-            <Show when={!canvas() || !agentManagement.agents()}>
+            <Show when={!canvas() || isCreatingCanvas() || (defaultCanvas.isLoading && !props.activeCanvasId) || (specificCanvas.isLoading && !!props.activeCanvasId)}>
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="text-center">
                   <Icon name="loader" class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-                  <p class="text-sm text-muted-foreground">Loading canvas...</p>
+                  <p class="text-sm text-muted-foreground">
+                    {isCreatingCanvas() ? 'Setting up your canvas...' : 'Loading canvas...'}
+                  </p>
                 </div>
               </div>
             </Show>

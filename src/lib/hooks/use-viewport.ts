@@ -40,14 +40,21 @@ export function useViewport(props: UseViewportProps) {
     const canvasId = props.canvasId();
     const userId = props.userId();
 
+    // Guard: Only proceed if we have both canvasId and userId
     if (!canvasId || !userId) {
       setNeedsConvexQuery(false);
       return;
     }
 
     const localViewport = getLocalViewport(canvasId, userId);
+    
     // Only query Convex if no local viewport exists
-    setNeedsConvexQuery(!localViewport);
+    const shouldQuery = !localViewport;
+    
+    // Guard: Only update if the query need actually changed
+    if (needsConvexQuery() !== shouldQuery) {
+      setNeedsConvexQuery(shouldQuery);
+    }
   });
 
   const viewportData = useConvexQuery(
@@ -429,7 +436,10 @@ export function useViewport(props: UseViewportProps) {
     const canvasId = props.canvasId();
     const userId = props.userId();
 
-    if (!canvasId || !userId) return;
+    // Guard: Only proceed if we have both canvasId and userId
+    if (!canvasId || !userId) {
+      return;
+    }
 
     // Get local viewport first
     const localViewport = getLocalViewport(canvasId, userId);
@@ -442,17 +452,30 @@ export function useViewport(props: UseViewportProps) {
       zoom: convexViewportData.zoom,
     } : null;
 
+    // Guard: Only proceed if we have some viewport data to work with
+    if (!localViewport && !convexViewport) {
+      return;
+    }
+
     // Use local-first resolution strategy
     const resolvedViewport = resolveInitialViewport(localViewport, convexViewport);
 
-    setViewport({
-      tx: resolvedViewport.tx,
-      ty: resolvedViewport.ty,
-      zoom: resolvedViewport.zoom,
-    });
+    // Guard: Only update viewport if it actually changed
+    const currentViewport = viewport();
+    const hasChanged = Math.abs(currentViewport.tx - resolvedViewport.tx) > 0.1 ||
+                      Math.abs(currentViewport.ty - resolvedViewport.ty) > 0.1 ||
+                      Math.abs(currentViewport.zoom - resolvedViewport.zoom) > 0.001;
+
+    if (hasChanged) {
+      setViewport({
+        tx: resolvedViewport.tx,
+        ty: resolvedViewport.ty,
+        zoom: resolvedViewport.zoom,
+      });
+    }
 
     // Once we have viewport data (local or convex), disable further queries
-    if (localViewport || convexViewport) {
+    if ((localViewport || convexViewport) && needsConvexQuery()) {
       setNeedsConvexQuery(false);
     }
   });

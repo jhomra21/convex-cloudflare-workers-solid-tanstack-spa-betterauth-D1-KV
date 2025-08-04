@@ -1,6 +1,6 @@
 import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
-import { createSignal, createEffect } from "solid-js";
+import { createSignal, createEffect, batch } from "solid-js";
 import { convexApi, useConvexMutation, useConvexQuery } from "~/lib/convex";
 import { useCurrentUserId, useCurrentUserName } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
@@ -57,43 +57,58 @@ function ImagesPage() {
     createEffect(() => {
         const shareId = search().share;
         const currentUserId = userId();
+        const lastProcessed = lastProcessedShareId();
 
         // Guard: Only process if we have a share ID, user is authenticated, and we haven't processed this share yet
-        if (!shareId || !currentUserId || lastProcessedShareId() === shareId) {
+        if (!shareId || !currentUserId || lastProcessed === shareId) {
             return;
         }
 
         // Store share intent for persistence across auth flows
         storeShareIntent(shareId);
 
-        // Mark as processed and handle the share
-        setLastProcessedShareId(shareId);
-        handleJoinSharedCanvas(shareId);
+        // Use batch to group state updates and prevent cascading effects
+        batch(() => {
+            setLastProcessedShareId(shareId);
+        });
+
+        // Handle the share asynchronously to avoid blocking the effect
+        queueMicrotask(() => {
+            handleJoinSharedCanvas(shareId);
+        });
     });
 
     // Handle pending share intents when user becomes authenticated
     createEffect(() => {
         const currentUserId = userId();
+        const hasChecked = hasCheckedPendingShare();
 
         // Guard: Only check when user becomes authenticated and we haven't checked yet
-        if (!currentUserId || hasCheckedPendingShare()) {
+        if (!currentUserId || hasChecked) {
             return;
         }
 
         // Check for pending share intent from storage
         const pendingShareId = getAndClearShareIntent();
 
-        // Always mark as checked to prevent re-runs
-        setHasCheckedPendingShare(true);
+        // Always mark as checked to prevent re-runs (use batch for state updates)
+        batch(() => {
+            setHasCheckedPendingShare(true);
+        });
 
         if (pendingShareId) {
             // Only proceed if there's no current share in URL to avoid conflicts
             const currentShareId = search().share;
             if (!currentShareId) {
-                setLastProcessedShareId(pendingShareId);
-                // Update URL first, then handle the share
+                batch(() => {
+                    setLastProcessedShareId(pendingShareId);
+                });
+                
+                // Update URL first, then handle the share asynchronously
                 window.history.replaceState({}, '', '/dashboard/canvas?share=' + pendingShareId);
-                handleJoinSharedCanvas(pendingShareId);
+                queueMicrotask(() => {
+                    handleJoinSharedCanvas(pendingShareId);
+                });
             }
         }
     });

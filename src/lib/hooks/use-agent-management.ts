@@ -128,7 +128,11 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Memoized agent processing with proper typing and validation
   const agents = createMemo((): Agent[] => {
     const rawAgentData = dbAgents.data;
-    if (!rawAgentData) return [];
+    
+    // Guard: Return empty array if no data or data is not an array
+    if (!rawAgentData || !Array.isArray(rawAgentData)) {
+      return [];
+    }
 
     // Convert and validate agent data, filtering out agents marked for deletion and chat agents
     return rawAgentData
@@ -143,7 +147,11 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Separate memo for agents that are being deleted (for animation)
   const deletingAgents = createMemo((): Agent[] => {
     const rawAgentData = dbAgents.data;
-    if (!rawAgentData) return [];
+    
+    // Guard: Return empty array if no data or data is not an array
+    if (!rawAgentData || !Array.isArray(rawAgentData)) {
+      return [];
+    }
 
     // Only include agents marked for deletion, excluding chat agents
     return rawAgentData
@@ -531,22 +539,30 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Watch for new agents to manage z-index
   createEffect(() => {
     const currentAgents = dbAgents.data;
-    if (!currentAgents) return;
+    
+    // Guard: Only proceed if we have actual agent data
+    if (!currentAgents || !Array.isArray(currentAgents)) {
+      return;
+    }
 
     // Create a stable set of current agent IDs
     const currentAgentIds = new Set(currentAgents.map((a: AgentData) => a._id));
     const prevIds = previousAgentIds();
 
-    // Only proceed if agent IDs actually changed (not just agent data)
+    // Guard: Only proceed if agent IDs actually changed (not just agent data)
     const prevIdsArray = Array.from(prevIds).sort();
     const currentIdsArray = Array.from(currentAgentIds).sort();
     const idsChanged = prevIdsArray.length !== currentIdsArray.length ||
       prevIdsArray.some((id, i) => id !== currentIdsArray[i]);
 
-    if (!idsChanged) return;
+    if (!idsChanged) {
+      return;
+    }
 
-    // Update previous agent IDs
-    setPreviousAgentIds(currentAgentIds as Set<string>);
+    // Update previous agent IDs using batch to prevent cascading updates
+    batch(() => {
+      setPreviousAgentIds(currentAgentIds as Set<string>);
+    });
   });
 
   // Unified animation end handler
