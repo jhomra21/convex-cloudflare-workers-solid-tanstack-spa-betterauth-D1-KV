@@ -1,5 +1,4 @@
 import { createSignal, createMemo, createEffect, batch, onCleanup } from 'solid-js';
-import { useQueryClient } from '@tanstack/solid-query';
 import { convexApi, useConvexQuery, useConvexMutation, useBatchConvexMutations } from '~/lib/convex';
 import { toast } from 'solid-sonner';
 import {
@@ -26,7 +25,6 @@ export interface UseAgentManagementProps {
 }
 
 export function useAgentManagement(props: UseAgentManagementProps) {
-  const queryClient = useQueryClient();
   const { batch: batchMutations } = useBatchConvexMutations();
 
   // Query for canvas agents using TanStack Query + Convex

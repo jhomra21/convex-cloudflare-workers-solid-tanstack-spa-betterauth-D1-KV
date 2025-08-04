@@ -80,10 +80,10 @@ export const NavUser: Component = () => {
               <SidebarMenuButton
                 size="lg"
                 class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground !cursor-pointer 
-                       transition-[scale,translate] duration-200 ease-in-out flex items-center transform translate-z-0
+                       transition-[scale,translate,shadow] duration-150 ease-out flex items-center transform translate-z-0
                        bg-gradient-to-b from-white via-foreground/5 to-foreground/0.5 border !border-t-foreground/3 !border-b-foreground/10 border-x-foreground/10
-                       hover:shadow-md hover:shadow-foreground/10 hover:scale-101 hover:transition-[shadow,scale]
-                       active:scale-96 active:shadow-none !rounded-xl will-change-auto
+                       hover:shadow-md hover:shadow-foreground/10
+                       active:scale-97 !rounded-xl
                       "
                 classList={{
                   "p-1 rounded-md w-auto": isSidebarCollapsed() && !isMobile(),

@@ -13,7 +13,7 @@ const Dialog = (props: DialogPrimitive.DialogRootProps) => {
 const DialogTrigger = <T extends ValidComponent = "button">(
   props: PolymorphicProps<T, DialogPrimitive.DialogTriggerProps<T>>
 ) => {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
+  return <DialogPrimitive.Trigger class="active:scale-97 transition-[scale] duration-150" data-slot="dialog-trigger" {...props} />
 }
 
 const DialogPortal: Component<DialogPrimitive.DialogPortalProps> = (props) => {

@@ -333,7 +333,7 @@ const SidebarInset: Component<ComponentProps<"main">> = (props) => {
   return (
     <main
       class={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-background/80 will-change-transform",
+        "relative flex min-h-svh flex-1 flex-col bg-background/80",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         local.class
       )}
@@ -632,7 +632,7 @@ const SidebarMenuSub: Component<ComponentProps<"ul">> = (props) => {
     <ul
       data-sidebar="menu-sub"
       class={cn(
-        "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 transition-opacity duration-150 ease-out will-change-opacity",
+        "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 transition-opacity duration-150 ease-out",
         "group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:pointer-events-none",
         local.class
       )}

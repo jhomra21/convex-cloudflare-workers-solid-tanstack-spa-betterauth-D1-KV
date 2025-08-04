@@ -241,24 +241,14 @@ export function ImageCanvas(props: ImageCanvasProps) {
   });
 
   const resizeHook = useCanvasResize({
-    onResizeMove: (agentId, size, positionAdjustment) => {
-      if (positionAdjustment) {
+    onResizeEnd: (agentId, finalSize, finalPosition) => {
+      if (finalPosition) {
         // Use combined update for resize handles that need position adjustment
-        const agent = agents().find(a => a.id === agentId);
-        if (agent) {
-          const newPos = {
-            x: agent.position.x + positionAdjustment.x,
-            y: agent.position.y + positionAdjustment.y,
-          };
-          updateAgentSizeAndPosition(agentId, size, newPos);
-        }
+        updateAgentSizeAndPosition(agentId, finalSize, finalPosition);
       } else {
         // Use size-only update for bottom-right handle
-        updateAgentSize(agentId, size);
+        updateAgentSize(agentId, finalSize);
       }
-    },
-    onResizeEnd: () => {
-      // Agent management hook handles saving
     },
     viewportGetter: () => viewport.viewport(),
   });

@@ -1005,39 +1005,33 @@ export function ImageAgent(props: ImageAgentProps) {
         </Show>
 
         {/* Resize Handles - Larger invisible areas for easier grabbing */}
-        {props.onResizeStart && (
-          <>
-            {/* Corner resize handles - larger hit areas, invisible */}
-            <div
-              class="absolute -top-2 -left-2 w-6 h-6 cursor-nw-resize z-30 opacity-0"
-              onMouseDown={(e) => {
-                props.onResizeStart?.(e, 'nw');
-              }}
-              title="Resize"
-            />
-            <div
-              class="absolute -top-2 -right-2 w-6 h-6 cursor-ne-resize z-30 opacity-0"
-              onMouseDown={(e) => {
-                props.onResizeStart?.(e, 'ne');
-              }}
-              title="Resize"
-            />
-            <div
-              class="absolute -bottom-2 -left-2 w-6 h-6 cursor-sw-resize z-30 opacity-0"
-              onMouseDown={(e) => {
-                props.onResizeStart?.(e, 'sw');
-              }}
-              title="Resize"
-            />
-            <div
-              class="absolute -bottom-2 -right-2 w-6 h-6 cursor-se-resize z-30 opacity-0"
-              onMouseDown={(e) => {
-                props.onResizeStart?.(e, 'se');
-              }}
-              title="Resize"
-            />
-          </>
-        )}
+        <Show when={props.onResizeStart}>
+          <For each={[
+            { position: 'nw', cursor: 'nw-resize', class: '-top-2 -left-2' },
+            { position: 'ne', cursor: 'ne-resize', class: '-top-2 -right-2' },
+            { position: 'sw', cursor: 'sw-resize', class: '-bottom-2 -left-2' },
+            { position: 'se', cursor: 'se-resize', class: '-bottom-2 -right-2' },
+            { position: 'n', cursor: 'n-resize', class: '-top-2 left-1/2 -translate-x-1/2' },
+            { position: 's', cursor: 's-resize', class: '-bottom-2 left-1/2 -translate-x-1/2' },
+            { position: 'w', cursor: 'w-resize', class: 'top-1/2 -left-2 -translate-y-1/2' },
+            { position: 'e', cursor: 'e-resize', class: 'top-1/2 -right-2 -translate-y-1/2' },
+          ]}>
+            {(handle) => (
+              <div
+                class={cn(
+                  "absolute w-6 h-6 opacity-0 z-30",
+                  handle.class
+                )}
+                style={{ cursor: handle.cursor }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  props.onResizeStart?.(e, handle.position);
+                }}
+                title="Resize"
+              />
+            )}
+          </For>
+        </Show>
       </Card>
     </ErrorBoundary>
   );
