@@ -548,10 +548,7 @@ aiChatApi.post('/process', async (c) => {
     );
 
     // 6. Auto-trigger media generation if enabled
-    console.log('🔄 Checking auto-generation:', { autoGenerate: analysisResult.autoGenerate, createdAgentsCount: createdAgents.length });
-    if (analysisResult.autoGenerate && createdAgents.length > 0) {
-      console.log('✅ Starting auto-generation for', createdAgents.length, 'agents');
-      
+    if (analysisResult.autoGenerate && createdAgents.length > 0) {      
       // Check if we have the required environment variables for generation
       const missingEnvVars = [];
       if (!c.env.CONVEX_URL) missingEnvVars.push('CONVEX_URL');
@@ -595,10 +592,8 @@ aiChatApi.post('/process', async (c) => {
 
       // Wait for all status updates to complete
       await Promise.all(statusUpdatePromises);
-      console.log('✅ All agent statuses updated to processing');
 
       // Then trigger generation for all agents in parallel using internal functions
-      console.log('🔄 Creating generation promises for', createdAgents.length, 'agents');
       const generationPromises = createdAgents.map(async (agentId, index) => {
         const operation = analysisResult.operations?.[index];
         if (!operation) {
@@ -606,12 +601,9 @@ aiChatApi.post('/process', async (c) => {
           return;
         }
 
-        console.log('🔄 Processing operation for agent:', agentId, 'type:', operation.type);
-
         try {
           if (operation.type === 'image-generate') {
             // Use internal function for image generation - use async execution like image editing
-            console.log('🔄 Starting internal image generation for agent:', agentId);
             c.executionCtx.waitUntil(
               generateImageInternal(
                 c.env,
@@ -631,23 +623,14 @@ aiChatApi.post('/process', async (c) => {
               })
             );
           } else if (operation.type === 'image-edit') {
-            console.log('🔄 Processing image-edit operation');
-            console.log('🔄 Operation inputSource:', operation.inputSource);
-            console.log('🔄 Referenced agent data:', referencedAgentData.map(a => ({ id: a._id, imageUrl: a.imageUrl })));
-
             let inputImageUrl = operation.inputSource?.fileUrl;
 
             // If it's an agent connection, get the image URL from the referenced agent
             if (operation.inputSource?.type === 'agent_connection' && operation.inputSource?.sourceAgentId) {
-              console.log('🔄 Looking for referenced agent with ID:', operation.inputSource.sourceAgentId);
               const referencedAgent = referencedAgentData.find(agent => agent._id === operation.inputSource?.sourceAgentId);
-              console.log('🔄 Found referenced agent:', referencedAgent ? { id: referencedAgent._id, imageUrl: referencedAgent.imageUrl } : 'NOT FOUND');
-
               if (referencedAgent && referencedAgent.imageUrl) {
                 inputImageUrl = referencedAgent.imageUrl;
-                console.log('✅ Using referenced agent image URL:', inputImageUrl);
               } else {
-                console.log('❌ Referenced agent not found or has no image URL');
                 // Set agent to failed status
                 const convex = new ConvexHttpClient(c.env.CONVEX_URL);
                 await convex.mutation(api.agents.updateAgentStatus, {
@@ -668,8 +651,6 @@ aiChatApi.post('/process', async (c) => {
               });
               return; // Skip this agent
             }
-
-            console.log('🔄 Starting internal image edit for agent:', agentId, 'with inputImageUrl:', inputImageUrl);
             
             // Use c.executionCtx.waitUntil to ensure the request completes even after response is sent
             c.executionCtx.waitUntil(
@@ -688,11 +669,8 @@ aiChatApi.post('/process', async (c) => {
                 // The internal function already handles setting agent status to failed
               })
             );
-
-            console.log('🔄 Image edit request fired, continuing...');
           } else if (operation.type === 'voice-generate') {
             // Use internal function for voice generation - use async execution like image editing
-            console.log('🔄 Starting internal voice generation for agent:', agentId);
             const baseUrl = new URL(c.req.url).origin;
             c.executionCtx.waitUntil(
               generateVoiceInternal(
@@ -713,7 +691,6 @@ aiChatApi.post('/process', async (c) => {
             );
           } else if (operation.type === 'video-generate') {
             // Use internal function for video generation - use async execution like image editing
-            console.log('🔄 Starting internal video generation for agent:', agentId);
             const baseUrl = new URL(c.req.url).origin;
             c.executionCtx.waitUntil(
               generateVideoInternal(
@@ -756,7 +733,6 @@ aiChatApi.post('/process', async (c) => {
       // Fire all generation requests in parallel (don't wait for them to complete)
       // This allows the chat response to return immediately while generations happen in background
       // Each agent will update its status independently as generation completes
-      console.log('🔄 Firing', generationPromises.length, 'generation promises');
       Promise.all(generationPromises).catch(error => {
         console.error('❌ Some generation requests failed:', error);
       });
