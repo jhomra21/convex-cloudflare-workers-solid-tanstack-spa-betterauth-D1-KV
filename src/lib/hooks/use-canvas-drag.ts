@@ -59,7 +59,11 @@ export function useCanvasDrag(options: UseDragOptions = {}) {
     agentPosition: Position,
     el: HTMLElement | null = null
   ) => {
+    // Only handle left mouse button for dragging
+    if (e.button !== 0) return;
+    
     e.preventDefault();
+    e.stopPropagation(); // Prevent canvas panning when dragging agents
     
     const canvasEl = getCanvasElement();
     if (!canvasEl) return;

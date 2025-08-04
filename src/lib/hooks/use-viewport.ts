@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, createEffect } from 'solid-js';
+import { createSignal, onCleanup, createEffect, batch } from 'solid-js';
 import { convexApi, useConvexMutation, useConvexQuery } from '~/lib/convex';
 import {
   getLocalViewport,
@@ -51,9 +51,12 @@ export function useViewport(props: UseViewportProps) {
     // Only query Convex if no local viewport exists
     const shouldQuery = !localViewport;
     
-    // Guard: Only update if the query need actually changed
+    // Guard: Only update if the query need actually changed to prevent circular updates
     if (needsConvexQuery() !== shouldQuery) {
-      setNeedsConvexQuery(shouldQuery);
+      // Use batch to prevent cascading effects
+      batch(() => {
+        setNeedsConvexQuery(shouldQuery);
+      });
     }
   });
 
@@ -250,7 +253,7 @@ export function useViewport(props: UseViewportProps) {
       } catch (error) {
         console.error('Failed to save viewport state to Convex:', error);
       }
-    }, 20000); // 20 second debounce for Convex
+    }, 5000); // 5 second debounce for Convex (reduced for better responsiveness)
   };
 
   // Zoom functions
@@ -280,6 +283,9 @@ export function useViewport(props: UseViewportProps) {
   // Zoom by factor at specific pivot point
   const zoomBy = (factor: number, pivotScreen: { x: number; y: number }, canvasContainerEl: HTMLDivElement | null) => {
     if (!canvasContainerEl) return;
+
+    // Don't zoom during panning to prevent conflicts
+    if (isPanning) return;
 
     const current = viewport();
     const newZoom = constrainZoom(current.zoom * factor);
@@ -313,6 +319,10 @@ export function useViewport(props: UseViewportProps) {
     return (e: WheelEvent) => {
       if (!e.ctrlKey) return; // Require ctrl to avoid hijacking scroll
       e.preventDefault();
+      e.stopPropagation();
+
+      // Don't zoom during panning to prevent conflicts
+      if (isPanning) return;
 
       // Use a more granular zoom factor based on wheel delta
       // This makes zooming feel more natural and responsive
@@ -333,16 +343,22 @@ export function useViewport(props: UseViewportProps) {
 
   // Smooth panning update using requestAnimationFrame
   const updatePanPosition = () => {
-    if (!isPanning) return;
+    if (!isPanning) {
+      panAnimationId = null;
+      return;
+    }
 
     const dx = currentPanPosition.x - panStart.x;
     const dy = currentPanPosition.y - panStart.y;
 
-    setViewport((prev) => ({
-      ...prev,
-      tx: panViewportStart.tx + dx,
-      ty: panViewportStart.ty + dy
-    }));
+    // Use batch to prevent cascading effects during panning
+    batch(() => {
+      setViewport((prev) => ({
+        ...prev,
+        tx: panViewportStart.tx + dx,
+        ty: panViewportStart.ty + dy
+      }));
+    });
 
     if (isPanning) {
       panAnimationId = requestAnimationFrame(updatePanPosition);
@@ -351,6 +367,7 @@ export function useViewport(props: UseViewportProps) {
 
   const panMove = (e: PointerEvent) => {
     if (!isPanning) return;
+    e.preventDefault(); // Prevent default scrolling behavior
     // Just update the current position, let RAF handle the viewport update
     currentPanPosition = { x: e.clientX, y: e.clientY };
   };
@@ -364,8 +381,9 @@ export function useViewport(props: UseViewportProps) {
       panAnimationId = null;
     }
 
-    window.removeEventListener('pointermove', panMove);
-    window.removeEventListener('pointerup', panUp);
+    // Remove event listeners with capture flag
+    window.removeEventListener('pointermove', panMove, { capture: true });
+    window.removeEventListener('pointerup', panUp, { capture: true });
 
     // Calculate final position but don't double-update viewport
     const dx = currentPanPosition.x - panStart.x;
@@ -379,7 +397,10 @@ export function useViewport(props: UseViewportProps) {
     // Only update if the position actually changed
     const currentVp = viewport();
     if (Math.abs(finalViewport.tx - currentVp.tx) > 0.1 || Math.abs(finalViewport.ty - currentVp.ty) > 0.1) {
-      setViewport(finalViewport);
+      // Use batch to prevent cascading effects
+      batch(() => {
+        setViewport(finalViewport);
+      });
     }
 
     // Save with debounce after panning ends (local-first approach)
@@ -395,11 +416,16 @@ export function useViewport(props: UseViewportProps) {
     // For left mouse, we'll let the canvas component decide based on target
     if (e.button === 1) {
       e.preventDefault();
+      e.stopPropagation(); // Prevent event bubbling
       startPanning(e);
     }
   };
 
   const startPanning = (e: PointerEvent) => {
+    // Prevent default behavior and stop propagation
+    e.preventDefault();
+    e.stopPropagation();
+
     // Cancel any ongoing zoom animation to prevent conflicts
     if (animationId) {
       cancelAnimationFrame(animationId);
@@ -424,8 +450,9 @@ export function useViewport(props: UseViewportProps) {
     // Capture the current viewport state after ensuring zoom animation is complete
     panViewportStart = { ...viewport() };
 
-    window.addEventListener('pointermove', panMove);
-    window.addEventListener('pointerup', panUp);
+    // Use capture phase to ensure we get events even if other handlers stop propagation
+    window.addEventListener('pointermove', panMove, { capture: true });
+    window.addEventListener('pointerup', panUp, { capture: true });
 
     // Start the smooth panning animation loop
     panAnimationId = requestAnimationFrame(updatePanPosition);
@@ -438,6 +465,11 @@ export function useViewport(props: UseViewportProps) {
 
     // Guard: Only proceed if we have both canvasId and userId
     if (!canvasId || !userId) {
+      return;
+    }
+
+    // Guard: Don't update viewport during active panning to prevent conflicts
+    if (isPanning) {
       return;
     }
 
@@ -467,16 +499,21 @@ export function useViewport(props: UseViewportProps) {
                       Math.abs(currentViewport.zoom - resolvedViewport.zoom) > 0.001;
 
     if (hasChanged) {
-      setViewport({
-        tx: resolvedViewport.tx,
-        ty: resolvedViewport.ty,
-        zoom: resolvedViewport.zoom,
+      // Use batch to prevent cascading effects
+      batch(() => {
+        setViewport({
+          tx: resolvedViewport.tx,
+          ty: resolvedViewport.ty,
+          zoom: resolvedViewport.zoom,
+        });
       });
     }
 
     // Once we have viewport data (local or convex), disable further queries
     if ((localViewport || convexViewport) && needsConvexQuery()) {
-      setNeedsConvexQuery(false);
+      batch(() => {
+        setNeedsConvexQuery(false);
+      });
     }
   });
 
@@ -488,6 +525,13 @@ export function useViewport(props: UseViewportProps) {
 
   // Cleanup
   onCleanup(() => {
+    // Clean up panning state
+    if (isPanning) {
+      isPanning = false;
+      window.removeEventListener('pointermove', panMove, { capture: true });
+      window.removeEventListener('pointerup', panUp, { capture: true });
+    }
+    
     if (convexSaveTimeout) {
       clearTimeout(convexSaveTimeout);
       convexSaveTimeout = null;

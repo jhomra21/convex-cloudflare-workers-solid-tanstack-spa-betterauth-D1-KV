@@ -58,6 +58,9 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     handle: string,
     currentSize: Size
   ) => {
+    // Only handle left mouse button for resizing
+    if (e.button !== 0) return;
+    
     e.preventDefault();
     e.stopPropagation(); // Prevent drag from starting
 

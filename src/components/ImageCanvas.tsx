@@ -265,6 +265,9 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Mouse down handler for agent dragging
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
+    // Only handle left mouse button for agent dragging
+    if (e.button !== 0) return;
+    
     const currentAgents = agents();
     const agent = currentAgents.find(a => a.id === agentId);
     if (!agent) {
@@ -278,9 +281,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Resize start handler for agent resizing
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
+    // Only handle left mouse button for resizing
+    if (e.button !== 0) return;
+    
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
 
+    e.stopPropagation(); // Prevent canvas panning during resize
     bringAgentToFront(agentId);
     resizeHook.handleResizeStart(e, agentId, handle, agent.size);
   };
@@ -417,12 +424,16 @@ export function ImageCanvas(props: ImageCanvasProps) {
           class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
           ref={(el) => (canvasContainerEl = el)}
           onPointerDown={(e) => {
-            // Handle middle mouse button panning
-            viewport.handlePanPointerDown(e);
+            // Handle middle mouse button panning (always)
+            if (e.button === 1) {
+              viewport.handlePanPointerDown(e);
+              return;
+            }
 
-            // Handle left mouse button panning on empty space
-            if (e.button === 0 && (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('canvas-content'))) {
+            // Handle left mouse button panning only on canvas container itself
+            if (e.button === 0 && e.target === e.currentTarget) {
               e.preventDefault();
+              e.stopPropagation();
               viewport.startPanning(e);
             }
           }}
@@ -446,7 +457,12 @@ export function ImageCanvas(props: ImageCanvasProps) {
               // Handle panning on canvas content (empty areas)
               if (e.button === 0 && e.target === e.currentTarget) {
                 e.preventDefault();
+                e.stopPropagation();
                 viewport.startPanning(e);
+              }
+              // Handle middle mouse panning anywhere on canvas content
+              else if (e.button === 1) {
+                viewport.handlePanPointerDown(e);
               }
             }}
           >
