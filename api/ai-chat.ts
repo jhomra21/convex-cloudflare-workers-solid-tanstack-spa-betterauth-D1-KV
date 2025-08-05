@@ -48,7 +48,7 @@ Available agent types:
 - image-generate: Creates images from text prompts (no input needed)
 - image-edit: Edits existing images with prompts (needs input image)
 - voice-generate: Creates speech from text (standalone)
-- video-generate: Creates videos from text prompts (standalone)
+- video-generate: Creates videos from text prompts (standalone, without audio by default)
 
 Connection rules:
 - Only image agents can connect to each other
@@ -701,7 +701,11 @@ aiChatApi.post('/process', async (c) => {
                 '16:9', // aspectRatio
                 '8s', // duration
                 agentId,
-                baseUrl // needed for webhook URL construction
+                baseUrl, // needed for webhook URL construction
+                undefined, // imageUrl (not needed for text-to-video)
+                'text-to-video', // videoType
+                false, // generateAudio - explicitly set to false (no audio by default)
+                '720p' // resolution
               ).then(() => {
                 console.log('✅ Successfully triggered video generation for agent:', agentId);
               }).catch(error => {
