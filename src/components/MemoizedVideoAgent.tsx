@@ -6,7 +6,7 @@
 import { createMemo } from 'solid-js';
 import { VideoAgent } from './VideoAgent';
 import { cn } from '~/lib/utils';
-import type { Agent } from '~/types/agents';
+import type { Agent, AvailableAgent } from '~/types/agents';
 
 interface MemoizedVideoAgentProps {
   agent: Agent;
@@ -14,10 +14,13 @@ interface MemoizedVideoAgentProps {
   isResizing: boolean;
   zIndex: number;
   isExiting?: boolean;
+  availableAgents?: AvailableAgent[];
   onRemove: (id: string) => void;
   onMouseDown: (e: MouseEvent) => void;
   onResizeStart: (e: MouseEvent, handle: string) => void;
   onPromptChange: (id: string, prompt: string) => void;
+  onConnectAgent?: (sourceAgentId: string, targetAgentId: string) => void;
+  onDisconnectAgent?: (agentId: string) => void;
   onAnimationEnd?: (id: string) => void;
   class?: string;
 }
@@ -45,8 +48,11 @@ export function MemoizedVideoAgent(props: MemoizedVideoAgentProps) {
         onPromptChange={props.onPromptChange}
         status={props.agent.status}
         model={props.agent.model}
-        type={props.agent.type as 'video-generate'}
+        type={props.agent.type as 'video-generate' | 'video-image-to-video'}
         connectedAgentId={props.agent.connectedAgentId}
+        availableAgents={props.availableAgents}
+        onConnectAgent={props.onConnectAgent}
+        onDisconnectAgent={props.onDisconnectAgent}
         class={cn(
           "shadow-lg border-2 transition-all duration-200",
           borderClass,

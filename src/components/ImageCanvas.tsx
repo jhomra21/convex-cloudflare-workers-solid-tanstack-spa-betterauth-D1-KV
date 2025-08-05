@@ -514,7 +514,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                       onAnimationEnd={handleAnimationEnd}
                     />
                   );
-                } else if (agent.type === 'video-generate') {
+                } else if (agent.type === 'video-generate' || agent.type === 'video-image-to-video') {
                   return (
                     <MemoizedVideoAgent
                       agent={agent}
@@ -522,10 +522,13 @@ export function ImageCanvas(props: ImageCanvasProps) {
                       isResizing={isResizing()}
                       zIndex={zIndex()}
                       isExiting={isExiting()}
+                      availableAgents={availableAgents()}
                       onRemove={removeAgent}
                       onMouseDown={(e) => handleMouseDown(e, agent.id)}
                       onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
                       onPromptChange={updateAgentPrompt}
+                      onConnectAgent={connectAgents}
+                      onDisconnectAgent={disconnectAgent}
                       onAnimationEnd={handleAnimationEnd}
                       class={cn(
                         "shadow-lg border-2 transition-all duration-200",

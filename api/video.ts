@@ -60,13 +60,21 @@ videoApi.post('/', async (c) => {
       duration = '8s',
       negativePrompt,
       enhancePrompt = true,
-      generateAudio = true,
-      seed
+      generateAudio = false, // Default to no audio
+      seed,
+      imageUrl, // New parameter for image-to-video
+      videoType = 'text-to-video', // 'text-to-video' or 'image-to-video'
+      resolution = '720p'
     } = data;
     agentId = data.agentId; // Assign to outer scope variable
 
     if (!prompt) {
       return c.json({ error: 'Prompt is required' }, 400);
+    }
+
+    // For image-to-video, imageUrl is required
+    if (videoType === 'image-to-video' && !imageUrl) {
+      return c.json({ error: 'Image URL is required for image-to-video generation' }, 400);
     }
 
     // Check environment bindings
@@ -93,23 +101,42 @@ videoApi.post('/', async (c) => {
     }
 
     // Submit to fal.ai queue with webhook
+    let falEndpoint: string;
+    let requestBody: any;
+
+    if (videoType === 'image-to-video') {
+      // Use image-to-video endpoint
+      falEndpoint = `https://queue.fal.run/fal-ai/veo3/fast/image-to-video?fal_webhook=${encodeURIComponent(webhookUrl)}`;
+      requestBody = {
+        prompt,
+        image_url: imageUrl,
+        duration,
+        generate_audio: generateAudio,
+      };
+    } else {
+      // Use text-to-video endpoint
+      falEndpoint = `https://queue.fal.run/fal-ai/veo3/fast?fal_webhook=${encodeURIComponent(webhookUrl)}`;
+      requestBody = {
+        prompt,
+        aspect_ratio: aspectRatio,
+        duration,
+        negative_prompt: negativePrompt,
+        enhance_prompt: enhancePrompt,
+        generate_audio: generateAudio,
+        seed: seed || undefined,
+        resolution: resolution,
+      };
+    }
+
     const falResponse = await fetch(
-      `https://queue.fal.run/fal-ai/veo3/fast?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+      falEndpoint,
       {
         method: 'POST',
         headers: {
           'Authorization': `Key ${c.env.FAL_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          aspect_ratio: aspectRatio,
-          duration,
-          negative_prompt: negativePrompt,
-          enhance_prompt: enhancePrompt,
-          generate_audio: generateAudio,
-          seed: seed || undefined,
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -215,7 +242,11 @@ export async function generateVideoInternal(
   aspectRatio: string = '16:9',
   duration: string = '8s',
   agentId?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  imageUrl?: string,
+  videoType: 'text-to-video' | 'image-to-video' = 'text-to-video',
+  generateAudio: boolean = false,
+  resolution: '720p' | '1080p' = '720p'
 ) {
   try {
     if (!env.FAL_KEY) {
@@ -239,21 +270,40 @@ export async function generateVideoInternal(
     }
 
     // Submit to fal.ai queue with webhook (same as the original endpoint)
+    let falEndpoint: string;
+    let requestBody: any;
+
+    if (videoType === 'image-to-video') {
+      // Use image-to-video endpoint
+      falEndpoint = `https://queue.fal.run/fal-ai/veo3/fast/image-to-video?fal_webhook=${encodeURIComponent(webhookUrl)}`;
+      requestBody = {
+        prompt,
+        image_url: imageUrl,
+        duration,
+        generate_audio: generateAudio,
+      };
+    } else {
+      // Use text-to-video endpoint
+      falEndpoint = `https://queue.fal.run/fal-ai/veo3/fast?fal_webhook=${encodeURIComponent(webhookUrl)}`;
+      requestBody = {
+        prompt,
+        aspect_ratio: aspectRatio,
+        duration,
+        enhance_prompt: true,
+        generate_audio: generateAudio,
+        resolution,
+      };
+    }
+
     const falResponse = await fetch(
-      `https://queue.fal.run/fal-ai/veo3/fast?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+      falEndpoint,
       {
         method: 'POST',
         headers: {
           'Authorization': `Key ${env.FAL_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          aspect_ratio: aspectRatio,
-          duration,
-          enhance_prompt: true,
-          generate_audio: true,
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 

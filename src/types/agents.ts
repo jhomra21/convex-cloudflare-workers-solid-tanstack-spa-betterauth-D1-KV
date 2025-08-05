@@ -8,7 +8,7 @@ import type { Id } from '../../convex/_generated/dataModel';
 // Base agent types from schema
 export type AgentStatus = 'idle' | 'processing' | 'success' | 'failed' | 'deleting';
 export type AgentModel = 'normal' | 'pro';
-export type AgentType = 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' | 'ai-chat';
+export type AgentType = 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' | 'video-image-to-video' | 'ai-chat';
 
 // Voice-specific types
 export type VoiceOption = 'Aurora' | 'Blade' | 'Britney' | 'Carl' | 'Cliff' | 'Richard' | 'Rico' | 'Siobhan' | 'Vicky';
@@ -210,7 +210,7 @@ export function isAgentData(obj: unknown): obj is AgentData {
         typeof (obj as AgentData).positionY === 'number' &&
         ['idle', 'processing', 'success', 'failed', 'deleting'].includes((obj as AgentData).status) &&
         ['normal', 'pro'].includes((obj as AgentData).model) &&
-        ['image-generate', 'image-edit', 'voice-generate', 'video-generate', 'ai-chat'].includes((obj as AgentData).type)
+        ['image-generate', 'image-edit', 'voice-generate', 'video-generate', 'video-image-to-video', 'ai-chat'].includes((obj as AgentData).type)
     );
 }
 
@@ -223,7 +223,7 @@ export function isValidAgentModel(model: string): model is AgentModel {
 }
 
 export function isValidAgentType(type: string): type is AgentType {
-    return ['image-generate', 'image-edit', 'voice-generate', 'video-generate', 'ai-chat'].includes(type);
+    return ['image-generate', 'image-edit', 'voice-generate', 'video-generate', 'video-image-to-video', 'ai-chat'].includes(type);
 }
 
 // Utility functions for agent operations
@@ -263,7 +263,7 @@ export function agentDataToAgent(agentData: AgentData): Agent {
 export function createAgentMetrics(agents: AgentData[]): AgentMetrics {
     const metrics: AgentMetrics = {
         totalAgents: agents.length,
-        agentsByType: { 'image-generate': 0, 'image-edit': 0, 'voice-generate': 0, 'video-generate': 0, 'ai-chat': 0 },
+        agentsByType: { 'image-generate': 0, 'image-edit': 0, 'voice-generate': 0, 'video-generate': 0, 'video-image-to-video': 0, 'ai-chat': 0 },
         agentsByStatus: { idle: 0, processing: 0, success: 0, failed: 0, deleting: 0 },
         agentsByModel: { normal: 0, pro: 0 },
         connections: 0,

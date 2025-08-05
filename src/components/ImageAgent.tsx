@@ -616,10 +616,10 @@ export function ImageAgent(props: ImageAgentProps) {
                     <Show when={!getInputImage()}>
                       <div
                         class={cn(
-                          "w-full h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center mb-3 transition-colors cursor-pointer",
+                          "w-full h-24 border-2 border-dashed rounded-lg flex flex-col items-center justify-center mb-3 hover:border-primary/60 transition-colors cursor-pointer",
                           isDragOver()
                             ? "border-primary bg-primary/5"
-                            : "border-muted-foreground/30 hover:border-muted-foreground/50"
+                            : "border-muted-foreground/30 "
                         )}
                         onDragOver={(e) => {
                           e.preventDefault();
@@ -633,6 +633,9 @@ export function ImageAgent(props: ImageAgentProps) {
                           input.accept = 'image/*';
                           input.onchange = handleFileInput;
                           input.click();
+                        }}
+                        onMouseDown={(e) =>{
+                          e.stopPropagation()
                         }}
                       >
                         <Icon name="upload" class="h-8 w-8 opacity-50 mb-2" />
