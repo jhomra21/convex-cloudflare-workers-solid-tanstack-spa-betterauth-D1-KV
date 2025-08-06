@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, Show, For, onMount } from 'solid-js';
+import { createSignal, createUniqueId, Show, For } from 'solid-js';
 import { Card, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -9,7 +9,7 @@ import { useAgentPromptState } from '~/lib/hooks/use-persistent-state';
 import { useStableStatus } from '~/lib/hooks/use-stable-props';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { useConvexMutation, convexApi } from '~/lib/convex';
-import type { AgentStatus, Agent, AvailableAgent } from '~/types/agents';
+import type { AgentStatus, AvailableAgent } from '~/types/agents';
 
 export interface VideoAgentProps {
     id?: string;
@@ -218,6 +218,14 @@ export function VideoAgent(props: VideoAgentProps) {
         setShowPromptInput(true);
     };
 
+    const handleCancelEdit = () => {
+        setShowPromptInput(false);
+        // Reset local prompt to the last generated prompt if there's a video
+        if (hasVideo() && props.prompt) {
+            setLocalPrompt(props.prompt);
+        }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -232,7 +240,7 @@ export function VideoAgent(props: VideoAgentProps) {
         <ErrorBoundary>
             <Card
                 class={cn(
-                    "flex flex-col relative transition-all duration-300 cursor-move",
+                    "flex flex-col relative transition-all duration-300 cursor-move overflow-hidden",
                     isLoading() ? "border border-secondary/50" : "",
                     props.class
                 )}
@@ -268,12 +276,10 @@ export function VideoAgent(props: VideoAgentProps) {
                     </Show>
                 </div>
 
-                <CardContent class="p-4 flex flex-col h-full relative">
-
+                <CardContent class="p-4 flex flex-col flex-1 overflow-hidden">
                     {/* Prompt Section */}
-                    <div class="flex-shrink-0 h-full w-full">
-                        <Show when={showPromptInput() || !hasVideo()}>
-                            <div class="flex flex-col justify-between h-full">
+                    <Show when={showPromptInput() || !hasVideo()}>
+                        <div class="flex flex-col justify-between h-full">
                                 <div> {/* Top container for controls */}
                                     <textarea
                                         value={localPrompt()}
@@ -372,6 +378,17 @@ export function VideoAgent(props: VideoAgentProps) {
                                     </div>
                                 </div>
                                 <div class="flex gap-2 mt-auto pt-3">
+                                    <Show when={hasVideo() && isSuccess()}>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleCancelEdit}
+                                            class="flex-1"
+                                            disabled={isLoading()}
+                                        >
+                                            <Icon name="x" class="w-4 h-4 mr-2" />
+                                            Cancel
+                                        </Button>
+                                    </Show>
                                     <Button
                                         onClick={handleGenerateVideo}
                                         class="flex-1"
@@ -380,7 +397,7 @@ export function VideoAgent(props: VideoAgentProps) {
                                         <Show when={isLoading()} fallback={
                                             <>
                                                 <Icon name="video" class="w-4 h-4 mr-2" />
-                                                Generate Video
+                                                {hasVideo() ? 'Regenerate' : 'Generate Video'}
                                             </>
                                         }>
                                             <Icon name="loader" class="w-4 h-4 mr-2 animate-spin" />
@@ -392,18 +409,18 @@ export function VideoAgent(props: VideoAgentProps) {
                                             variant="destructive"
                                             size="icon"
                                             onClick={() => props.onRemove?.(agentId)}
+                                            title="Delete Agent"
                                         >
-                                            <Icon name="x" class="h-4 w-4" />
+                                            <Icon name="trash-2" class="h-4 w-4" />
                                         </Button>
                                     </Show>
                                 </div>
-                            </div>
-                        </Show>
-                    </div>
+                        </div>
+                    </Show>
 
                     {/* Generated Video Display */}
-                    <Show when={hasVideo() && isSuccess()}>
-                        <div class="flex-1 flex flex-col relative">
+                    <Show when={hasVideo() && isSuccess() && !showPromptInput()}>
+                        <div class="flex flex-col h-full">
                             {/* Video Info */}
                             <div class="mb-3">
                                 <p class="text-xs text-muted-foreground mb-1">Generated Video:</p>
@@ -416,10 +433,10 @@ export function VideoAgent(props: VideoAgentProps) {
                             </div>
 
                             {/* Video Player */}
-                            <div class="bg-muted/30 rounded-lg p-3 mb-3 relative flex-1">
+                            <div class="flex-1 bg-muted/30 rounded-lg p-3 mb-3 flex items-center justify-center min-h-0">
                                 <video
                                 controls
-                                class="w-full h-auto max-h-full rounded cursor-default"
+                                class="w-full h-auto max-w-full max-h-[calc(100%-2rem)] rounded cursor-default object-contain"
                                 preload="none"
                                 style={{
                                 "aspect-ratio": aspectRatio() === '16:9' ? '16/9' : 
@@ -432,7 +449,7 @@ export function VideoAgent(props: VideoAgentProps) {
                             </div>
 
                             {/* Action Buttons */}
-                            <div class="flex gap-2 mt-auto">
+                            <div class="flex gap-2 flex-shrink-0">
                                 <Button
                                     variant="outline"
                                     size="sm"
