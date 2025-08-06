@@ -47,7 +47,7 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
         class={cn(
           "absolute z-40",
           positionClasses,
-          "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+          "bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/90",
           "border rounded-lg shadow-lg",
           "transition-all ease-[cubic-bezier(0.4,0,0.2,1)]",
           isMinimized() ? "" : ""

@@ -1,4 +1,4 @@
-import { createSignal, Show, type Component, createEffect } from 'solid-js';
+import { createSignal, Show, type Component } from 'solid-js';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
@@ -54,7 +54,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
     <div 
       class={cn(
         "absolute top-4 left-1/2 -translate-x-1/2 z-50",
-        "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+        "bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/90",
         "border rounded-lg shadow-lg",
         "transition-all ease-[cubic-bezier(0.4,0,0.2,1)]",
         isMinimized() ? "p-2" : "p-3"

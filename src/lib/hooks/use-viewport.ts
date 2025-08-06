@@ -18,14 +18,17 @@ export interface UseViewportProps {
 }
 
 export function useViewport(props: UseViewportProps) {
-  // Viewport state management
+  // Viewport state management - initialize with proper default
   const [viewport, setViewport] = createSignal<ViewportState>({
     tx: 0,
     ty: 0,
     zoom: 0.25,
   });
 
-
+  // Track if viewport has been initialized from storage
+  const [isViewportInitialized, setIsViewportInitialized] = createSignal(false);
+  // Track if this is the initial restoration (page load) vs ongoing updates
+  const [hasCompletedInitialRestore, setHasCompletedInitialRestore] = createSignal(false);
 
   // Zoom constraints
   const MIN_ZOOM = 0.01; // 1%
@@ -34,6 +37,9 @@ export function useViewport(props: UseViewportProps) {
 
   // Signal to control when we need to query Convex
   const [needsConvexQuery, setNeedsConvexQuery] = createSignal(false);
+  
+  // Track the current canvas ID to detect changes
+  let lastCanvasId: string | null = null;
 
   // Check if we need to query Convex on canvas/user change
   createEffect(() => {
@@ -58,6 +64,11 @@ export function useViewport(props: UseViewportProps) {
         setNeedsConvexQuery(shouldQuery);
       });
     }
+
+    // Fallback initialization - if we have local data, mark as initialized immediately
+    if (localViewport && !isViewportInitialized()) {
+      setIsViewportInitialized(true);
+    }
   });
 
   const viewportData = useConvexQuery(
@@ -78,7 +89,7 @@ export function useViewport(props: UseViewportProps) {
   // Smooth zoom animation state
   let animationId: number | null = null;
   let targetViewport: ViewportState | null = null;
-  const ZOOM_ANIMATION_DURATION = 150; // ms
+  const ZOOM_ANIMATION_DURATION = 100; // ms - reduced for more responsive feel
   let animationStartTime = 0;
   let startViewport: ViewportState | null = null;
 
@@ -214,8 +225,6 @@ export function useViewport(props: UseViewportProps) {
     // Always save to localStorage immediately (local-first)
     saveLocalViewport(newViewport, canvasId, userId);
 
-
-
     // Debounce Convex save for 20 seconds
     if (convexSaveTimeout) {
       clearTimeout(convexSaveTimeout);
@@ -287,7 +296,18 @@ export function useViewport(props: UseViewportProps) {
     // Don't zoom during panning to prevent conflicts
     if (isPanning) return;
 
-    const current = viewport();
+    // Cancel any ongoing animation and use the target viewport as current state
+    // This prevents using stale viewport values during rapid zoom events
+    let current = viewport();
+    if (animationId && targetViewport) {
+      // If animation is running, use the target as the current state
+      current = targetViewport;
+      cancelAnimationFrame(animationId);
+      animationId = null;
+      targetViewport = null;
+      startViewport = null;
+    }
+    
     const newZoom = constrainZoom(current.zoom * factor);
 
     // If zoom didn't actually change, don't update anything
@@ -340,6 +360,7 @@ export function useViewport(props: UseViewportProps) {
   let panViewportStart = { tx: 0, ty: 0, zoom: 1 };
   let currentPanPosition = { x: 0, y: 0 };
   let panAnimationId: number | null = null;
+  let panTimeoutId: number | null = null;
 
   // Smooth panning update using requestAnimationFrame
   const updatePanPosition = () => {
@@ -381,9 +402,17 @@ export function useViewport(props: UseViewportProps) {
       panAnimationId = null;
     }
 
+    // Clear the safety timeout
+    if (panTimeoutId) {
+      clearTimeout(panTimeoutId);
+      panTimeoutId = null;
+    }
+
     // Remove event listeners with capture flag
     window.removeEventListener('pointermove', panMove, { capture: true });
     window.removeEventListener('pointerup', panUp, { capture: true });
+    window.removeEventListener('pointercancel', panUp, { capture: true });
+    window.removeEventListener('pointerleave', panUp, { capture: true });
 
     // Calculate final position but don't double-update viewport
     const dx = currentPanPosition.x - panStart.x;
@@ -444,6 +473,18 @@ export function useViewport(props: UseViewportProps) {
       convexSaveTimeout = null;
     }
 
+    // Clear any existing pan timeout
+    if (panTimeoutId) {
+      clearTimeout(panTimeoutId);
+      panTimeoutId = null;
+    }
+
+    // Ensure viewport is initialized when panning starts
+    // This helps with the case where user pans before zoom is attempted
+    if (!isViewportInitialized()) {
+      setIsViewportInitialized(true);
+    }
+
     isPanning = true;
     panStart = { x: e.clientX, y: e.clientY };
     currentPanPosition = { x: e.clientX, y: e.clientY };
@@ -453,6 +494,17 @@ export function useViewport(props: UseViewportProps) {
     // Use capture phase to ensure we get events even if other handlers stop propagation
     window.addEventListener('pointermove', panMove, { capture: true });
     window.addEventListener('pointerup', panUp, { capture: true });
+    // Also listen for pointercancel and pointerleave to handle edge cases
+    window.addEventListener('pointercancel', panUp, { capture: true });
+    window.addEventListener('pointerleave', panUp, { capture: true });
+
+    // Add a safety timeout to reset panning state if events are missed
+    panTimeoutId = window.setTimeout(() => {
+      if (isPanning) {
+        console.warn('Panning timeout - forcing reset');
+        panUp();
+      }
+    }, 5000); // 5 second timeout
 
     // Start the smooth panning animation loop
     panAnimationId = requestAnimationFrame(updatePanPosition);
@@ -465,11 +517,32 @@ export function useViewport(props: UseViewportProps) {
 
     // Guard: Only proceed if we have both canvasId and userId
     if (!canvasId || !userId) {
+      // Reset initialization flags if we don't have required data
+      if (isViewportInitialized()) {
+        setIsViewportInitialized(false);
+      }
+      if (hasCompletedInitialRestore()) {
+        setHasCompletedInitialRestore(false);
+      }
+      lastCanvasId = null;
       return;
     }
 
+    // Reset restoration flags if canvas changed (switching between canvases)
+    if (lastCanvasId !== null && lastCanvasId !== canvasId) {
+      setIsViewportInitialized(false);
+      setHasCompletedInitialRestore(false);
+    }
+    lastCanvasId = canvasId;
+
     // Guard: Don't update viewport during active panning to prevent conflicts
     if (isPanning) {
+      return;
+    }
+
+    // CRITICAL: Don't restore if we've completed initial restoration and canvas hasn't changed
+    // This prevents overriding user zoom/pan actions while still allowing initial restore
+    if (hasCompletedInitialRestore()) {
       return;
     }
 
@@ -484,12 +557,7 @@ export function useViewport(props: UseViewportProps) {
       zoom: convexViewportData.zoom,
     } : null;
 
-    // Guard: Only proceed if we have some viewport data to work with
-    if (!localViewport && !convexViewport) {
-      return;
-    }
-
-    // Use local-first resolution strategy
+    // Use local-first resolution strategy - this will return default if no data
     const resolvedViewport = resolveInitialViewport(localViewport, convexViewport);
 
     // Guard: Only update viewport if it actually changed
@@ -507,6 +575,17 @@ export function useViewport(props: UseViewportProps) {
           zoom: resolvedViewport.zoom,
         });
       });
+    }
+
+    // Mark viewport as initialized once we've processed the data
+    // This happens whether we have stored data or use defaults
+    if (!isViewportInitialized()) {
+      setIsViewportInitialized(true);
+    }
+
+    // Mark initial restoration as complete to prevent future overrides
+    if (!hasCompletedInitialRestore()) {
+      setHasCompletedInitialRestore(true);
     }
 
     // Once we have viewport data (local or convex), disable further queries
@@ -530,6 +609,8 @@ export function useViewport(props: UseViewportProps) {
       isPanning = false;
       window.removeEventListener('pointermove', panMove, { capture: true });
       window.removeEventListener('pointerup', panUp, { capture: true });
+      window.removeEventListener('pointercancel', panUp, { capture: true });
+      window.removeEventListener('pointerleave', panUp, { capture: true });
     }
     
     if (convexSaveTimeout) {
@@ -543,6 +624,10 @@ export function useViewport(props: UseViewportProps) {
     if (panAnimationId) {
       cancelAnimationFrame(panAnimationId);
       panAnimationId = null;
+    }
+    if (panTimeoutId) {
+      clearTimeout(panTimeoutId);
+      panTimeoutId = null;
     }
   });
 
@@ -559,6 +644,7 @@ export function useViewport(props: UseViewportProps) {
     restoreViewport,
     saveViewportState,
     forceConvexSync, // For cases where immediate Convex sync is needed
+    isViewportInitialized, // Expose initialization state
 
     MIN_ZOOM,
     MAX_ZOOM,

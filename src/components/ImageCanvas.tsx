@@ -258,7 +258,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleMouseDown = (e: MouseEvent, agentId: string) => {
     // Only handle left mouse button for agent dragging
     if (e.button !== 0) return;
-    
+
     const currentAgents = agents();
     const agent = currentAgents.find(a => a.id === agentId);
     if (!agent) {
@@ -274,7 +274,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleResizeStart = (e: MouseEvent, agentId: string, handle: string) => {
     // Only handle left mouse button for resizing
     if (e.button !== 0) return;
-    
+
     const agent = agents().find(a => a.id === agentId);
     if (!agent) return;
 
@@ -289,14 +289,30 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
   const handleAddVideoAgent = () => addAgent('', 'video-generate');
 
+  // Helper methods for zoom controls that get the current canvas container ref
+  const handleZoomIn = () => {
+    if (!canvasContainerEl) {
+      console.warn('Canvas container element not available for zoom in');
+      return;
+    }
+    viewport.zoomIn(canvasContainerEl);
+  };
+  const handleZoomOut = () => {
+    if (!canvasContainerEl) {
+      console.warn('Canvas container element not available for zoom out');
+      return;
+    }
+    viewport.zoomOut(canvasContainerEl);
+  };
+
   // Load toolbar minimized state from localStorage synchronously
-  const getToolbarState = () => typeof window !== 'undefined' 
-    ? localStorage.getItem('canvas-toolbar-minimized') === 'true' 
+  const getToolbarState = () => typeof window !== 'undefined'
+    ? localStorage.getItem('canvas-toolbar-minimized') === 'true'
     : false;
   const getControlsState = () => typeof window !== 'undefined'
     ? localStorage.getItem('canvas-controls-minimized') === 'true'
     : false;
-    
+
   const [toolbarMinimized, setToolbarMinimized] = createSignal(getToolbarState());
   const [controlsMinimized, setControlsMinimized] = createSignal(getControlsState());
 
@@ -582,8 +598,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
           zoom={viewport.viewport().zoom}
           minZoom={viewport.MIN_ZOOM}
           maxZoom={viewport.MAX_ZOOM}
-          onZoomIn={() => viewport.zoomIn(canvasContainerEl)}
-          onZoomOut={() => viewport.zoomOut(canvasContainerEl)}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
           onResetZoom={viewport.resetZoom}
           onResetView={viewport.resetZoom} // Use resetZoom which resets position and zoom
           position="bottom-center"
