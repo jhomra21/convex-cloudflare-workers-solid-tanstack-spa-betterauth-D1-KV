@@ -3,7 +3,8 @@ import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { MemoizedVideoAgent } from './MemoizedVideoAgent';
 import { AgentConnection } from './AgentConnection';
-import { AgentToolbar } from './AgentToolbar';
+import { FloatingCanvasToolbar } from './FloatingCanvasToolbar';
+import { FloatingCanvasControls } from './FloatingCanvasControls';
 import { FloatingChatInterface } from './FloatingChatInterface';
 import { Button } from '~/components/ui/button';
 import { Icon } from '~/components/ui/icon';
@@ -288,6 +289,17 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
   const handleAddVideoAgent = () => addAgent('', 'video-generate');
 
+  // Load toolbar minimized state from localStorage synchronously
+  const getToolbarState = () => typeof window !== 'undefined' 
+    ? localStorage.getItem('canvas-toolbar-minimized') === 'true' 
+    : false;
+  const getControlsState = () => typeof window !== 'undefined'
+    ? localStorage.getItem('canvas-controls-minimized') === 'true'
+    : false;
+    
+  const [toolbarMinimized, setToolbarMinimized] = createSignal(getToolbarState());
+  const [controlsMinimized, setControlsMinimized] = createSignal(getControlsState());
+
   // AI Chat management for floating interface
   const [isChatProcessing, setIsChatProcessing] = createSignal(false);
 
@@ -391,27 +403,10 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   return (
     <ErrorBoundary>
-      <div class={cn("flex flex-col h-full overflow-hidden relative", props.class)}>
-        {/* Toolbar */}
-        <AgentToolbar
-          activeAgentType={activeAgentType()}
-          agentCount={agentCount()}
-          userAgentCount={userAgentCount()}
-          isSharedCanvas={!!props.activeCanvasId}
-          isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
-          isCanvasOwner={canvas()?.userId === userId()}
-          canvasId={canvas()?._id}
-          currentUserId={userId()}
-          onAddGenerateAgent={handleAddGenerateAgent}
-          onAddEditAgent={handleAddEditAgent}
-          onAddVoiceAgent={handleAddVoiceAgent}
-          onAddVideoAgent={handleAddVideoAgent}
-          onClearCanvas={clearCanvas}
-        />
-
-        {/* Canvas */}
+      <div class={cn("h-full overflow-hidden relative", props.class)}>
+        {/* Canvas - now takes full height */}
         <div
-          class="canvas-container flex-1 relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
+          class="canvas-container h-full relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
           ref={(el) => (canvasContainerEl = el)}
           onPointerDown={(e) => {
             // Handle middle mouse button panning (always)
@@ -562,53 +557,39 @@ export function ImageCanvas(props: ImageCanvasProps) {
           </div>
         </div>
 
-        {/* Status Bar */}
-        <div class="flex items-center justify-between px-1 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 text-xs text-muted-foreground">
-          <span>Drag agents to move • Click and drag empty space to pan • Ctrl+scroll to zoom</span>
-          <div class="flex items-center gap-4">
-            {/* Zoom Controls */}
-            <div class="flex items-center gap-1">
-              <Button
-                onClick={() => viewport.zoomOut(canvasContainerEl)}
-                size="sm"
-                variant="ghost"
-                disabled={viewport.viewport().zoom <= viewport.MIN_ZOOM}
-                class="h-6 w-6 p-0"
-                title="Zoom Out"
-              >
-                <span class="text-xs font-bold">−</span>
-              </Button>
-              <span class="text-xs text-muted-foreground min-w-12 text-center font-mono">
-                {Math.round(viewport.viewport().zoom * 100)}%
-              </span>
-              <Button
-                onClick={() => viewport.zoomIn(canvasContainerEl)}
-                size="sm"
-                variant="ghost"
-                disabled={viewport.viewport().zoom >= viewport.MAX_ZOOM}
-                class="h-6 w-6 p-0"
-                title="Zoom In"
-              >
-                <span class="text-xs font-bold">+</span>
-              </Button>
-              <Button
-                onClick={viewport.resetZoom}
-                size="sm"
-                variant="ghost"
-                disabled={viewport.viewport().zoom === 1.0}
-                class="h-6 w-6 p-0 ml-1"
-                title="Reset Zoom (100%)"
-              >
-                <Icon name="refresh-cw" class="h-2 w-2" />
-              </Button>
-            </div>
-            <span>•</span>
-            <span class="flex items-center gap-1">
-              <Icon name="move" class="h-3 w-3" />
-              Pan & Zoom
-            </span>
-          </div>
-        </div>
+        {/* Floating Toolbar - positioned at top center */}
+        <FloatingCanvasToolbar
+          activeAgentType={activeAgentType()}
+          agentCount={agentCount()}
+          userAgentCount={userAgentCount()}
+          isSharedCanvas={!!props.activeCanvasId}
+          isOwnerSharingCanvas={!props.activeCanvasId && !!canvas()?.isShareable}
+          isCanvasOwner={canvas()?.userId === userId()}
+          canvasId={canvas()?._id}
+          currentUserId={userId()}
+          canvasName={canvas()?.name}
+          onAddGenerateAgent={handleAddGenerateAgent}
+          onAddEditAgent={handleAddEditAgent}
+          onAddVoiceAgent={handleAddVoiceAgent}
+          onAddVideoAgent={handleAddVideoAgent}
+          onClearCanvas={clearCanvas}
+          isMinimized={toolbarMinimized()}
+          onToggleMinimize={setToolbarMinimized}
+        />
+
+        {/* Floating Controls - positioned at bottom right */}
+        <FloatingCanvasControls
+          zoom={viewport.viewport().zoom}
+          minZoom={viewport.MIN_ZOOM}
+          maxZoom={viewport.MAX_ZOOM}
+          onZoomIn={() => viewport.zoomIn(canvasContainerEl)}
+          onZoomOut={() => viewport.zoomOut(canvasContainerEl)}
+          onResetZoom={viewport.resetZoom}
+          onResetView={viewport.resetZoom} // Use resetZoom which resets position and zoom
+          position="bottom-center"
+          isMinimized={controlsMinimized()}
+          onToggleMinimize={setControlsMinimized}
+        />
       </div>
 
       {/* Empty State Overlay */}

@@ -141,7 +141,7 @@ function ImagesPage() {
     return (
         <div class="h-full flex flex-col">
             {/* Header */}
-            <div class="flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div class="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div class="w-full !px-0 pb-4">
                     <div class="flex flex-col lg:flex-row lg:justify-between gap-4">
                         <div class="flex flex-col sm:flex-row gap-4">

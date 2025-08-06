@@ -160,6 +160,26 @@ code {
   }
 }
 
+/* Toolbar Spring Animation */
+@keyframes toolbar-fade-slide {
+  0% {
+    transform: translateY(-12px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* Canvas Controls Animation */
+@keyframes controls-fade-slide {
+  0% {
+    transform: translateY(8px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
 /* Route Transition Animations */
 @keyframes slideInFromLeft {
   from {

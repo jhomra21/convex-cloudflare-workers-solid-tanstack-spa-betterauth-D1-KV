@@ -81,7 +81,17 @@ type SidebarProviderProps = Omit<ComponentProps<"div">, "style"> & {
 }
 
 const SidebarProvider: Component<SidebarProviderProps> = (rawProps) => {
-  const props = mergeProps({ defaultOpen: true }, rawProps)
+  // Read stored state from localStorage or use default
+  const getStoredState = () => {
+    if (typeof window === 'undefined') return true
+    const stored = document.cookie
+      .split('; ')
+      .find(row => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
+      ?.split('=')[1]
+    return stored ? stored === 'true' : true
+  }
+
+  const props = mergeProps({ defaultOpen: getStoredState() }, rawProps)
   const [local, others] = splitProps(props, [
     "defaultOpen",
     "open",

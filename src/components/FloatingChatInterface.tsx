@@ -157,11 +157,11 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
 
   return (
     <>
-      <div class="floating-chat-container absolute bottom-16 right-6 z-[9998]">
+      <div class="floating-chat-container absolute bottom-13 right-6 z-[9998]">
         {/* Chat Interface */}
         <div
           class={cn(
-            "bg-background border-2 border-border rounded-lg shadow-xl transition-all duration-300 ease-out",
+            "bg-background border-2 border-border rounded-lg shadow-xl transition-all duration-150 ease-out",
             "flex flex-col overflow-hidden",
             isOpen()
               ? "opacity-100 scale-100 translate-y-0 w-80 h-96"
@@ -437,7 +437,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
         <Button
           onClick={() => setIsOpen(!isOpen())}
           class={cn(
-            "h-10 w-10 rounded-full shadow-md transition-all duration-300 ease-out",
+            "h-10 w-10 rounded-full shadow-md transition-all duration-150 ease-out",
             "bg-background border-2 border-border hover:border-green-500/50",
             "hover:bg-green-50 dark:hover:bg-green-950/20",
             "flex items-center justify-center relative",
