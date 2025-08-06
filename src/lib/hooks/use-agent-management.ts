@@ -123,6 +123,9 @@ export function useAgentManagement(props: UseAgentManagementProps) {
   // Debounced saves for transforms to reduce API calls
   const debouncedSaves = new Map<string, number>();
 
+  // Cache to preserve Agent object identity across renders
+  const agentCache = new Map<string, Agent>();
+
   // Memoized agent processing with proper typing and validation
   const agents = createMemo((): Agent[] => {
     const rawAgentData = dbAgents.data;
@@ -133,13 +136,43 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }
 
     // Convert and validate agent data, filtering out agents marked for deletion and chat agents
-    return rawAgentData
-      .filter((rawAgent: AgentData): rawAgent is AgentData => 
-        isAgentData(rawAgent) && 
-        rawAgent.status !== 'deleting' && 
-        rawAgent.type !== 'ai-chat'
-      )
-      .map((agentData: AgentData): Agent => agentDataToAgent(agentData));
+    const updated: Agent[] = [];
+    rawAgentData.forEach((rawAgent: AgentData) => {
+      if (!isAgentData(rawAgent) || rawAgent.status === 'deleting' || rawAgent.type === 'ai-chat') return;
+
+      const existing = agentCache.get(rawAgent._id);
+      if (existing) {
+        const positionChanged = existing.position.x !== rawAgent.positionX || existing.position.y !== rawAgent.positionY;
+        const sizeChanged = existing.size.width !== rawAgent.width || existing.size.height !== rawAgent.height;
+        const statusChanged = existing.status !== rawAgent.status;
+        const basicChanged = positionChanged || sizeChanged || statusChanged;
+
+        if (basicChanged) {
+          // create a fresh object so Solid signals downstream components to rerender
+          const converted = agentDataToAgent(rawAgent);
+          agentCache.set(rawAgent._id, converted);
+          updated.push(converted);
+        } else {
+          // mutate in place for minor prop changes that shouldn't cause re-mount (keeps video stable)
+          existing.prompt = rawAgent.prompt;
+          existing.generatedImage = rawAgent.imageUrl as any;
+          existing.generatedVideo = rawAgent.videoUrl as any;
+          existing.type = rawAgent.type as any;
+          existing.connectedAgentId = rawAgent.connectedAgentId as any;
+          updated.push(existing);
+        }
+      } else {
+        const converted = agentDataToAgent(rawAgent);
+        agentCache.set(rawAgent._id, converted);
+        updated.push(converted);
+      }
+    });
+    // prune cache of removed ids
+    const currentIds = new Set(updated.map(a=>a.id));
+    for (const id of agentCache.keys()) {
+      if (!currentIds.has(id)) agentCache.delete(id);
+    }
+    return updated;
   });
 
   // Separate memo for agents that are being deleted (for animation)
