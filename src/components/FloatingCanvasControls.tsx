@@ -20,7 +20,7 @@ export interface FloatingCanvasControlsProps {
 export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (props) => {
   const [isMinimized, setIsMinimized] = createSignal(props.isMinimized ?? false);
   const [showHelp, setShowHelp] = createSignal(props.showHelp ?? false);
-  
+
   const handleToggleMinimize = () => {
     const newState = !isMinimized();
     setIsMinimized(newState);
@@ -35,33 +35,33 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
 
   const position = props.position ?? 'bottom-center';
   // Center controls at bottom to match top toolbar, or position left/right
-  const positionClasses = 
+  const positionClasses =
     position === 'bottom-left' ? 'bottom-4 left-4' :
-    position === 'bottom-right' ? 'bottom-4 right-4' :
-    'bottom-4 left-1/2 -translate-x-1/2'; // Center by default
+      position === 'bottom-right' ? 'bottom-4 right-4' :
+        'bottom-4 left-1/2 -translate-x-1/2'; // Center by default
 
   return (
     <>
       {/* Main controls */}
-      <div 
+      <div
         class={cn(
           "absolute z-40",
           positionClasses,
           "bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/90",
           "border rounded-lg shadow-lg",
           "transition-all ease-[cubic-bezier(0.4,0,0.2,1)]",
-          isMinimized() ? "" : ""
+          isMinimized() ? "p-1" : "p-2"
         )}
       >
         <div
           class="relative overflow-hidden"
           style={{
-            "max-height": isMinimized() ? "40px" : "200px",
-            "transition": "max-height 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+            "max-height": isMinimized() ? "40px" : "300px",
+            "transition": "max-height 150ms cubic-bezier(0.4, 0, 0.2, 1) ease-in"
           }}
         >
           {/* Minimized view - zoom controls with percentage */}
-          <div 
+          <div
             class="flex items-center gap-2 px-2 py-1.5"
             style={{
               "display": isMinimized() ? "flex" : "none"
@@ -77,11 +77,11 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
             >
               <span class="text-sm font-bold">−</span>
             </Button>
-            
-            <span class="text-xs font-mono text-muted-foreground min-w-[45px] text-center">
+
+            <span class="text-sm font-mono text-muted-foreground min-w-[45px] text-center">
               {Math.round(props.zoom * 100)}%
             </span>
-            
+
             <Button
               onClick={props.onZoomIn}
               size="sm"
@@ -92,9 +92,9 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
             >
               <span class="text-sm font-bold">+</span>
             </Button>
-            
+
             <div class="w-px h-4 bg-border mx-1" />
-            
+
             <Button
               size="sm"
               variant="ghost"
@@ -102,8 +102,8 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               class="h-6 w-6 p-0"
               title="Expand controls"
             >
-              <Icon 
-                name="chevron-up" 
+              <Icon
+                name="chevron-up"
                 class="h-3 w-3 transition-transform duration-150"
                 style={{
                   "transform": isMinimized() ? "rotate(0deg)" : "rotate(180deg)"
@@ -112,11 +112,11 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
             </Button>
           </div>
           {/* Expanded view */}
-          <div 
+          <div
             class="p-2"
             style={{
               "display": isMinimized() ? "none" : "block",
-              "animation": !isMinimized() ? "controls-fade-slide 250ms ease-out forwards" : "none"
+              "animation": !isMinimized() ? "controls-fade-slide 150ms ease-in" : "none"
             }}
           >
             {/* Zoom controls */}
@@ -131,13 +131,13 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               >
                 <span class="text-base font-bold">−</span>
               </Button>
-              
+
               <div class="px-2 min-w-[60px] text-center">
                 <span class="text-sm font-mono text-muted-foreground">
                   {Math.round(props.zoom * 100)}%
                 </span>
               </div>
-              
+
               <Button
                 onClick={props.onZoomIn}
                 size="sm"
@@ -148,9 +148,9 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               >
                 <span class="text-base font-bold">+</span>
               </Button>
-              
+
               <div class="w-px h-6 bg-border mx-1" />
-              
+
               <Button
                 onClick={props.onResetZoom}
                 size="sm"
@@ -187,9 +187,9 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
                 <span class="text-xs mr-1">?</span>
                 Help
               </Button>
-              
+
               <div class="flex-1" />
-              
+
               <Button
                 size="sm"
                 variant="ghost"
@@ -197,8 +197,8 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
                 class="h-7 w-7 p-0"
                 title="Minimize controls"
               >
-                <Icon 
-                  name="chevron-up" 
+                <Icon
+                  name="chevron-up"
                   class="h-3 w-3 transition-transform duration-150"
                   style={{
                     "transform": isMinimized() ? "rotate(0deg)" : "rotate(180deg)"
@@ -212,12 +212,12 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
 
       {/* Help overlay */}
       <Show when={showHelp()}>
-        <div 
+        <div
           class={cn(
             "absolute z-50",
-            position === 'bottom-left' ? 'bottom-20 left-4' : 
-            position === 'bottom-right' ? 'bottom-20 right-4' :
-            'bottom-20 left-1/2 -translate-x-1/2', // Center if controls are centered
+            position === 'bottom-left' ? 'bottom-20 left-4' :
+              position === 'bottom-right' ? 'bottom-20 right-4' :
+                'bottom-20 left-1/2 -translate-x-1/2', // Center if controls are centered
             "bg-background/95 backdrop-blur border rounded-lg shadow-lg p-4",
             "max-w-xs"
           )}
@@ -233,7 +233,7 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               <Icon name="x" class="h-3 w-3" />
             </Button>
           </div>
-          
+
           <div class="space-y-2 text-xs text-muted-foreground">
             <div class="flex justify-between">
               <span>Pan canvas</span>
