@@ -66,9 +66,10 @@ export function MemoizedVoiceAgent(props: MemoizedVoiceAgentProps) {
       class="absolute select-none"
       data-agent-id={props.agent.id}
       style={{
-        transform: `translate3d(${props.agent.position.x}px, ${props.agent.position.y}px, 0) ${props.isDragged ? 'scale(1.05)' : 'scale(1)'}`,
+        transform: `translate3d(${props.agent.position.x}px, ${props.agent.position.y}px, 0) ${props.isDragged ? 'scale(1.05)' : ''}`,
         transition: props.isDragged ? 'none' : 'transform 0.2s ease',
         'z-index': props.zIndex,
+        'will-change': props.isDragged ? 'transform' : 'auto',
 
       }}
       onMouseDown={(e) => {

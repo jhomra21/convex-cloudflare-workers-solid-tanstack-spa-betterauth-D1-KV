@@ -26,52 +26,23 @@ interface MemoizedVideoAgentProps {
 }
 
 export function MemoizedVideoAgent(props: MemoizedVideoAgentProps) {
-  // Single memo for the entire VideoAgent - only re-render when agent data actually changes
-  const memoizedVideoAgent = createMemo(() => {
-    // Simple style calculations for the VideoAgent component
-    const animationClass = props.isExiting ? 'animate-scale-out' : '';
-    const borderClass = props.isDragged
-      ? "border-primary shadow-xl"
-      : props.isResizing
-        ? "border-secondary shadow-lg"
-        : "border-transparent hover:border-muted-foreground/20";
-
-    return (
-      <VideoAgent
-        id={props.agent.id}
-        userName={props.agent.userName}
-        prompt={props.agent.prompt}
-        onRemove={props.onRemove}
-        size={props.agent.size}
-        onResizeStart={props.onResizeStart}
-        generatedVideo={props.agent.generatedVideo}
-        onPromptChange={props.onPromptChange}
-        status={props.agent.status}
-        model={props.agent.model}
-        type={props.agent.type as 'video-generate' | 'video-image-to-video'}
-        connectedAgentId={props.agent.connectedAgentId}
-        availableAgents={props.availableAgents}
-        onConnectAgent={props.onConnectAgent}
-        onDisconnectAgent={props.onDisconnectAgent}
-        class={cn(
-          "shadow-lg border-2 transition-all duration-200",
-          borderClass,
-          animationClass,
-          props.class
-        )}
-      />
-    );
-  });
+  // Simple style calculations without excessive memoization
+  const animationClass = () => props.isExiting ? 'animate-scale-out' : '';
+  const borderClass = () => {
+    if (props.isDragged) return "border-primary shadow-xl";
+    if (props.isResizing) return "border-secondary shadow-lg";
+    return "border-transparent hover:border-muted-foreground/20";
+  };
 
   return (
     <div
       class="absolute select-none"
       data-agent-id={props.agent.id}
       style={{
-        transform: `translate3d(${props.agent.position.x}px, ${props.agent.position.y}px, 0) ${props.isDragged ? 'scale(1.05)' : 'scale(1)'}`,
+        transform: `translate3d(${props.agent.position.x}px, ${props.agent.position.y}px, 0) ${props.isDragged ? 'scale(1.05)' : ''}`,
         transition: props.isDragged ? 'none' : 'transform 0.2s ease',
         'z-index': props.zIndex,
-       
+        'will-change': props.isDragged ? 'transform' : 'auto',
       }}
       onMouseDown={(e) => {
         // Prevent drag if clicking on interactive elements
@@ -90,7 +61,29 @@ export function MemoizedVideoAgent(props: MemoizedVideoAgentProps) {
         }
       }}
     >
-      {memoizedVideoAgent()}
+      <VideoAgent
+        id={props.agent.id}
+        userName={props.agent.userName}
+        prompt={props.agent.prompt}
+        size={props.agent.size}
+        generatedVideo={props.agent.generatedVideo}
+        status={props.agent.status}
+        model={props.agent.model}
+        type={props.agent.type as 'video-generate' | 'video-image-to-video'}
+        connectedAgentId={props.agent.connectedAgentId}
+        availableAgents={props.availableAgents}
+        onRemove={props.onRemove}
+        onResizeStart={props.onResizeStart}
+        onPromptChange={props.onPromptChange}
+        onConnectAgent={props.onConnectAgent}
+        onDisconnectAgent={props.onDisconnectAgent}
+        class={cn(
+          "shadow-lg border-2 transition-all duration-200",
+          borderClass(),
+          animationClass(),
+          props.class
+        )}
+      />
     </div>
   );
 }

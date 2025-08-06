@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, onCleanup, onMount, batch } from 'solid-js';
+import { createSignal, For, Show, createEffect, onCleanup, onMount, batch, Index } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { MemoizedVideoAgent } from './MemoizedVideoAgent';
@@ -484,48 +484,48 @@ export function ImageCanvas(props: ImageCanvasProps) {
               )}
             </For>
 
-            {/* Agents with individual memoization for better performance */}
-            <For each={agents()}>
-              {(agent) => {
+            {/* Agents - using Index for better performance with position updates */}
+            <Index each={agents()}>
+              {(agent, index) => {
                 // Calculate current interaction state
-                const isDragged = () => dragHook.draggedAgent() === agent.id;
-                const isResizing = () => resizeHook.resizingAgent() === agent.id;
-                const zIndex = () => getAgentZIndex(agent.id, isDragged());
+                const isDragged = () => dragHook.draggedAgent() === agent().id;
+                const isResizing = () => resizeHook.resizingAgent() === agent().id;
+                const zIndex = () => getAgentZIndex(agent().id, isDragged());
 
                 // Calculate animation state
-                const isExiting = () => deletingAgents().some(deletingAgent => deletingAgent.id === agent.id);
+                const isExiting = () => deletingAgents().some(deletingAgent => deletingAgent.id === agent().id);
 
 
 
                 // Render different agent types
-                if (agent.type === 'voice-generate') {
+                if (agent().type === 'voice-generate') {
                   return (
                     <MemoizedVoiceAgent
-                      agent={agent}
+                      agent={agent()}
                       isDragged={isDragged()}
                       isResizing={isResizing()}
                       zIndex={zIndex()}
                       isExiting={isExiting()}
                       onRemove={removeAgent}
-                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                      onMouseDown={(e) => handleMouseDown(e, agent().id)}
+                      onResizeStart={(e, handle) => handleResizeStart(e, agent().id, handle)}
                       onSizeChange={updateAgentSize}
                       onPromptChange={updateAgentPrompt}
                       onAnimationEnd={handleAnimationEnd}
                     />
                   );
-                } else if (agent.type === 'video-generate' || agent.type === 'video-image-to-video') {
+                } else if (agent().type === 'video-generate' || agent().type === 'video-image-to-video') {
                   return (
                     <MemoizedVideoAgent
-                      agent={agent}
+                      agent={agent()}
                       isDragged={isDragged()}
                       isResizing={isResizing()}
                       zIndex={zIndex()}
                       isExiting={isExiting()}
                       availableAgents={availableAgents()}
                       onRemove={removeAgent}
-                      onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                      onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                      onMouseDown={(e) => handleMouseDown(e, agent().id)}
+                      onResizeStart={(e, handle) => handleResizeStart(e, agent().id, handle)}
                       onPromptChange={updateAgentPrompt}
                       onConnectAgent={connectAgents}
                       onDisconnectAgent={disconnectAgent}
@@ -540,16 +540,16 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
                 return (
                   <MemoizedImageAgent
-                    agent={agent}
+                    agent={agent()}
                     isDragged={isDragged()}
                     isResizing={isResizing()}
                     zIndex={zIndex()}
                     isExiting={isExiting()}
-                    isRecentlyDragged={recentlyDraggedAgents().has(agent.id)}
+                    isRecentlyDragged={recentlyDraggedAgents().has(agent().id)}
                     availableAgents={availableAgents()}
                     onRemove={removeAgent}
-                    onMouseDown={(e) => handleMouseDown(e, agent.id)}
-                    onResizeStart={(e, handle) => handleResizeStart(e, agent.id, handle)}
+                    onMouseDown={(e) => handleMouseDown(e, agent().id)}
+                    onResizeStart={(e, handle) => handleResizeStart(e, agent().id, handle)}
                     onSizeChange={updateAgentSize}
                     onPromptChange={updateAgentPrompt}
                     onConnectAgent={connectAgents}
@@ -558,7 +558,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                   />
                 );
               }}
-            </For>
+            </Index>
           </div>
         </div>
 

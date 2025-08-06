@@ -437,10 +437,16 @@ export function VideoAgent(props: VideoAgentProps) {
                                 <video
                                 controls
                                 class="w-full h-auto max-w-full max-h-[calc(100%-2rem)] rounded cursor-default object-contain"
-                                preload="none"
+                                preload="metadata"
+                                poster=""
                                 style={{
                                 "aspect-ratio": aspectRatio() === '16:9' ? '16/9' : 
                                 aspectRatio() === '9:16' ? '9/16' : '1/1'
+                                }}
+                                onLoadedMetadata={(e) => {
+                                    // Seek to 1 second to get a better thumbnail
+                                    const video = e.currentTarget as HTMLVideoElement;
+                                    video.currentTime = 1;
                                 }}
                                 >
                                     <source src={props.generatedVideo} type="video/mp4" />

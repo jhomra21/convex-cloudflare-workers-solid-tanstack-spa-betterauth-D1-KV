@@ -196,9 +196,20 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
     const finalSize = scheduledSize;
     const finalPositionAdjustment = scheduledPositionAdjustment;
 
+    // Store the current transform before clearing
+    let shouldRestoreTransform = false;
+    let restoreTransform = '';
+    
+    if (wrapperEl && !finalPositionAdjustment) {
+      // For bottom-right resize (no position change), preserve the current position
+      // by restoring the original transform after clearing styles
+      shouldRestoreTransform = true;
+      restoreTransform = `translate3d(${originalTransformX}px, ${originalTransformY}px, 0) scale(${originalDragScale})`;
+    }
+
     // Clear the transform and card styles to let reactive state take over
     if (wrapperEl) {
-      wrapperEl.style.transform = '';
+      wrapperEl.style.transform = shouldRestoreTransform ? restoreTransform : '';
       wrapperEl.style.transition = '';
 
       // Clear card element styles
