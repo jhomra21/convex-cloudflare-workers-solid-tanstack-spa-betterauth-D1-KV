@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect, onCleanup, onMount, batch, Index } from 'solid-js';
+import { createSignal, For, Show, createEffect, onCleanup, onMount, batch } from 'solid-js';
 import { MemoizedImageAgent } from './MemoizedImageAgent';
 import { MemoizedVoiceAgent } from './MemoizedVoiceAgent';
 import { MemoizedVideoAgent } from './MemoizedVideoAgent';
