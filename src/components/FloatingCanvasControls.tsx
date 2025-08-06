@@ -47,10 +47,10 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
         class={cn(
           "absolute z-40",
           positionClasses,
-          "bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/90",
+          "bg-background/95 supports-[backdrop-filter]:bg-background/95",
           "border rounded-lg shadow-lg",
           "transition-all ease-[cubic-bezier(0.4,0,0.2,1)]",
-          isMinimized() ? "p-1" : "p-2"
+          isMinimized() ? "p-0" : "p-1"
         )}
       >
         <div
@@ -119,8 +119,8 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               "animation": !isMinimized() ? "controls-fade-slide 150ms ease-in" : "none"
             }}
           >
-            {/* Zoom controls */}
-            <div class="flex items-center gap-1 mb-2">
+            {/* Zoom controls - top row */}
+            <div class="flex items-center justify-center gap-1 mb-2">
               <Button
                 onClick={props.onZoomOut}
                 size="sm"
@@ -148,35 +148,10 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
               >
                 <span class="text-base font-bold">+</span>
               </Button>
-
-              <div class="w-px h-6 bg-border mx-1" />
-
-              <Button
-                onClick={props.onResetZoom}
-                size="sm"
-                variant="ghost"
-                disabled={props.zoom === 1.0}
-                class="h-8 w-8 p-0"
-                title="Reset Zoom (100%)"
-              >
-                <Icon name="refresh-cw" class="h-4 w-4" />
-              </Button>
-
-              <Show when={props.onResetView}>
-                <Button
-                  onClick={props.onResetView}
-                  size="sm"
-                  variant="ghost"
-                  class="h-8 w-8 p-0"
-                  title="Reset View"
-                >
-                  <Icon name="house" class="h-4 w-4" />
-                </Button>
-              </Show>
             </div>
 
-            {/* Additional controls */}
-            <div class="flex items-center gap-1">
+            {/* Additional controls - bottom row */}
+            <div class="flex items-center justify-center gap-1">
               <Button
                 size="sm"
                 variant="ghost"
@@ -188,7 +163,28 @@ export const FloatingCanvasControls: Component<FloatingCanvasControlsProps> = (p
                 Help
               </Button>
 
-              <div class="flex-1" />
+              <Button
+                onClick={props.onResetZoom}
+                size="sm"
+                variant="ghost"
+                disabled={props.zoom === 1.0}
+                class="h-7 w-7 p-0"
+                title="Reset Zoom (100%)"
+              >
+                <Icon name="refresh-cw" class="h-4 w-4" />
+              </Button>
+
+              <Show when={props.onResetView}>
+                <Button
+                  onClick={props.onResetView}
+                  size="sm"
+                  variant="ghost"
+                  class="h-7 w-7 p-0"
+                  title="Reset View"
+                >
+                  <Icon name="house" class="h-4 w-4" />
+                </Button>
+              </Show>
 
               <Button
                 size="sm"
