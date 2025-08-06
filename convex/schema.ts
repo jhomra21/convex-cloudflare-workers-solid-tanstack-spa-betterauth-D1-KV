@@ -51,7 +51,7 @@ export default defineSchema({
     requestId: v.optional(v.string()),
     model: v.union(v.literal("normal"), v.literal("pro")),
     status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
     connectedAgentId: v.optional(v.id("agents")),
     uploadedImageUrl: v.optional(v.string()),
     activeImageUrl: v.optional(v.string()), // For edit agents: which image to use as input (original or generated)

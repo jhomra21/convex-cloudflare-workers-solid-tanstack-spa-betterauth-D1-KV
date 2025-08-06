@@ -33,7 +33,7 @@ export const getCanvasAgents = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -110,7 +110,7 @@ export const createAgent = mutation({
     width: v.number(),
     height: v.number(),
     model: v.optional(v.union(v.literal("normal"), v.literal("pro"))),
-    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat"))),
+    type: v.optional(v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat"))),
     voice: v.optional(v.union(
       v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
       v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
@@ -461,7 +461,7 @@ export const disconnectAgents = mutation({
 export const updateAgentType = mutation({
   args: {
     agentId: v.id("agents"),
-    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+    type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
   },
   returns: v.null(),
   handler: async (ctx, { agentId, type }) => {
@@ -532,7 +532,7 @@ export const getConnectedAgent = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -551,7 +551,7 @@ export const getConnectedAgent = query({
   },
 });
 
-// Clear all agents from canvas
+// Clear all agents from canvas (excluding chat agents)
 export const clearCanvasAgents = mutation({
   args: { canvasId: v.id("canvases") },
   returns: v.null(),
@@ -559,10 +559,11 @@ export const clearCanvasAgents = mutation({
     const agents = await ctx.db
       .query("agents")
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
+      .filter((q) => q.neq(q.field("type"), "ai-chat")) // Exclude chat agents
       .collect();
 
-    // Since we're deleting all agents, we don't need to worry about connection cleanup
-    // Just delete all agents directly
+    // Since we're deleting all agents (except chat), we don't need to worry about connection cleanup
+    // Just delete all non-chat agents directly
     for (const agent of agents) {
       await ctx.db.delete(agent._id);
     }
@@ -581,7 +582,10 @@ export const clearUserAgents = mutation({
     const agents = await ctx.db
       .query("agents")
       .withIndex("by_canvas", (q) => q.eq("canvasId", canvasId))
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.and(
+        q.eq(q.field("userId"), userId),
+        q.neq(q.field("type"), "ai-chat") // Exclude chat agents
+      ))
       .collect();
 
     // For each agent being deleted, clean up connections properly
@@ -690,7 +694,7 @@ export const getAgentByRequestId = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),
@@ -798,7 +802,7 @@ export const getChatAgent = query({
       requestId: v.optional(v.string()),
       model: v.union(v.literal("normal"), v.literal("pro")),
       status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
-      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("ai-chat")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
       connectedAgentId: v.optional(v.id("agents")),
       uploadedImageUrl: v.optional(v.string()),
       activeImageUrl: v.optional(v.string()),

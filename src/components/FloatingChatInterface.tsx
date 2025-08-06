@@ -25,6 +25,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
   const [isOpen, setIsOpen] = createSignal(false);
   const [message, setMessage] = createSignal('');
   const [uploadedFiles, setUploadedFiles] = createSignal<File[]>([]);
+  const [hoveredMessageIndex, setHoveredMessageIndex] = createSignal<number | null>(null);
 
   // Initialize context selection
   const contextSelection = useContextSelection();
@@ -98,25 +99,21 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
     });
   };
 
-  // Get icon for item with type safety
+  // Copy message to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  // Get icon for item (always returns bot icon for agents)
   const getItemIcon = (item: ContextItem): IconName => {
-    if (item.icon) {
-      // Since we can't easily validate against the IconName union type at runtime,
-      // we'll trust that the provided icon name is valid and let the Icon component
-      // handle invalid names with its fallback mechanism
-      return item.icon as IconName;
-    }
-    
-    switch (item.type) {
-      case 'file':
-        return 'file';
-      case 'folder':
-        return 'folder';
-      case 'agent':
-        return 'bot';
-      default:
-        return 'file';
-    }
+    // All context items are agents now, so always return 'bot'
+    return 'bot';
   };
 
 
@@ -209,7 +206,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
               }
             >
               <For each={props.chatHistory}>
-                {(msg: ChatMessage) => (
+                {(msg: ChatMessage, index) => (
                   <div class={cn(
                     "flex gap-2 text-sm",
                     msg.role === 'user' ? "justify-end" : "justify-start"
@@ -220,12 +217,18 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
                       </div>
                     </Show>
 
-                    <div class={cn(
-                      "max-w-[80%] rounded-lg px-3 py-2",
-                      msg.role === 'user'
-                        ? "bg-blue-500 text-white"
-                        : "bg-muted text-foreground"
-                    )}>
+                    <div 
+                      class={cn(
+                        "max-w-[80%] rounded-lg px-3 py-2 relative group cursor-pointer transition-all",
+                        msg.role === 'user'
+                          ? "bg-blue-500 text-white hover:bg-blue-600"
+                          : "bg-muted text-foreground hover:bg-muted/80"
+                      )}
+                      onClick={() => copyToClipboard(msg.content)}
+                      onMouseEnter={() => setHoveredMessageIndex(index())}
+                      onMouseLeave={() => setHoveredMessageIndex(null)}
+                      title="Click to copy"
+                    >
                       <div class="whitespace-pre-wrap break-words">
                         {/* Split content by **Created Agents:** to handle status section */}
                         <Show
@@ -263,6 +266,23 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
                       )}>
                         {formatTime(msg.timestamp)}
                       </p>
+                      
+                      {/* Copy icon on hover */}
+                      <Show when={hoveredMessageIndex() === index()}>
+                        <div class={cn(
+                          "absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity",
+                          "bg-background/80 backdrop-blur-sm rounded p-1",
+                          msg.role === 'user' ? "bg-blue-600/20" : "bg-muted/50"
+                        )}>
+                          <Icon 
+                            name="copy" 
+                            class={cn(
+                              "h-3 w-3",
+                              msg.role === 'user' ? "text-white" : "text-muted-foreground"
+                            )} 
+                          />
+                        </div>
+                      </Show>
                     </div>
 
                     <Show when={msg.role === 'user'}>
@@ -320,7 +340,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
                 class="h-7 px-2 text-xs"
               >
                 <Icon name="plus" class="h-3 w-3 mr-1" />
-                Add Context
+                Add Agents
                 <Show when={contextSelection.hasSelection()}>
                   <span class="ml-1 bg-blue-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center">
                     {contextSelection.selectionCount()}
