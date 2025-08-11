@@ -140,8 +140,7 @@ export function ContextSelector(props: ContextSelectorProps) {
               <Icon name="search-x" class="h-5 w-5 text-muted-foreground mb-2" />
               <p class="text-xs text-muted-foreground mb-1">No image agents found</p>
               <p class="text-[10px] text-muted-foreground/70 leading-relaxed">
-                Only image generation and image editing agents can be used as context. 
-                Voice and video agents are not compatible with chat operations.
+                Only image generation and image editing agents can be used as context! 
               </p>
             </div>
           }>
