@@ -126,7 +126,7 @@ export function ContextSelector(props: ContextSelectorProps) {
               type="text"
               value={searchQuery()}
               onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              placeholder="Search agents..."
+              placeholder="Search image agents..."
               class="w-full pl-7 pr-3 py-1.5 text-sm bg-muted/50 border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent"
               autofocus
             />
@@ -136,9 +136,13 @@ export function ContextSelector(props: ContextSelectorProps) {
         {/* Items List */}
         <div class="flex-1 overflow-y-auto">
           <Show when={filteredItems().length > 0} fallback={
-            <div class="flex flex-col items-center justify-center py-4 text-center">
-              <Icon name="search-x" class="h-5 w-5 text-muted-foreground mb-1" />
-              <p class="text-xs text-muted-foreground">No agents found</p>
+            <div class="flex flex-col items-center justify-center py-4 text-center px-3">
+              <Icon name="search-x" class="h-5 w-5 text-muted-foreground mb-2" />
+              <p class="text-xs text-muted-foreground mb-1">No image agents found</p>
+              <p class="text-[10px] text-muted-foreground/70 leading-relaxed">
+                Only image generation and image editing agents can be used as context. 
+                Voice and video agents are not compatible with chat operations.
+              </p>
             </div>
           }>
             <div class="py-1">
@@ -187,7 +191,7 @@ export function ContextSelector(props: ContextSelectorProps) {
         {/* Footer - simplified */}
         <div class="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
           <div class="text-xs text-muted-foreground">
-            <Show when={selectedItems().length > 0} fallback="Click agents to add them">
+            <Show when={selectedItems().length > 0} fallback="Click image agents to add them">
               {selectedItems().length} selected
             </Show>
           </div>
