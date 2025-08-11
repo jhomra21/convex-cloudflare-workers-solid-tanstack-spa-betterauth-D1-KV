@@ -1,4 +1,4 @@
-import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
 import type { ContextItem } from '~/types/context';
@@ -25,10 +25,22 @@ export function ContextSelector(props: ContextSelectorProps) {
     setSelectedIds(ids);
   });
 
-  // Filter items - only show agents for context selection
+  // Filter items - only show image agents for context selection
+  // Voice and video agents are excluded since chat can only process images
   const filteredItems = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
-    const agentsOnly = props.availableItems.filter(item => item.type === 'agent');
+    const agentsOnly = props.availableItems.filter(item => {
+      // Only show agent-type items
+      if (item.type !== 'agent') return false;
+      
+      // Exclude voice and video agents from selection
+      // Chat agents can only work with image agents
+      const agentTypeName = item.name.toLowerCase();
+      const isVoiceAgent = agentTypeName.includes('voice');
+      const isVideoAgent = agentTypeName.includes('video');
+      
+      return !isVoiceAgent && !isVideoAgent;
+    });
     
     if (!query) return agentsOnly;
     

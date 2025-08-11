@@ -1,13 +1,19 @@
 import type { ContextItem } from '~/types/context';
 
-// Convert agents to context items
+// Convert agents to context items (only image agents for chat context)
 export function convertAgentsToContextItems(agents: Array<{
   id: string;
   prompt: string;
   imageUrl?: string;
   type: string;
 }>): ContextItem[] {
-  return agents.map(agent => ({
+  // Filter to only include image agents (image-generate and image-edit)
+  // Exclude voice-generate, video-generate, video-image-to-video, and ai-chat agents
+  const imageAgentsOnly = agents.filter(agent => 
+    agent.type === 'image-generate' || agent.type === 'image-edit'
+  );
+  
+  return imageAgentsOnly.map(agent => ({
     id: `agent:${agent.id}`,
     name: agent.type.replace('-', ' '),
     type: 'agent' as const,

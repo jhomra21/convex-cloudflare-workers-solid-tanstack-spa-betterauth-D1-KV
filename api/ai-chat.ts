@@ -50,6 +50,8 @@ Available agent types:
 - voice-generate: Creates speech from text (standalone)
 - video-generate: Creates videos from text prompts OR from images (can work standalone for text-to-video, or needs input image for image-to-video)
 
+IMPORTANT: When users reference existing agents for context, only consider image-generate and image-edit agents. Voice and video agents cannot be used as context for new agent creation.
+
 Connection rules:
 - Image agents can connect to each other
 - image-edit agents can connect to image-generate or other image-edit agents
