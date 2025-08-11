@@ -48,19 +48,21 @@ Available agent types:
 - image-generate: Creates images from text prompts (no input needed)
 - image-edit: Edits existing images with prompts (needs input image)
 - voice-generate: Creates speech from text (standalone)
-- video-generate: Creates videos from text prompts (standalone, without audio by default)
+- video-generate: Creates videos from text prompts OR from images (can work standalone for text-to-video, or needs input image for image-to-video)
 
 Connection rules:
-- Only image agents can connect to each other
+- Image agents can connect to each other
 - image-edit agents can connect to image-generate or other image-edit agents
 - image-generate agents cannot connect to anything (they don't need input)
-- voice and video agents are standalone
+- video-generate agents can connect to image agents when doing image-to-video generation
+- voice agents are standalone
 
 Context handling:
 - When users reference existing agents, create image-edit agents that connect to those agents
-- When users upload images, create image-edit agents with those uploaded images
+- When users upload images, create image-edit agents with those uploaded images (or video-generate agents if they want to create videos from those images)
 - For bulk operations like "remove background from 5 images", create multiple image-edit agents
 - For chaining like "create landscape then add fog", create connected agents
+- When users want to create videos from images, create video-generate agents with image-to-video type
 
 Current context:
 - Referenced agents: ${JSON.stringify(referencedAgents)} (${referencedAgents.length} agents)
@@ -171,42 +173,88 @@ When creating image-edit agents for uploaded files, use the exact URLs provided 
 function parseIntentWithRules(message: string, uploadedFileCount: number, referencedAgentCount: number = 0, uploadedFileUrls: string[] = [], referencedAgentIds: string[] = []): IntentAnalysisResult {
   const lowerMessage = message.toLowerCase();
 
-  // Handle uploaded files - create edit agents
+  // Handle uploaded files - check if user wants to create videos from images
   if (uploadedFileCount > 0) {
-    return {
-      intent: 'create_agents',
-      confidence: 0.8,
-      operations: Array(uploadedFileCount).fill(null).map((_, i) => ({
-        type: 'image-edit' as const,
-        prompt: message,
-        model: 'normal' as const,
-        inputSource: {
-          type: 'uploaded_file' as const,
-          fileUrl: uploadedFileUrls[i] || `uploaded-file-${i}`
-        }
-      })),
-      response: `I'll create ${uploadedFileCount} image editing agent(s) to process your uploaded images with the prompt: "${message}"`,
-      autoGenerate: true
-    };
+    const videoKeywords = ['video', 'movie', 'clip', 'animation', 'motion', 'animate'];
+    const hasVideoKeyword = videoKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    if (hasVideoKeyword) {
+      // User wants to create videos from uploaded images
+      return {
+        intent: 'create_agents',
+        confidence: 0.8,
+        operations: Array(uploadedFileCount).fill(null).map((_, i) => ({
+          type: 'video-generate' as const,
+          prompt: message,
+          model: 'normal' as const,
+          inputSource: {
+            type: 'uploaded_file' as const,
+            fileUrl: uploadedFileUrls[i] || `uploaded-file-${i}`
+          }
+        })),
+        response: `I'll create ${uploadedFileCount} video generation agent(s) to create videos from your uploaded images with the prompt: "${message}"`,
+        autoGenerate: true
+      };
+    } else {
+      // Default to image editing for uploaded images
+      return {
+        intent: 'create_agents',
+        confidence: 0.8,
+        operations: Array(uploadedFileCount).fill(null).map((_, i) => ({
+          type: 'image-edit' as const,
+          prompt: message,
+          model: 'normal' as const,
+          inputSource: {
+            type: 'uploaded_file' as const,
+            fileUrl: uploadedFileUrls[i] || `uploaded-file-${i}`
+          }
+        })),
+        response: `I'll create ${uploadedFileCount} image editing agent(s) to process your uploaded images with the prompt: "${message}"`,
+        autoGenerate: true
+      };
+    }
   }
 
-  // Handle referenced agents - create edit agents that connect to them
+  // Handle referenced agents - check if user wants to create videos from image agents
   if (referencedAgentCount > 0) {
-    return {
-      intent: 'create_agents',
-      confidence: 0.8,
-      operations: Array(referencedAgentCount).fill(null).map((_, i) => ({
-        type: 'image-edit' as const,
-        prompt: message,
-        model: 'normal' as const,
-        inputSource: {
-          type: 'agent_connection' as const,
-          sourceAgentId: referencedAgentIds[i] || `referenced-agent-${i}` // Use actual agent ID if available
-        }
-      })),
-      response: `I'll create ${referencedAgentCount} image editing agent(s) to modify your referenced agents with: "${message}"`,
-      autoGenerate: true
-    };
+    const videoKeywords = ['video', 'movie', 'clip', 'animation', 'motion', 'animate'];
+    const hasVideoKeyword = videoKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    if (hasVideoKeyword) {
+      // User wants to create videos from referenced image agents
+      return {
+        intent: 'create_agents',
+        confidence: 0.8,
+        operations: Array(referencedAgentCount).fill(null).map((_, i) => ({
+          type: 'video-generate' as const,
+          prompt: message,
+          model: 'normal' as const,
+          inputSource: {
+            type: 'agent_connection' as const,
+            sourceAgentId: referencedAgentIds[i] || `referenced-agent-${i}`
+          }
+        })),
+        response: `I'll create ${referencedAgentCount} video generation agent(s) to create videos from your referenced images with: "${message}"`,
+        autoGenerate: true
+      };
+    } else {
+      // Default to image editing for referenced agents
+      return {
+        intent: 'create_agents',
+        confidence: 0.8,
+        operations: Array(referencedAgentCount).fill(null).map((_, i) => ({
+          type: 'image-edit' as const,
+          prompt: message,
+          model: 'normal' as const,
+          inputSource: {
+            type: 'agent_connection' as const,
+            sourceAgentId: referencedAgentIds[i] || `referenced-agent-${i}` // Use actual agent ID if available
+          }
+        })),
+        response: `I'll create ${referencedAgentCount} image editing agent(s) to modify your referenced agents with: "${message}"`,
+        autoGenerate: true
+      };
+    }
   }
 
   // Enhanced keyword-based detection for new agents
@@ -690,6 +738,23 @@ aiChatApi.post('/process', async (c) => {
               })
             );
           } else if (operation.type === 'video-generate') {
+            // Determine if this is image-to-video or text-to-video
+            let inputImageUrl = operation.inputSource?.fileUrl;
+            let videoType: 'text-to-video' | 'image-to-video' = 'text-to-video';
+            
+            // If it's an agent connection, get the image URL from the referenced agent
+            if (operation.inputSource?.type === 'agent_connection' && operation.inputSource?.sourceAgentId) {
+              const referencedAgent = referencedAgentData.find(agent => agent._id === operation.inputSource?.sourceAgentId);
+              if (referencedAgent && referencedAgent.imageUrl) {
+                inputImageUrl = referencedAgent.imageUrl;
+                videoType = 'image-to-video';
+              }
+            } else if (operation.inputSource?.type === 'uploaded_file' && operation.inputSource?.fileUrl) {
+              // Handle uploaded image for image-to-video
+              inputImageUrl = operation.inputSource.fileUrl;
+              videoType = 'image-to-video';
+            }
+            
             // Use internal function for video generation - use async execution like image editing
             const baseUrl = new URL(c.req.url).origin;
             c.executionCtx.waitUntil(
@@ -702,14 +767,14 @@ aiChatApi.post('/process', async (c) => {
                 '8s', // duration
                 agentId,
                 baseUrl, // needed for webhook URL construction
-                undefined, // imageUrl (not needed for text-to-video)
-                'text-to-video', // videoType
+                inputImageUrl, // imageUrl for image-to-video
+                videoType, // dynamically determined video type
                 false, // generateAudio - explicitly set to false (no audio by default)
                 '720p' // resolution
               ).then(() => {
-                console.log('✅ Successfully triggered video generation for agent:', agentId);
+                console.log(`✅ Successfully triggered ${videoType} generation for agent:`, agentId);
               }).catch(error => {
-                console.error('❌ Failed to generate video internally:', error);
+                console.error(`❌ Failed to generate ${videoType} internally:`, error);
                 // The internal function already handles setting agent status to failed
               })
             );

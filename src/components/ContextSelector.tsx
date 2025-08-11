@@ -1,4 +1,4 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
+import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
 import { Icon } from '~/components/ui/icon';
 import { cn } from '~/lib/utils';
 import type { ContextItem } from '~/types/context';
@@ -16,6 +16,8 @@ export interface ContextSelectorProps {
 export function ContextSelector(props: ContextSelectorProps) {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
+  
+  let containerRef: HTMLDivElement | undefined;
 
   // Initialize selected items from props
   createMemo(() => {
@@ -42,7 +44,7 @@ export function ContextSelector(props: ContextSelectorProps) {
     return props.availableItems.filter(item => ids.has(item.id));
   });
 
-  // Toggle item selection
+  // Toggle item selection and immediately update parent
   const toggleItem = (item: ContextItem) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
@@ -51,37 +53,59 @@ export function ContextSelector(props: ContextSelectorProps) {
       } else {
         newSet.add(item.id);
       }
+      // Immediately update the parent with new selection
+      const newSelectedItems = props.availableItems.filter(i => newSet.has(i.id));
+      props.onSelect(newSelectedItems);
       return newSet;
     });
   };
 
-  // Handle selection confirmation
-  const handleConfirm = () => {
-    props.onSelect(selectedItems());
+  // Handle close - no need for confirm anymore
+  const handleClose = () => {
     props.onClose();
   };
 
-  // Handle keyboard shortcuts
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      props.onClose();
-    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleConfirm();
-    }
-  };
-
-  // Handle global key events
+  // Handle click outside and escape key
   createMemo(() => {
     if (props.isOpen) {
-      const handler = (e: KeyboardEvent) => handleKeyDown(e);
-      document.addEventListener('keydown', handler);
-      return () => document.removeEventListener('keydown', handler);
+      const handleKeyDownWrapper = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          props.onClose();
+        }
+      };
+      
+      const handleClickOutside = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (containerRef && containerRef.contains(target)) {
+          return;
+        }
+        const isAddAgentsButton = target.closest('button')?.textContent?.includes('Add Agents');
+        if (isAddAgentsButton) {
+          return;
+        }
+        props.onClose();
+      };
+
+      document.addEventListener('keydown', handleKeyDownWrapper);
+      
+      const clickTimeout = setTimeout(() => {
+        document.addEventListener('click', handleClickOutside, true);
+      }, 0);
+      
+      return () => {
+        clearTimeout(clickTimeout);
+        document.removeEventListener('keydown', handleKeyDownWrapper);
+        document.removeEventListener('click', handleClickOutside, true);
+      };
     }
   });
 
   return (
     <Show when={props.isOpen}>
-      <div class="absolute bottom-full left-0 mb-2 bg-background border border-border rounded-lg shadow-lg w-fit max-h-60 flex flex-col overflow-hidden">
+      <div 
+        ref={containerRef}
+        onClick={(e) => e.stopPropagation()}
+        class="absolute bottom-full left-0 mb-2 bg-background border border-border rounded-lg shadow-lg w-80 max-h-72 flex flex-col overflow-hidden">
         {/* Search */}
         <div class="p-2 border-b border-border">
           <div class="relative">
@@ -111,28 +135,36 @@ export function ContextSelector(props: ContextSelectorProps) {
                   <button
                     onClick={() => toggleItem(item)}
                     class={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50",
+                      "w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-all",
+                      "hover:bg-muted/50 border-l-2 border-transparent",
                       selectedIds().has(item.id) 
-                        ? "bg-blue-50 dark:bg-blue-950/50" 
-                        : ""
+                        ? "bg-blue-50 dark:bg-blue-950/30 border-l-blue-500" 
+                        : "hover:border-l-muted-foreground/20"
                     )}
                   >
-                    <div class="w-6 h-6 rounded bg-muted/50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <Show when={item.imageUrl} fallback={<Icon name="bot" class="h-3 w-3 text-muted-foreground" />}>
+                    <div class="w-8 h-8 rounded-md bg-muted/50 flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/50">
+                      <Show when={item.imageUrl} fallback={<Icon name="bot" class="h-4 w-4 text-muted-foreground" />}>
                         <img src={item.imageUrl} alt="" class="w-full h-full object-cover" />
                       </Show>
                     </div>
                     
                     <div class="min-w-0 flex-1">
-                      <div class="font-medium truncate text-xs">{item.name}</div>
+                      <div class="font-medium truncate text-sm">{item.name}</div>
                       <div class="text-xs text-muted-foreground truncate">
-                        {item.description}
+                        {item.description || item.type}
                       </div>
                     </div>
                     
-                    <Show when={selectedIds().has(item.id)}>
-                      <Icon name="check" class="h-3 w-3 text-blue-600 flex-shrink-0" />
-                    </Show>
+                    <div class={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                      selectedIds().has(item.id)
+                        ? "bg-blue-500 border-blue-500"
+                        : "border-muted-foreground/30 hover:border-muted-foreground/50"
+                    )}>
+                      <Show when={selectedIds().has(item.id)}>
+                        <Icon name="check" class="h-3 w-3 text-white" />
+                      </Show>
+                    </div>
                   </button>
                 )}
               </For>
@@ -140,18 +172,19 @@ export function ContextSelector(props: ContextSelectorProps) {
           </Show>
         </div>
 
-        {/* Footer */}
+        {/* Footer - simplified */}
         <div class="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
           <div class="text-xs text-muted-foreground">
-            {selectedItems().length} selected
+            <Show when={selectedItems().length > 0} fallback="Click agents to add them">
+              {selectedItems().length} selected
+            </Show>
           </div>
           
           <button
-            onClick={handleConfirm}
-            disabled={selectedItems().length === 0}
-            class="px-2 py-1 text-xs bg-blue-500 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+            onClick={handleClose}
+            class="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            Add
+            Done
           </button>
         </div>
       </div>

@@ -89,6 +89,13 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
       e.preventDefault();
       handleSendMessage();
     }
+    // Clear all context with Ctrl/Cmd + Shift + X
+    if (e.key === 'x' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      contextSelection.clearSelection();
+      setUploadedFiles([]);
+      toast.success('Cleared all context');
+    }
   };
 
   // Format timestamp
@@ -164,7 +171,7 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
             "bg-background border-2 border-border rounded-lg shadow-xl transition-all duration-150 ease-out",
             "flex flex-col overflow-hidden",
             isOpen()
-              ? "opacity-100 scale-100 translate-y-0 w-80 h-96"
+              ? "opacity-100 scale-100 translate-y-0 w-96 h-[28rem]"
               : "opacity-0 scale-95 translate-y-2 w-0 h-0 pointer-events-none"
           )}
           style={{
@@ -324,6 +331,46 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
             </div>
           </Show>
 
+          {/* Uploaded Files Section */}
+          <Show when={uploadedFiles().length > 0}>
+            <div class="border-t px-3 py-1.5">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-muted-foreground">Uploaded Files</span>
+                <button
+                  onClick={() => setUploadedFiles([])}
+                  class="text-xs text-muted-foreground hover:text-foreground"
+                  title="Clear all files"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <For each={uploadedFiles().slice(0, 3)}>
+                  {(file, index) => (
+                    <div class="flex items-center gap-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded text-xs border border-green-200 dark:border-green-800">
+                      <Icon name="image" class="h-3 w-3 flex-shrink-0" />
+                      <span class="truncate max-w-20" title={file.name}>
+                        {file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}
+                      </span>
+                      <button
+                        onClick={() => removeUploadedFile(index())}
+                        class="hover:bg-green-200 dark:hover:bg-green-800 rounded p-0.5"
+                        title="Remove file"
+                      >
+                        <Icon name="x" class="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  )}
+                </For>
+                <Show when={uploadedFiles().length > 3}>
+                  <div class="flex items-center px-2 py-1 text-xs text-muted-foreground">
+                    +{uploadedFiles().length - 3} more
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </Show>
+
 
 
           {/* Message Input */}
@@ -419,7 +466,14 @@ export function FloatingChatInterface(props: FloatingChatInterfaceProps) {
 
             <div class="flex items-center justify-between mt-2">
               <p class="text-xs text-muted-foreground">
-                Press Enter to send, Shift+Enter for new line
+                <Show 
+                  when={contextSelection.hasSelection() || uploadedFiles().length > 0}
+                  fallback="Press Enter to send, Shift+Enter for new line"
+                >
+                  <span title="Ctrl/Cmd+Shift+X to clear all">
+                    Enter to send • Ctrl+Shift+X to clear context
+                  </span>
+                </Show>
               </p>
               <Show when={props.isProcessing}>
                 <div class="flex items-center gap-1 text-xs text-orange-500">
