@@ -27,6 +27,9 @@ export interface FloatingCanvasToolbarProps {
   onAddVideoAgent: () => void;
   onClearCanvas: () => void;
   
+  // Drag and drop handlers
+  onStartDrag?: (type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate', e: MouseEvent) => void;
+  
   // Floating toolbar control
   isMinimized?: boolean;
   onToggleMinimize?: (value: boolean) => void;
@@ -56,7 +59,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
         "absolute top-4 left-1/2 -translate-x-1/2 z-50",
         "bg-background/95 supports-[backdrop-filter]:bg-background/95",
         "border rounded-lg shadow-lg",
-        "transition-all ease-[cubic-bezier(0.4,0,0.2,1)]",
+        "transition-transform ease-[cubic-bezier(0.4,0,0.2,1)]",
         isMinimized() ? "p-2" : "p-3"
       )}
       style={{ 
@@ -100,14 +103,20 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
 
           <div class="h-4 w-px bg-border" />
 
-          {/* Quick add buttons */}
+          {/* Quick add buttons - now draggable */}
           <div class="flex items-center gap-0.5">
             <Button
               size="sm"
               variant="ghost"
               onClick={props.onAddGenerateAgent}
-              class="h-7 px-1.5 flex items-center gap-0.5"
-              title="Add Generate Agent"
+              onMouseDown={(e: MouseEvent) => {
+                // Only start drag if onStartDrag is provided and left mouse button
+                if (e.button === 0 && props.onStartDrag) {
+                  props.onStartDrag('image-generate', e);
+                }
+              }}
+              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
               <Icon name="image" class="h-3.5 w-3.5 text-blue-600" />
@@ -116,8 +125,14 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
               size="sm"
               variant="ghost"
               onClick={props.onAddEditAgent}
-              class="h-7 px-1.5 flex items-center gap-0.5"
-              title="Add Edit Agent"
+              onMouseDown={(e: MouseEvent) => {
+                // Only start drag if onStartDrag is provided and left mouse button
+                if (e.button === 0 && props.onStartDrag) {
+                  props.onStartDrag('image-edit', e);
+                }
+              }}
+              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
               <Icon name="edit" class="h-3.5 w-3.5 text-purple-600" />
@@ -126,8 +141,14 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
               size="sm"
               variant="ghost"
               onClick={props.onAddVoiceAgent}
-              class="h-7 px-1.5 flex items-center gap-0.5"
-              title="Add Voice Agent"
+              onMouseDown={(e: MouseEvent) => {
+                // Only start drag if onStartDrag is provided and left mouse button
+                if (e.button === 0 && props.onStartDrag) {
+                  props.onStartDrag('voice-generate', e);
+                }
+              }}
+              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
               <Icon name="mic" class="h-3.5 w-3.5 text-indigo-600" />
@@ -136,8 +157,14 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
               size="sm"
               variant="ghost"
               onClick={props.onAddVideoAgent}
-              class="h-7 px-1.5 flex items-center gap-0.5"
-              title="Add Video Agent"
+              onMouseDown={(e: MouseEvent) => {
+                // Only start drag if onStartDrag is provided and left mouse button
+                if (e.button === 0 && props.onStartDrag) {
+                  props.onStartDrag('video-generate', e);
+                }
+              }}
+              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
               <Icon name="video" class="h-3.5 w-3.5 text-red-600" />
@@ -151,7 +178,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
             size="sm"
             variant="ghost"
             onClick={props.onClearCanvas}
-            class="h-7 px-1.5 flex items-center gap-0.5"
+            class="h-7 w-7 p-0 flex items-center gap-0.5"
             disabled={
               props.isSharedCanvas && !props.isCanvasOwner
                 ? (props.userAgentCount || 0) === 0
@@ -159,11 +186,8 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
             }
             title={props.isSharedCanvas && !props.isCanvasOwner ? "Clear your agents" : "Clear all agents"}
           >
-            <span class="h-3 w-3 text-muted-foreground">-</span>
-            <Icon name="trash-2" class="h-3.5 w-3.5 text-destructive" />
+            <Icon name="trash-2" class="h-4 w-4 text-destructive" />
           </Button>
-          
-          <div class="flex-1" />
           
           <Button
             size="sm"
@@ -174,7 +198,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
           >
             <Icon 
               name="chevron-down" 
-              class="h-4 w-4 transition-transform duration-150"
+              class="h-4 w-4 transition-transform"
               style={{
                 "transform": isMinimized() ? "rotate(0deg)" : "rotate(180deg)"
               }}

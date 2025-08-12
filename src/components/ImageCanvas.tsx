@@ -16,6 +16,8 @@ import { useCanvasResize } from '~/lib/hooks/use-canvas-resize';
 import { useViewport } from '~/lib/hooks/use-viewport';
 import { useAgentManagement } from '~/lib/hooks/use-agent-management';
 import { useZIndexManagement } from '~/lib/hooks/use-z-index-management';
+import { useToolbarDragDrop, type AgentDragType } from '~/lib/hooks/use-toolbar-drag-drop';
+import { DraggableAgentPlaceholder } from '~/components/DraggableAgentPlaceholder';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import { toast } from 'solid-sonner';
 
@@ -92,6 +94,20 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Z-index management
   const zIndexManagement = useZIndexManagement();
+
+  // Drag and drop from toolbar
+  const toolbarDragDrop = useToolbarDragDrop({
+    viewport: viewport.viewport,
+    onDrop: (type: AgentDragType, position) => {
+      // Map the drag type to our agent creation type
+      const agentType = type as 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate';
+      
+      // Create agent at the dropped position with empty prompt
+      agentManagement.addAgentAtPosition('', agentType, position);
+      
+      toast.success(`Added ${type.replace('-', ' ')} agent`);
+    },
+  });
 
 
   const createCanvasMutation = useConvexMutation(convexApi.canvas.createCanvas);
@@ -288,6 +304,11 @@ export function ImageCanvas(props: ImageCanvasProps) {
   const handleAddEditAgent = () => addAgent('', 'image-edit');
   const handleAddVoiceAgent = () => addAgent('', 'voice-generate');
   const handleAddVideoAgent = () => addAgent('', 'video-generate');
+  
+  // Handle drag start from toolbar
+  const handleStartDrag = (type: AgentDragType, e: MouseEvent) => {
+    toolbarDragDrop.startDrag(type, e);
+  };
 
   // Helper methods for zoom controls that get the current canvas container ref
   const handleZoomIn = () => {
@@ -588,6 +609,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
           onAddVoiceAgent={handleAddVoiceAgent}
           onAddVideoAgent={handleAddVideoAgent}
           onClearCanvas={clearCanvas}
+          onStartDrag={handleStartDrag}
           isMinimized={toolbarMinimized()}
           onToggleMinimize={setToolbarMinimized}
         />
@@ -641,6 +663,16 @@ export function ImageCanvas(props: ImageCanvasProps) {
           onSendMessage={handleSendChatMessage}
         />
       </Show>
+      
+      {/* Draggable Agent Placeholder */}
+      <DraggableAgentPlaceholder
+        isDragging={toolbarDragDrop.dragState().isDragging}
+        dragType={toolbarDragDrop.dragState().dragType}
+        cursorX={toolbarDragDrop.dragState().cursorPosition.x}
+        cursorY={toolbarDragDrop.dragState().cursorPosition.y}
+        isOverCanvas={!!toolbarDragDrop.dragState().canvasPosition}
+        hasMoved={toolbarDragDrop.dragState().hasMoved}
+      />
     </ErrorBoundary>
   );
 }

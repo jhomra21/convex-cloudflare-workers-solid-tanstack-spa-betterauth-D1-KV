@@ -302,7 +302,58 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     }, 200);
   };
 
-  // Create a new agent
+  // Create a new agent at a specific position
+  const addAgentAtPosition = async (
+    prompt: string = '',
+    type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' = 'image-generate',
+    position: Position
+  ) => {
+    if (!props.canvas()?._id || !props.userId()) return;
+
+    // Set the active agent type for UI cues only
+    setActiveAgentType(
+      type === 'image-generate' ? 'generate' :
+        type === 'image-edit' ? 'edit' :
+          type === 'voice-generate' ? 'voice' :
+            type === 'video-generate' ? 'video' : 'none'
+    );
+
+    // Get agent size based on type
+    const agentSize: Size = type === 'video-generate'
+      ? { width: 320, height: 450 } // Video agents need more height for controls
+      : { width: 320, height: 384 }; // Default size for other agents
+
+    try {
+      // Create in Convex
+      const createParams: any = {
+        canvasId: props.canvas()!._id,
+        userId: props.userId()!,
+        userName: props.userName(),
+        prompt: prompt || '',
+        positionX: position.x,
+        positionY: position.y,
+        width: agentSize.width,
+        height: agentSize.height,
+        type,
+      };
+
+      // Add voice-specific fields for voice agents
+      if (type === 'voice-generate') {
+        createParams.voice = 'Aurora'; // Default voice
+      }
+
+      await createAgentMutation.mutate(createParams);
+
+    } catch (error) {
+      console.error('Failed to create agent:', error);
+      toast.error('Failed to create agent');
+    } finally {
+      // Reset active agent type
+      setActiveAgentType('none');
+    }
+  };
+
+  // Create a new agent with automatic positioning
   const addAgent = async (prompt?: string, type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate' | 'ai-chat' = 'image-generate') => {
     if (!props.canvas()?._id || !props.userId()) return;
 
@@ -629,6 +680,7 @@ export function useAgentManagement(props: UseAgentManagementProps) {
     activeAgentType,
     deletingAgents, // Expose deleting agents for animation checks
     addAgent,
+    addAgentAtPosition, // Expose the new position-specific method
     removeAgent,
     connectAgents,
     disconnectAgent,

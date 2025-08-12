@@ -4,9 +4,9 @@ import { SidebarMenu } from "./ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Icon } from "./ui/icon"
 import { SidebarMenuButton } from "./ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuPortal } from "./ui/dropdown-menu"
 import type { Component } from "solid-js"
-import { Show, createMemo } from "solid-js"
+import { Show, createMemo, createSignal } from "solid-js"
 import { Link, useNavigate } from "@tanstack/solid-router"
 import { useQuery } from "@tanstack/solid-query"
 import { sessionQueryOptions } from "~/lib/auth-guard"
@@ -16,6 +16,8 @@ export const NavUser: Component = () => {
   const { isMobile, state, setOpenMobile } = useSidebar()
   const navigate = useNavigate()
   const signOutMutation = useSignOutMutation();
+  const [dropdownOpen, setDropdownOpen] = createSignal(false);
+  let buttonRef: HTMLButtonElement | undefined;
   
   // // Get user data from auth context
   // const user = createMemo(() => context()?.session?.user);
@@ -75,47 +77,58 @@ export const NavUser: Component = () => {
             </SidebarMenuButton>
           }
         >
-          <DropdownMenu placement={isMobile() ? "top" : "right-start"}>
-            <DropdownMenuTrigger class="w-full flex !rounded-xl">
-              <SidebarMenuButton
-                size="lg"
-                class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground !cursor-pointer 
-                       transition-[scale,translate,shadow] duration-150 ease-out flex items-center transform translate-z-0
-                       bg-gradient-to-b from-white via-foreground/5 to-foreground/0.5 border !border-t-foreground/3 !border-b-foreground/10 border-x-foreground/10
-                       hover:shadow-md hover:shadow-foreground/10
-                       active:scale-97 !rounded-xl
-                      "
+          <SidebarMenuButton
+            ref={buttonRef}
+            as="button"
+            size="lg"
+            class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground !cursor-pointer 
+                   transition-[transform,shadow] ease-out flex items-center transform translate-z-0
+                   bg-gradient-to-b from-white via-foreground/5 to-foreground/0.5 border !border-t-foreground/3 !border-b-foreground/10 border-x-foreground/10
+                   hover:shadow-md hover:shadow-foreground/10
+                   active:scale-97 !rounded-xl w-full
+                  "
+            classList={{
+              "p-1 rounded-md w-auto": isSidebarCollapsed() && !isMobile(),
+              "w-full justify-start": !isSidebarCollapsed() || isMobile(),
+            }}
+            onClick={(e: MouseEvent) => {
+              // This will only fire on click (mouseup), not mousedown
+              e.stopPropagation();
+              setDropdownOpen(!dropdownOpen());
+            }}
+          >
+            <Avatar class="h-8 w-8 rounded-lg shrink-0 shadow-sm border border-foreground/5">
+                <Show when={user()?.image}>
+                  <AvatarImage src={user()?.image || ''} alt={user()?.name || ''} />
+              </Show>
+                <AvatarFallback class="rounded-lg">{getInitials(user()?.name || "")}</AvatarFallback>
+            </Avatar>
+            <Show when={!isSidebarCollapsed() || isMobile()}>
+              <div class="grid flex-1 text-left text-sm leading-tight ml-2 min-w-0 transition-opacity duration-200 ease-in-out"
                 classList={{
-                  "p-1 rounded-md w-auto": isSidebarCollapsed() && !isMobile(),
-                  "w-full justify-start": !isSidebarCollapsed() || isMobile(),
+                  "opacity-0 pointer-events-none": isSidebarCollapsed() && !isMobile(),
+                  "opacity-100": !isSidebarCollapsed() || isMobile(),
                 }}
               >
-                <Avatar class="h-8 w-8 rounded-lg shrink-0 shadow-sm border border-foreground/5">
-                    <Show when={user()?.image}>
-                      <AvatarImage src={user()?.image || ''} alt={user()?.name || ''} />
-                  </Show>
-                    <AvatarFallback class="rounded-lg">{getInitials(user()?.name || "")}</AvatarFallback>
-                </Avatar>
-                <Show when={!isSidebarCollapsed() || isMobile()}>
-                  <div class="grid flex-1 text-left text-sm leading-tight ml-2 min-w-0 transition-opacity duration-200 ease-in-out"
-                    classList={{
-                      "opacity-0 pointer-events-none": isSidebarCollapsed() && !isMobile(),
-                      "opacity-100": !isSidebarCollapsed() || isMobile(),
-                    }}
-                  >
-                      <span class="truncate font-semibold">{user()?.name}</span>
-                      <span class="truncate text-xs text-foreground/60">{user()?.email}</span>
-                  </div>
-                  <Icon name="chevronupdown" class="ml-auto size-4 shrink-0 transition-opacity duration-200 ease-in-out" 
-                    classList={{
-                      "opacity-0 pointer-events-none": isSidebarCollapsed() && !isMobile(),
-                      "opacity-100": !isSidebarCollapsed() || isMobile(),
-                    }}
-                  />
-                </Show>
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
+                  <span class="truncate font-semibold">{user()?.name}</span>
+                  <span class="truncate text-xs text-foreground/60">{user()?.email}</span>
+              </div>
+              <Icon name="chevronupdown" class="ml-auto size-4 shrink-0 transition-opacity duration-200 ease-in-out" 
+                classList={{
+                  "opacity-0 pointer-events-none": isSidebarCollapsed() && !isMobile(),
+                  "opacity-100": !isSidebarCollapsed() || isMobile(),
+                }}
+              />
+            </Show>
+          </SidebarMenuButton>
+          <DropdownMenu 
+            placement={isMobile() ? "top" : "right-start"}
+            open={dropdownOpen()}
+            onOpenChange={setDropdownOpen}
+            getAnchorRect={() => buttonRef?.getBoundingClientRect()}
+          >
+            <DropdownMenuPortal>
+              <DropdownMenuContent
               class={`min-w-56 rounded-lg ${isSidebarCollapsed() && !isMobile() ? "w-56" : "w-[var(--kb-menu-content-available-width)]"}`}
             >
               <DropdownMenuLabel class="p-0 font-normal">
@@ -149,7 +162,8 @@ export const NavUser: Component = () => {
                   <Icon name="logout" class="mr-2 size-4" />
                   Log out
                 </DropdownMenuItem>
-            </DropdownMenuContent>
+              </DropdownMenuContent>
+            </DropdownMenuPortal>
           </DropdownMenu>
         </Show>
       </SidebarMenuItem>
