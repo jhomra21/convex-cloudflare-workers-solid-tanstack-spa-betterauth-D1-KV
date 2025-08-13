@@ -71,7 +71,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
         class="relative overflow-hidden"
         style={{
           "max-height": isMinimized() ? "40px" : "300px",
-          "transition": "max-height 150ms cubic-bezier(0.4, 0, 0.2, 1) ease-out"
+          "transition": "max-height 150ms cubic-bezier(0.4, 0, 0.2, 1)"
         }}
       >
         {/* Minimized view - compact horizontal layout */}

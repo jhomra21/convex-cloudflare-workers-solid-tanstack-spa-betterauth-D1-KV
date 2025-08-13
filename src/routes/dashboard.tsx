@@ -1,9 +1,10 @@
 import {
   Outlet,
   createFileRoute,
+  useLocation,
 }
   from '@tanstack/solid-router'
-import { Suspense, Show, createSignal } from 'solid-js'
+import { Suspense, Show, createSignal, createMemo } from 'solid-js'
 import { Transition } from 'solid-transition-group'
 import { QueryClient } from '@tanstack/solid-query'
 import {
@@ -15,7 +16,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { Separator } from "~/components/ui/separator"
 import { AppSidebar } from '~/components/AppSidebar'
 import { Breadcrumbs } from '~/components/Breadcrumbs'
+import { CanvasControls } from '~/components/CanvasControls'
 import { protectedLoader } from '~/lib/auth-guard'
+import { activeCanvasId, setActiveCanvasId, currentCanvas } from '~/lib/canvas-store'
+import { useCurrentUserId } from '~/lib/auth-actions'
 
 // Define router context type (can be shared or defined in a central types file too)
 export interface RouterContext {
@@ -30,6 +34,11 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardPage() {
   const [isScrolled, setIsScrolled] = createSignal(false);
+  const location = useLocation();
+  const userId = useCurrentUserId();
+
+  // Check if we're on the canvas page
+  const isCanvasPage = createMemo(() => location().pathname === '/dashboard/canvas');
 
   let scrollTimer: number;
   const handleScroll = (e: Event) => {
@@ -81,8 +90,8 @@ function DashboardPage() {
         <SidebarProvider>
           <div class="flex h-screen w-screen overflow-hidden bg-muted/40">
             <AppSidebar />
-            <SidebarInset class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-all duration-150 ease-in-out flex flex-col">
-              <header class={`flex h-16 shrink-0 items-center rounded-t-xl gap-2 border-b border-gray-200 dark:border-gray-700 bg-background/95 backdrop-blur-sm sticky top-0 z-20 md:relative md:z-10 transition-shadow duration-150 ${isScrolled() ? 'shadow-md' : ''}`}>
+            <SidebarInset class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col">
+              <header class={`flex h-16 shrink-0 items-center justify-between rounded-t-xl gap-2 bg-background/95 backdrop-blur-sm sticky top-0 z-20 md:relative md:z-10 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
                 <div class="flex items-center gap-2 px-4">
                   <Tooltip openDelay={500}>
                     <TooltipTrigger>
@@ -95,10 +104,22 @@ function DashboardPage() {
                   <Separator orientation="vertical" class="mr-2 h-4" />
                   <Breadcrumbs />
                 </div>
+                <Show when={isCanvasPage()}>
+                  <div class="px-4">
+                    <CanvasControls
+                      activeCanvasId={activeCanvasId()}
+                      onCanvasChange={setActiveCanvasId}
+                      currentCanvas={currentCanvas()}
+                      userId={userId()}
+                    />
+                  </div>
+                </Show>
               </header>
-              {/* Opacity gradient overlay positioned right under header for fade effect */}
-              <div class={`absolute top-16 left-0 right-0 h-6 bg-gradient-to-b from-background/50 to-transparent pointer-events-none z-30 transform transition-transform duration-200 ${isScrolled() ? 'translate-y-0' : 'translate-y-[-100%]'}`}></div>
-              <div onScroll={handleScroll} class="flex-grow overflow-y-auto p-4 relative min-h-0">
+              {/* Opacity gradient overlay positioned right under header for fade effect - hidden on canvas page */}
+              <Show when={!isCanvasPage()}>
+                <div class={`absolute top-16 left-0 right-0 h-6 bg-gradient-to-b from-background/50 to-transparent pointer-events-none z-30 transform transition-transform duration-200 ${isScrolled() ? 'translate-y-0' : 'translate-y-[-100%]'}`}></div>
+              </Show>
+              <div onScroll={handleScroll} class="flex-grow overflow-y-auto px-2 pb-2 relative min-h-0">
                 <Suspense fallback={
                   <div class="w-full h-full flex items-center justify-center">
                     <p>Loading dashboard content...</p>

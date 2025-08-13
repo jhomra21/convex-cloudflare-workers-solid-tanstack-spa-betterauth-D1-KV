@@ -86,7 +86,7 @@ function AccountPage() {
 	};
 
 	return (
-		<div class="container p4 mx-auto space-y-8">
+		<div class="container p-2 mx-auto space-y-8">
 			<div>
 				<h1 class="text-3xl font-bold tracking-tight">Account Settings</h1>
 				<p class="text-muted-foreground mt-1">Manage your account, preferences, and data.</p>

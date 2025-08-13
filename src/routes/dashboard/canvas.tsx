@@ -1,15 +1,11 @@
 import { createFileRoute, useSearch } from "@tanstack/solid-router";
 import { ImageCanvas } from "~/components/ImageCanvas";
-import { createSignal, createEffect, batch } from "solid-js";
+import { createEffect, batch, createSignal } from "solid-js";
 import { convexApi, useConvexMutation, useConvexQuery } from "~/lib/convex";
 import { useCurrentUserId, useCurrentUserName } from "~/lib/auth-actions";
 import { toast } from 'solid-sonner';
-import { CanvasSelector } from '~/components/CanvasSelector';
-import { ShareCanvasDialog } from '~/components/ShareCanvasDialog';
 import { storeShareIntent, getAndClearShareIntent } from '~/lib/share-intent';
-import { Button } from '~/components/ui/button';
-import { Icon } from '~/components/ui/icon';
-import { cn } from '~/lib/utils';
+import { activeCanvasId, setActiveCanvasId, currentCanvas, setCurrentCanvas } from '~/lib/canvas-store';
 
 export const Route = createFileRoute('/dashboard/canvas')({
     component: ImagesPage,
@@ -27,11 +23,6 @@ function ImagesPage() {
 
     // Mutation hooks
     const joinSharedCanvasMutation = useConvexMutation(convexApi.canvas.joinSharedCanvas);
-    
-
-
-    // Track active canvas ID (null = default canvas, string = specific canvas)
-    const [activeCanvasId, setActiveCanvasId] = createSignal<string | null>(null);
 
     // Canvas data for share functionality
     const defaultCanvas = useConvexQuery(
@@ -46,8 +37,11 @@ function ImagesPage() {
         () => ['canvas', 'specific', activeCanvasId(), userId()]
     );
 
-    // Current active canvas data
-    const currentCanvas = () => activeCanvasId() ? specificCanvas.data : defaultCanvas.data;
+    // Update the shared store with current canvas data
+    createEffect(() => {
+        const canvas = activeCanvasId() ? specificCanvas.data : defaultCanvas.data;
+        setCurrentCanvas(canvas);
+    });
 
     // Track the last processed share ID to prevent duplicate processing
     const [lastProcessedShareId, setLastProcessedShareId] = createSignal<string | null>(null);
@@ -103,7 +97,7 @@ function ImagesPage() {
                 batch(() => {
                     setLastProcessedShareId(pendingShareId);
                 });
-                
+
                 // Update URL first, then handle the share asynchronously
                 window.history.replaceState({}, '', '/dashboard/canvas?share=' + pendingShareId);
                 queueMicrotask(() => {
@@ -139,67 +133,12 @@ function ImagesPage() {
     };
 
     return (
-        <div class="h-full flex flex-col">
-            {/* Header */}
-            <div class="flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div class="w-full !px-0 pb-4">
-                    <div class="flex flex-col lg:flex-row lg:justify-between gap-4">
-                        <div class="flex flex-col sm:flex-row gap-4">
-                            <div class="flex-1 min-w-0">
-                                <h1 class="text-xl sm:text-2xl font-semibold mb-1">Gen-AI Canvas</h1>
-                                <p class="text-muted-foreground text-sm">
-                                    Create and organize AI-generated media with intelligent agents
-                                </p>
-                            </div>
-
-                            <div class="flex-shrink-0 sm:border-l sm:pl-4 sm:ml-4">
-                                <div class="text-xs text-muted-foreground mb-1">Canvas</div>
-                                <div class="flex items-center gap-2">
-                                    <CanvasSelector
-                                        activeCanvasId={activeCanvasId()}
-                                        onCanvasChange={setActiveCanvasId}
-                                        currentCanvasName={currentCanvas()?.name}
-                                    />
-                                    <ShareCanvasDialog
-                                        canvasId={currentCanvas()?._id}
-                                        canvasName={currentCanvas()?.name}
-                                        currentShareId={currentCanvas()?.shareId}
-                                        isShareable={!activeCanvasId() && !!currentCanvas()?.isShareable}
-                                        canvasOwnerId={currentCanvas()?.userId}
-                                        currentUserId={userId()}
-                                    >
-                                        <Button
-                                            size="sm"
-                                            variant={(!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) ? "default" : "outline"}
-                                            class={cn(
-                                                "flex items-center gap-2",
-                                                (!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) && "bg-blue-600 hover:bg-blue-700 border-blue-600"
-                                            )}
-                                        >
-                                            <Icon name={(!!activeCanvasId() || (!activeCanvasId() && !!currentCanvas()?.isShareable)) ? "users" : "share"} class="h-4 w-4" />
-                                            {
-                                                !!activeCanvasId() ? "Shared" : // Collaborator on shared canvas
-                                                    (!activeCanvasId() && !!currentCanvas()?.isShareable) ? "Sharing" : // Owner sharing their canvas
-                                                        "Share" // Not shared
-                                            }
-                                        </Button>
-                                    </ShareCanvasDialog>
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div class="flex-1 overflow-hidden">
-                <ImageCanvas
-                    class="h-full"
-                    activeCanvasId={activeCanvasId()}
-                    onCanvasDisabled={() => setActiveCanvasId(null)}
-                />
-            </div>
+        <div class="h-full !p-0">
+            <ImageCanvas
+                class="h-full"
+                activeCanvasId={activeCanvasId()}
+                onCanvasDisabled={() => setActiveCanvasId(null)}
+            />
         </div>
     );
 }

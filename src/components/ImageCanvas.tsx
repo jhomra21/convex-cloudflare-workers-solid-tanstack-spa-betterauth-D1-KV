@@ -440,7 +440,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   return (
     <ErrorBoundary>
-      <div class={cn("h-full overflow-hidden relative", props.class)}>
+      <div class={cn("overflow-hidden relative", props.class)}>
         {/* Canvas - now takes full height */}
         <div
           class="canvas-container h-full relative overflow-hidden bg-muted/30 border-2 border-dashed border-muted-foreground/20 min-h-0 rounded-xl cursor-grab active:cursor-grabbing"
