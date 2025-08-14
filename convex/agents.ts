@@ -711,6 +711,47 @@ export const getAgentByRequestId = query({
   },
 });
 
+// Get agent by ID (for API validation)
+export const getAgentById = query({
+  args: { agentId: v.id("agents") },
+  returns: v.union(
+    v.object({
+      _id: v.id("agents"),
+      _creationTime: v.number(),
+      canvasId: v.id("canvases"),
+      userId: v.string(),
+      userName: v.optional(v.string()),
+      prompt: v.string(),
+      positionX: v.number(),
+      positionY: v.number(),
+      width: v.number(),
+      height: v.number(),
+      imageUrl: v.optional(v.string()),
+      audioUrl: v.optional(v.string()),
+      videoUrl: v.optional(v.string()),
+      voice: v.optional(v.union(
+        v.literal("Aurora"), v.literal("Blade"), v.literal("Britney"),
+        v.literal("Carl"), v.literal("Cliff"), v.literal("Richard"),
+        v.literal("Rico"), v.literal("Siobhan"), v.literal("Vicky")
+      )),
+      audioSampleUrl: v.optional(v.string()),
+      requestId: v.optional(v.string()),
+      model: v.union(v.literal("normal"), v.literal("pro")),
+      status: v.union(v.literal("idle"), v.literal("processing"), v.literal("success"), v.literal("failed"), v.literal("deleting")),
+      type: v.union(v.literal("image-generate"), v.literal("image-edit"), v.literal("voice-generate"), v.literal("video-generate"), v.literal("video-image-to-video"), v.literal("ai-chat")),
+      connectedAgentId: v.optional(v.id("agents")),
+      uploadedImageUrl: v.optional(v.string()),
+      activeImageUrl: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { agentId }) => {
+    return await ctx.db.get(agentId);
+  },
+});
+
 // Update agent video URL
 export const updateAgentVideo = mutation({
   args: {

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../convex/_generated/api';
 import type { Env, HonoVariables } from './types';
+import { validateAgent } from './agent-validation';
 
 const imagesApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -42,16 +43,17 @@ async function updateAgentImageAndStatus(
 }
 
 // Edit an image using input image + prompt
-imagesApi.post('/edit', async (c) => {
+imagesApi.post('/edit', validateAgent({ 
+  allowedTypes: ['image-edit'],
+  required: true 
+}), async (c) => {
   const user = c.get('user');
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+  const validatedAgent = c.get('validatedAgent');
+  const data = c.get('parsedBody'); // Get parsed body from middleware
 
   let agentId; // Declare agentId in outer scope
 
   try {
-    const data = await c.req.json();
     const { prompt, inputImageUrl, model = "fal-ai/flux-kontext/dev", steps = 28 } = data;
     agentId = data.agentId; // Assign to outer scope variable
 
@@ -301,16 +303,17 @@ imagesApi.post('/upload', async (c) => {
 });
 
 // Generate and store an image
-imagesApi.post('/', async (c) => {
+imagesApi.post('/', validateAgent({ 
+  allowedTypes: ['image-generate'],
+  required: true 
+}), async (c) => {
   const user = c.get('user');
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+  const validatedAgent = c.get('validatedAgent');
+  const data = c.get('parsedBody'); // Get parsed body from middleware
 
   let agentId; // Declare agentId in outer scope
 
   try {
-    const data = await c.req.json();
     const { prompt, model = "@cf/black-forest-labs/flux-1-schnell", steps = 4, seed } = data;
     agentId = data.agentId; // Assign to outer scope variable
 

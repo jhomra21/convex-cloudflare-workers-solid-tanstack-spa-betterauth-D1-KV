@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../convex/_generated/api';
 import type { Env, HonoVariables } from './types';
+import { validateAgent } from './agent-validation';
 
 const videoApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -43,16 +44,17 @@ async function updateAgentVideoAndStatus(
 }
 
 // Generate video using queue and webhooks
-videoApi.post('/', async (c) => {
+videoApi.post('/', validateAgent({ 
+  allowedTypes: ['video-generate', 'video-image-to-video'],
+  required: true 
+}), async (c) => {
   const user = c.get('user');
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+  const validatedAgent = c.get('validatedAgent');
+  const data = c.get('parsedBody'); // Get parsed body from middleware
 
   let agentId; // Declare agentId in outer scope
 
   try {
-    const data = await c.req.json();
     const {
       prompt,
       model = 'normal',

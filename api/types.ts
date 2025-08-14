@@ -20,9 +20,39 @@ export type Env = {
   NODE_ENV?: string;
 };
 
+// Agent type for validated agents in middleware
+export type ValidatedAgent = {
+  _id: string;
+  _creationTime: number;
+  canvasId: string;
+  userId: string;
+  userName?: string;
+  prompt: string;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  imageUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  voice?: "Aurora" | "Blade" | "Britney" | "Carl" | "Cliff" | "Richard" | "Rico" | "Siobhan" | "Vicky";
+  audioSampleUrl?: string;
+  requestId?: string;
+  model: "normal" | "pro";
+  status: "idle" | "processing" | "success" | "failed" | "deleting";
+  type: "image-generate" | "image-edit" | "voice-generate" | "video-generate" | "video-image-to-video" | "ai-chat";
+  connectedAgentId?: string;
+  uploadedImageUrl?: string;
+  activeImageUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type HonoVariables = {
   user: AuthInstance['$Infer']['Session']['user'] | null;
   session: AuthInstance['$Infer']['Session']['session'] | null;
+  validatedAgent?: ValidatedAgent;
+  parsedBody?: any;
 }
 
 export interface User {
