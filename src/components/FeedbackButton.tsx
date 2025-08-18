@@ -52,7 +52,7 @@ export function FeedbackButton() {
                 as={Button}
                 variant="ghost"
                 size="sm"
-                class="gap-2 !px-0"
+                class="gap-2 !px-2"
             >
                 <Icon class='size-4' name="message-circle" />
                 Feedback

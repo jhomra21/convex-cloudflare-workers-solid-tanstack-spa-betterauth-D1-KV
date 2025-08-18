@@ -105,7 +105,7 @@ function DashboardPage() {
                   <Separator orientation="vertical" class="mr-2 h-4" />
                   <Breadcrumbs />
                 </div>
-                <div class="flex items-center gap-2 px-4">
+                <div class="flex items-center gap-2 px-2">
                   <Show when={isCanvasPage()}>
                     <CanvasControls
                       activeCanvasId={activeCanvasId()}
