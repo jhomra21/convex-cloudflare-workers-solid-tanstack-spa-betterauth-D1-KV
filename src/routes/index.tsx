@@ -4,7 +4,6 @@ import { Show } from 'solid-js';
 import { Button } from '~/components/ui/button';
 import { useRouter } from '@tanstack/solid-router';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '~/components/ui/card';
-import { Badge } from '~/components/ui/badge';
 import { Icon } from '~/components/ui/icon';
 import Footer from '~/components/Footer';
 import { publicLoader } from '~/lib/auth-guard';
