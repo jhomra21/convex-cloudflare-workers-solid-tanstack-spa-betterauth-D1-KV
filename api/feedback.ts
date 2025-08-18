@@ -3,6 +3,11 @@ import type { Env, HonoVariables } from './types';
 
 const feedbackApi = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
+// KV cache keys and TTL (seconds)
+const FEEDBACK_ALL_CACHE_KEY = 'feedback:all';
+const userCacheKey = (userId: string) => `feedback:user:${userId}`;
+const FEEDBACK_CACHE_TTL = 60 * 5;
+
 // Helper function to check if user is admin
 async function isUserAdmin(c: any): Promise<boolean> {
   const user = c.get('user');
@@ -71,6 +76,13 @@ feedbackApi.post('/', async (c) => {
       return c.json({ error: 'Failed to submit feedback' }, 500);
     }
 
+    // Invalidate caches (no-op if FEEDBACK_CACHE not configured)
+    await Promise.all([
+      c.env.FEEDBACK_CACHE?.delete(FEEDBACK_ALL_CACHE_KEY),
+      c.env.FEEDBACK_CACHE?.delete(userCacheKey(user.id))
+    ]);
+    console.log('Caches invalidated');
+
     return c.json({
       success: true,
       feedback: {
@@ -97,6 +109,16 @@ feedbackApi.get('/', async (c) => {
   }
 
   try {
+    // Try KV cache first (if configured)
+    const key = userCacheKey(user.id);
+    const cached = await c.env.FEEDBACK_CACHE?.get(key);
+    if (cached) {
+      try {
+        console.log('Cache HIT');
+        return c.json(JSON.parse(cached));
+      } catch {}
+    }
+
     const result = await c.env.DB.prepare(`
       SELECT id, type, message, status, createdAt, updatedAt
       FROM feedback
@@ -105,10 +127,14 @@ feedbackApi.get('/', async (c) => {
       LIMIT 50
     `).bind(user.id).all();
 
-    return c.json({
+    const payload = {
       success: true,
       feedback: result.results
-    });
+    };
+    console.log('Cache MISS');
+    await c.env.FEEDBACK_CACHE?.put(key, JSON.stringify(payload), { expirationTtl: FEEDBACK_CACHE_TTL });
+    console.log('Cache UPDATED');
+    return c.json(payload);
 
   } catch (error) {
     console.error('Error fetching feedback:', error);
@@ -125,6 +151,15 @@ feedbackApi.get('/all', async (c) => {
   }
 
   try {
+    // Try KV cache first (if configured)
+    const cached = await c.env.FEEDBACK_CACHE?.get(FEEDBACK_ALL_CACHE_KEY);
+    if (cached) {
+      try {
+        console.log('Cache HIT');
+        return c.json(JSON.parse(cached));
+      } catch {}
+    }
+
     const result = await c.env.DB.prepare(`
       SELECT f.id, f.type, f.message, f.status, f.createdAt, f.updatedAt,
              u.name as userName, u.email as userEmail
@@ -134,10 +169,14 @@ feedbackApi.get('/all', async (c) => {
       LIMIT 100
     `).all();
 
-    return c.json({
+    const payload = {
       success: true,
       feedback: result.results
-    });
+    };
+    console.log('Cache MISS');
+    await c.env.FEEDBACK_CACHE?.put(FEEDBACK_ALL_CACHE_KEY, JSON.stringify(payload), { expirationTtl: FEEDBACK_CACHE_TTL });
+    console.log('Cache UPDATED');
+    return c.json(payload);
 
   } catch (error) {
     console.error('Error fetching all feedback:', error);
@@ -176,6 +215,10 @@ feedbackApi.patch('/:id/status', async (c) => {
 
     const now = new Date().toISOString();
 
+    // Find owner for targeted cache invalidation
+    const owner = await c.env.DB.prepare(`
+      SELECT userId FROM feedback WHERE id = ?
+    `).bind(feedbackId).first();
     // Update feedback status
     const result = await c.env.DB.prepare(`
       UPDATE feedback 
@@ -191,6 +234,13 @@ feedbackApi.patch('/:id/status', async (c) => {
     if (result.meta.changes === 0) {
       return c.json({ error: 'Feedback not found' }, 404);
     }
+
+    // Invalidate caches (no-op if FEEDBACK_CACHE not configured)
+    await c.env.FEEDBACK_CACHE?.delete(FEEDBACK_ALL_CACHE_KEY);
+    if (owner && (owner as any).userId) {
+      await c.env.FEEDBACK_CACHE?.delete(userCacheKey((owner as any).userId));
+    }
+    console.log('Caches invalidated');
 
     return c.json({
       success: true,
@@ -218,6 +268,10 @@ feedbackApi.delete('/:id', async (c) => {
   try {
     const feedbackId = c.req.param('id');
 
+    // Find owner for targeted cache invalidation
+    const owner = await c.env.DB.prepare(`
+      SELECT userId FROM feedback WHERE id = ?
+    `).bind(feedbackId).first();
     // Delete feedback
     const result = await c.env.DB.prepare(`
       DELETE FROM feedback WHERE id = ?
@@ -231,6 +285,13 @@ feedbackApi.delete('/:id', async (c) => {
     if (result.meta.changes === 0) {
       return c.json({ error: 'Feedback not found' }, 404);
     }
+
+    // Invalidate caches (no-op if FEEDBACK_CACHE not configured)
+    await c.env.FEEDBACK_CACHE?.delete(FEEDBACK_ALL_CACHE_KEY);
+    if (owner && (owner as any).userId) {
+      await c.env.FEEDBACK_CACHE?.delete(userCacheKey((owner as any).userId));
+    }
+    console.log('Caches invalidated');
 
     return c.json({ success: true });
 

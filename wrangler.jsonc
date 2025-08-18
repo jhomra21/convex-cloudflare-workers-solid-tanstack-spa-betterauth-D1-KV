@@ -28,6 +28,10 @@
     {
       "binding": "SESSIONS",
       "id": "8b750fa1c569422386611ef88f0c082c"
+    },
+    {
+      "binding": "FEEDBACK_CACHE",      
+      "id": "8846348bebd3409e839fd6107aecd4a7"
     }
   ],
   "r2_buckets": [
@@ -39,7 +43,7 @@
     }
   ],
   "ai": {
-    "binding": "AI",
+    "binding": "AI"
     // "experimental_remote": true
   }
 }

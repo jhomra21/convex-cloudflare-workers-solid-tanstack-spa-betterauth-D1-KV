@@ -8,6 +8,8 @@ export type Env = {
   ASSETS: Fetcher;
   DB: D1Database;
   SESSIONS: KVNamespace;
+  // Optional, dedicated KV for feedback caching (separate from SESSIONS)
+  FEEDBACK_CACHE?: KVNamespace;
   convex_cf_workers_images_test: R2Bucket;
   AI: Ai;
   BETTER_AUTH_SECRET: string;
