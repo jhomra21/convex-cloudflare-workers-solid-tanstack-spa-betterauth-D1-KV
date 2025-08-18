@@ -15,6 +15,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardFeedbackRouteImport } from './routes/dashboard/feedback'
 import { Route as DashboardCanvasRouteImport } from './routes/dashboard/canvas'
 import { Route as DashboardAccountRouteImport } from './routes/dashboard/account'
 
@@ -43,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardFeedbackRoute = DashboardFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardCanvasRoute = DashboardCanvasRouteImport.update({
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
+  '/dashboard/feedback': typeof DashboardFeedbackRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
+  '/dashboard/feedback': typeof DashboardFeedbackRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/canvas': typeof DashboardCanvasRoute
+  '/dashboard/feedback': typeof DashboardFeedbackRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/account'
     | '/dashboard/canvas'
+    | '/dashboard/feedback'
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard/account'
     | '/dashboard/canvas'
+    | '/dashboard/feedback'
     | '/dashboard'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/account'
     | '/dashboard/canvas'
+    | '/dashboard/feedback'
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
@@ -172,6 +184,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/feedback': {
+      id: '/dashboard/feedback'
+      path: '/feedback'
+      fullPath: '/dashboard/feedback'
+      preLoaderRoute: typeof DashboardFeedbackRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/canvas': {
       id: '/dashboard/canvas'
       path: '/canvas'
@@ -206,12 +225,14 @@ declare module '@tanstack/solid-router' {
 interface DashboardRouteChildren {
   DashboardAccountRoute: typeof DashboardAccountRoute
   DashboardCanvasRoute: typeof DashboardCanvasRoute
+  DashboardFeedbackRoute: typeof DashboardFeedbackRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAccountRoute: DashboardAccountRoute,
   DashboardCanvasRoute: DashboardCanvasRoute,
+  DashboardFeedbackRoute: DashboardFeedbackRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 

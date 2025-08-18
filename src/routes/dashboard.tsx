@@ -17,6 +17,7 @@ import { Separator } from "~/components/ui/separator"
 import { AppSidebar } from '~/components/AppSidebar'
 import { Breadcrumbs } from '~/components/Breadcrumbs'
 import { CanvasControls } from '~/components/CanvasControls'
+import { FeedbackButton } from '~/components/FeedbackButton'
 import { protectedLoader } from '~/lib/auth-guard'
 import { activeCanvasId, setActiveCanvasId, currentCanvas } from '~/lib/canvas-store'
 import { useCurrentUserId } from '~/lib/auth-actions'
@@ -104,16 +105,17 @@ function DashboardPage() {
                   <Separator orientation="vertical" class="mr-2 h-4" />
                   <Breadcrumbs />
                 </div>
-                <Show when={isCanvasPage()}>
-                  <div class="px-4">
+                <div class="flex items-center gap-2 px-4">
+                  <Show when={isCanvasPage()}>
                     <CanvasControls
                       activeCanvasId={activeCanvasId()}
                       onCanvasChange={setActiveCanvasId}
                       currentCanvas={currentCanvas()}
                       userId={userId()}
                     />
-                  </div>
-                </Show>
+                  </Show>
+                  <FeedbackButton />
+                </div>
               </header>
               {/* Opacity gradient overlay positioned right under header for fade effect - hidden on canvas page */}
               <Show when={!isCanvasPage()}>

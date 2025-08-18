@@ -19,8 +19,8 @@ import { NavUser } from './nav-user';
 const routeMetadata: Partial<Record<keyof FileRoutesByFullPath, { name: string; iconName: IconName; isSidebarItem?: boolean }>> = {
   '/dashboard': { name: 'Home', iconName: 'house', isSidebarItem: true },
   '/dashboard/account': { name: 'Account', iconName: 'user', isSidebarItem: true },
-
   '/dashboard/canvas': { name: 'Gen-AI Canvas', iconName: 'image', isSidebarItem: true },
+  '/dashboard/feedback': { name: 'Feedback Board', iconName: 'message-circle', isSidebarItem: true },
   // Add more route metadata here as your application grows
   // Only items with isSidebarItem: true will be shown
 };

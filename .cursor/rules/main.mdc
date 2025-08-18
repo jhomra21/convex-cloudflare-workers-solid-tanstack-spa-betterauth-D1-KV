@@ -48,6 +48,7 @@ Always look at [package.json](mdc:package.json) before recommending installing a
 
 
 # Development Notes
+Think carefully and only action the specific task I have given you with the most concise and elegant solution that changes as little code as possible.
 
 ## SolidJS Reactivity Guidelines ⚠️
 

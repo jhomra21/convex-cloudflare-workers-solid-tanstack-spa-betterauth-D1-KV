@@ -6,6 +6,7 @@ import imagesApi from './images'
 import voiceApi from './voice'
 import videoApi from './video'
 import aiChatApi from './ai-chat'
+import feedbackApi from './feedback'
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -69,5 +70,8 @@ app.route('/api/video', videoApi);
 
 // Mount the AI chat API routes
 app.route('/api/ai-chat', aiChatApi);
+
+// Mount the feedback API routes
+app.route('/api/feedback', feedbackApi);
 
 export default app;

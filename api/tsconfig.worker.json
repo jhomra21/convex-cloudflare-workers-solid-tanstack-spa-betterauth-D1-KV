@@ -8,5 +8,5 @@
     "allowSyntheticDefaultImports": true,
     "composite": true
     },
-  "include": ["./agent-validation.ts", "./index.ts", "../auth.ts", "./types.ts", "./images.ts", "./voice.ts", "./video.ts", "./ai-chat.ts"]
+  "include": ["./agent-validation.ts", "./index.ts", "../auth.ts", "./types.ts", "./images.ts", "./voice.ts", "./video.ts", "./ai-chat.ts", "./feedback.ts"]
   }
