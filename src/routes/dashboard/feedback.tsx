@@ -86,7 +86,7 @@ function FeedbackBoard() {
     }
 
     return (
-        <div class="space-y-6 p-4 !pt-0">
+        <div class="space-y-6 px-2 pb-2 !pt-0">
             {/* Header */}
             <div class="flex justify-between">
                 <h1 class="text-2xl font-semibold text-gray-900">Feedback Board</h1>

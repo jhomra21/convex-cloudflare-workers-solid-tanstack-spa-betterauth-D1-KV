@@ -96,7 +96,7 @@ function DashboardPage() {
                 <div class="flex items-center gap-2 px-4">
                   <Tooltip openDelay={500}>
                     <TooltipTrigger>
-                      <SidebarTrigger class="-ml-1" />
+                      <SidebarTrigger class="-ml-[7px]" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Toggle Sidebar</p>
