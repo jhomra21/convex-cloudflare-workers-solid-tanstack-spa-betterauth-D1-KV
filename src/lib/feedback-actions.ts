@@ -89,3 +89,85 @@ export function useAllFeedbackQuery() {
     refetchOnWindowFocus: false,
   }));
 }
+
+/**
+ * Check if current user is admin (non-blocking)
+ */
+export function useAdminCheckQuery() {
+  return useQuery(() => ({
+    queryKey: ['admin-check'],
+    queryFn: async (): Promise<{ isAdmin: boolean }> => {
+      const response = await fetch('/api/feedback/admin-check', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        // Don't throw error, just return false for admin status
+        return { isAdmin: false };
+      }
+
+      return response.json();
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    refetchOnWindowFocus: false,
+    retry: false, // Don't retry admin check failures
+  }));
+}
+
+/**
+ * Update feedback status mutation (admin only)
+ */
+export function useUpdateFeedbackStatusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(() => ({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const response = await fetch(`/api/feedback/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch feedback queries
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  }));
+}
+
+/**
+ * Delete feedback mutation (admin only)
+ */
+export function useDeleteFeedbackMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(() => ({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/feedback/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch feedback queries
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  }));
+}

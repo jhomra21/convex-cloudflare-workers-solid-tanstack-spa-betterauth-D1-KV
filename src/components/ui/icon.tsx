@@ -5,7 +5,7 @@ export type IconName = "panelLeft" | "panelLeftClose" | "house" | "dumbbell" | "
   "logout" | "gear" | "user" | "login" | "stickynote" | "google" | 'image' | 'volume2' | 'mic' | 'micOff' | 'video' |
   "archive" | "archive-restore" | "clock" | "calendar" | "file-clock" | "file-plus" | "plus" | "file" | "square-check"
   | "edit" | "check" | "trash-2" | "loader" | "layout-grid" | "play" | "refresh-cw" | "mouse-pointer" | "triangle-alert" |
-  "circle-x" | "upload" | "share" | "copy" | "users" | "chevron-down" | "download" | "move" | "arrow-down" | "message-circle" | "bot" | "send" | "chevron-up" | "loader-2" | "link" | "paperclip" | "search" | "search-x" | "folder" | "file-code" | "braces" | "file-text" | "bug";
+  "circle-x" | "circle" | "check-circle" | "upload" | "share" | "copy" | "users" | "chevron-down" | "download" | "move" | "arrow-down" | "message-circle" | "bot" | "send" | "chevron-up" | "loader-2" | "link" | "paperclip" | "search" | "search-x" | "folder" | "file-code" | "braces" | "file-text" | "bug";
 
 // Define props for the Icon component
 // We want to accept any standard SVG element attributes
@@ -313,6 +313,19 @@ const CircleXIcon = (props: ComponentProps<"svg">) => (
     <circle cx="12" cy="12" r="10" />
     <path d="m15 9-6 6" />
     <path d="m9 9 6 6" />
+  </svg>
+);
+
+const CircleIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <circle cx="12" cy="12" r="10" />
+  </svg>
+);
+
+const CheckCircleIcon = (props: ComponentProps<"svg">) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {...props}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
   </svg>
 );
 
@@ -628,6 +641,12 @@ export const Icon = (props: IconProps) => {
       </Match>
       <Match when={local.name === "circle-x"}>
         <CircleXIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "circle"}>
+        <CircleIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
+      </Match>
+      <Match when={local.name === "check-circle"}>
+        <CheckCircleIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />
       </Match>
       <Match when={local.name === "upload"}>
         <UploadIcon width={defaultWidth} height={defaultHeight} class={defaultClass} {...others} />

@@ -1,18 +1,56 @@
 import { createFileRoute } from '@tanstack/solid-router'
 import { For, Show, createSignal } from 'solid-js'
-import { useAllFeedbackQuery } from '~/lib/feedback-actions'
+import { useAllFeedbackQuery, useAdminCheckQuery, useUpdateFeedbackStatusMutation, useDeleteFeedbackMutation } from '~/lib/feedback-actions'
 import { Button } from '~/components/ui/button'
 import { Icon } from '~/components/ui/icon'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+    DropdownMenuItem,
+} from '~/components/ui/dropdown-menu'
 
 export const Route = createFileRoute('/dashboard/feedback')({
+    beforeLoad: ({ context }) => {
+        // Start admin check query early but don't block page load
+        const { queryClient } = context;
+        queryClient.prefetchQuery({
+            queryKey: ['admin-check'],
+            queryFn: async () => {
+                const response = await fetch('/api/feedback/admin-check', {
+                    credentials: 'include',
+                });
+                if (!response.ok) return { isAdmin: false };
+                return response.json();
+            },
+            staleTime: 1000 * 60 * 10,
+        }).catch(() => {
+            // Ignore prefetch errors
+        });
+    },
     component: FeedbackBoard,
 })
 
 function FeedbackBoard() {
     const [selectedType, setSelectedType] = createSignal<'all' | 'bug' | 'feedback'>('all')
     const [selectedStatus, setSelectedStatus] = createSignal<'all' | 'open' | 'in_progress' | 'resolved' | 'closed'>('all')
+    const [deletingItemId, setDeletingItemId] = createSignal<string | null>(null)
 
     const feedbackQuery = useAllFeedbackQuery()
+    const adminCheckQuery = useAdminCheckQuery()
+    const updateStatusMutation = useUpdateFeedbackStatusMutation()
+    const deleteFeedbackMutation = useDeleteFeedbackMutation()
+
+    const isAdmin = () => adminCheckQuery.data?.isAdmin || false
+
+    const handleDeleteConfirm = (itemId: string) => {
+        deleteFeedbackMutation.mutate(itemId)
+        setDeletingItemId(null)
+    }
+
+    const handleDeleteCancel = () => {
+        setDeletingItemId(null)
+    }
 
     const filteredFeedback = () => {
         const data = feedbackQuery.data?.feedback || []
@@ -229,14 +267,109 @@ function FeedbackBoard() {
                                         </p>
                                     </div>
 
-                                    <Show when={item.userName}>
-                                        <div class="flex items-center gap-2 text-sm text-gray-600 pt-4 border-t border-gray-100">
-                                            <Icon class="size-4" name="user" />
-                                            <span>
-                                                {item.userName || 'Anonymous'}
-                                            </span>
-                                        </div>
-                                    </Show>
+                                    <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                                        <Show when={item.userName}>
+                                            <div class="flex items-center gap-2 text-sm text-gray-600">
+                                                <Icon class="size-4" name="user" />
+                                                <span>
+                                                    {item.userName || 'Anonymous'}
+                                                </span>
+                                            </div>
+                                        </Show>
+
+                                        {/* Admin Controls */}
+                                        <Show when={isAdmin()}>
+                                            <div class="flex items-center gap-2 transition-all duration-200">
+                                                {/* Status Update Dropdown */}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger
+                                                        as={Button}
+                                                        variant="outline"
+                                                        size="sm"
+                                                        disabled={updateStatusMutation.isPending}
+                                                    >
+                                                        <Show when={updateStatusMutation.isPending}>
+                                                            <Icon class="size-4 animate-spin" name="loader-2" />
+                                                        </Show>
+                                                        <Show when={!updateStatusMutation.isPending}>
+                                                            <Icon class="size-4" name="edit" />
+                                                        </Show>
+                                                        Status
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent>
+                                                        <DropdownMenuItem
+                                                            onClick={() => updateStatusMutation.mutate({ id: item.id, status: 'open' })}
+                                                        >
+                                                            <Icon class="size-4 mr-2" name="circle" />
+                                                            Open
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => updateStatusMutation.mutate({ id: item.id, status: 'in_progress' })}
+                                                        >
+                                                            <Icon class="size-4 mr-2" name="clock" />
+                                                            In Progress
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => updateStatusMutation.mutate({ id: item.id, status: 'resolved' })}
+                                                        >
+                                                            <Icon class="size-4 mr-2" name="check-circle" />
+                                                            Resolved
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => updateStatusMutation.mutate({ id: item.id, status: 'closed' })}
+                                                        >
+                                                            <Icon class="size-4 mr-2" name="circle-x" />
+                                                            Closed
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                {/* Delete Button with Inline Confirmation */}
+                                                <div class="flex items-center gap-2 transition-all duration-200">
+                                                    <Show when={deletingItemId() !== item.id}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setDeletingItemId(item.id)}
+                                                            disabled={deleteFeedbackMutation.isPending}
+                                                            class="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                                                        >
+                                                            <Icon class="size-4" name="trash-2" />
+                                                        </Button>
+                                                    </Show>
+
+                                                    {/* Inline Delete Confirmation */}
+                                                    <Show when={deletingItemId() === item.id}>
+                                                        <div class="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleDeleteConfirm(item.id)}
+                                                                disabled={deleteFeedbackMutation.isPending}
+                                                                class="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                                                            >
+                                                                <Show when={deleteFeedbackMutation.isPending}>
+                                                                    <Icon class="size-4 animate-spin" name="loader-2" />
+                                                                </Show>
+                                                                <Show when={!deleteFeedbackMutation.isPending}>
+                                                                    <Icon class="size-4" name="check" />
+                                                                </Show>
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={handleDeleteCancel}
+                                                                disabled={deleteFeedbackMutation.isPending}
+                                                                class="transition-all duration-200"
+                                                            >
+                                                                <Icon class="size-4" name="x" />
+                                                            </Button>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                            </div>
+                                        </Show>
+                                    </div>
                                 </div>
                             )}
                         </For>

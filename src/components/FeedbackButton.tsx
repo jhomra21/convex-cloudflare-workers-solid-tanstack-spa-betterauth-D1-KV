@@ -1,4 +1,4 @@
-import { createSignal, Show, createEffect } from 'solid-js'
+import { createSignal, Show } from 'solid-js'
 import { Button } from '~/components/ui/button'
 import { TextField, TextFieldTextArea, TextFieldLabel } from '~/components/ui/text-field'
 import {
@@ -52,7 +52,7 @@ export function FeedbackButton() {
                 as={Button}
                 variant="ghost"
                 size="sm"
-                class="gap-2"
+                class="gap-2 !px-0"
             >
                 <Icon class='size-4' name="message-circle" />
                 Feedback
