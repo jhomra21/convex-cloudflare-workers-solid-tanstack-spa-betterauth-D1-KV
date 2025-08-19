@@ -22,7 +22,7 @@ const HomePage: Component = () => {
           <p class="mt-4 text-lg text-muted-foreground">
             Create images, video, and audio — guided by an agentic chat. Build, remix, and share in one canvas.
           </p>
-          <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <div class="mt-8 flex flex-row flex-wrap gap-3 justify-center">
             <Show
               when={loaderData()?.session}
               fallback={(
@@ -30,14 +30,14 @@ const HomePage: Component = () => {
                   <Button
                     onClick={() => router.navigate({ to: "/auth", search: { redirect: undefined, deleted: undefined } })}
                     variant="sf-compute"
-                    class="justify-between w-full sm:w-auto px-6 py-3"
+                    class="items-center justify-center gap-2 w-auto px-6 py-3"
                   >
                     <span>Login  //  Sign Up</span>
                     <span class="ml-2 opacity-70">🔑</span>
                   </Button>
                   <Button
                     variant="outline"
-                    class="w-full sm:w-auto px-6 py-3"
+                    class="w-auto px-6 py-3"
                     onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                   >
                     Learn more
@@ -49,7 +49,7 @@ const HomePage: Component = () => {
                 <Button
                   onClick={() => router.navigate({ to: "/dashboard/canvas" })}
                   variant="sf-compute"
-                  class="justify-between w-full sm:w-auto px-6 py-3"
+                  class="items-center justify-center gap-2 w-auto px-6 py-3"
                 >
                   <span>Open Canvas</span>
                   <span class="ml-2 opacity-70">🎨</span>
@@ -57,9 +57,10 @@ const HomePage: Component = () => {
                 <Button
                   onClick={() => router.navigate({ to: "/dashboard" })}
                   variant="secondary"
-                  class="w-full sm:w-auto px-6 py-3"
+                  class="items-center justify-center gap-2 w-auto px-6 py-3"
                 >
                   <span>Go to Dashboard</span>
+                  <span class="ml-2 opacity-70">↗️</span>
                 </Button>
               </>
             </Show>
