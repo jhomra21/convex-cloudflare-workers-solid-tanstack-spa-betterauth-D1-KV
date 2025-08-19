@@ -260,6 +260,24 @@ function parseIntentWithRules(message: string, uploadedFileCount: number, refere
   }
 
   // Enhanced keyword-based detection for new agents
+  const capabilityKeywords = [
+    'what can you do', 'what are your capabilities', 'what can you make',
+    'tell me about yourself', 'what kind of agents', 'what types of agents',
+    'what can you create', 'what do you make'
+  ];
+  const isCapabilityInquiry = capabilityKeywords.some(phrase => lowerMessage.includes(phrase));
+
+  // If it's a capability inquiry, respond directly
+  if (isCapabilityInquiry) {
+    return {
+      intent: 'general_chat',
+      confidence: 0.9, // High confidence for direct questions
+      operations: [],
+      response: "I can help you create AI agents for image generation, image editing, voice generation, and video generation. You can also reference existing agents or upload images to create editing agents. What would you like to create?",
+      autoGenerate: false
+    };
+  }
+
   const imageKeywords = ['image', 'picture', 'photo', 'drawing', 'artwork', 'visual', 'graphic'];
   const voiceKeywords = ['voice', 'speech', 'audio', 'sound', 'speak', 'say', 'talk'];
   const videoKeywords = ['video', 'movie', 'clip', 'animation', 'motion'];
