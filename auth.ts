@@ -11,6 +11,8 @@ type Env = {
     GOOGLE_CLIENT_SECRET: string;
     GITHUB_CLIENT_ID: string;
     GITHUB_CLIENT_SECRET: string;
+    TWITTER_CLIENT_ID: string;
+    TWITTER_CLIENT_SECRET: string;
 }
 
 // Create a type alias to avoid complex type inference issues
@@ -70,6 +72,14 @@ export const getAuth = (env: Env): AuthInstance => {
                 clientSecret: env.GITHUB_CLIENT_SECRET,
                 redirectURI: process.env.NODE_ENV === 'development'
                     ? 'http://localhost:3000/api/auth/callback/github'
+                    : undefined
+            },
+            twitter: {
+                clientId: env.TWITTER_CLIENT_ID,
+                clientSecret: env.TWITTER_CLIENT_SECRET,
+                scope: ["users.read", "users.email", "offline.access"],
+                redirectURI: process.env.NODE_ENV === 'development'
+                    ? 'http://localhost:3000/api/auth/callback/twitter'
                     : undefined
             }
         }

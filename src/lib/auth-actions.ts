@@ -62,6 +62,12 @@ export function useGithubSignInMutation() {
     }));
 }
 
+export function useTwitterSignInMutation() {
+    return useMutation(() => ({
+        mutationFn: () => authClient.signIn.social({ provider: 'twitter' }),
+    }));
+}
+
 type UserUpdateVariables = { 
   name: string; 
   image: string | null | undefined;

@@ -45,7 +45,7 @@ const HomePage: Component = () => {
                 </>
               )}
             >
-              <div class="flex flex-col sm:flex-row gap-3">
+              <>
                 <Button
                   onClick={() => router.navigate({ to: "/dashboard/canvas" })}
                   variant="sf-compute"
@@ -61,7 +61,7 @@ const HomePage: Component = () => {
                 >
                   <span>Go to Dashboard</span>
                 </Button>
-              </div>
+              </>
             </Show>
           </div>
         </section>

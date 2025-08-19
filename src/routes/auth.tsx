@@ -12,7 +12,8 @@ import {
   // useSignInMutation, 
   // useSignUpMutation, 
   useGoogleSignInMutation,
-  useGithubSignInMutation
+  useGithubSignInMutation,
+  useTwitterSignInMutation
 } from '~/lib/auth-actions';
 
 import type { User, Session } from 'better-auth';
@@ -28,7 +29,7 @@ export const Spinner = (props: { class?: string }) => (
   />
 );
 
-type AuthAction = 'signIn' | 'signUp' | 'google' | 'github' | null;
+type AuthAction = 'signIn' | 'signUp' | 'google' | 'github' | 'twitter' | null;
 type AuthTab = 'signIn' | 'signUp';
 
 function AuthPage() {
@@ -59,6 +60,7 @@ function AuthPage() {
   // const signUpMutation = useSignUpMutation();
   const googleSignInMutation = useGoogleSignInMutation();
   const githubSignInMutation = useGithubSignInMutation();
+  const twitterSignInMutation = useTwitterSignInMutation();
   createEffect(() => {
     // Clear API error when switching tabs or changing form inputs
     activeTab();
@@ -252,6 +254,23 @@ function AuthPage() {
                 </Show>
 
                 Sign In with GitHub
+              </Button>
+              <Button variant="outline" class="w-full mt-4" onClick={() => {
+                setLoadingAction('twitter');
+                twitterSignInMutation.mutate(undefined, {
+                  onError: (err) => {
+                    handleError(err);
+                    setLoadingAction(null);
+                  }
+                });
+              }} disabled={loadingAction() !== null}>
+                <Show when={loadingAction() === 'twitter'}><Spinner class="mr-2" /></Show>
+                <Show when={!twitterSignInMutation.isPending}>
+                  <svg class="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M22.46 6c-.77.35-1.6.58-2.46.67.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98-3.54-.18-6.69-1.86-8.79-4.46-.37.63-.58 1.37-.58 2.15 0 1.49.76 2.81 1.91 3.58-.7-.02-1.37-.21-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.35 0-.69-.02-1.03-.06C3.44 20.29 5.7 21 8.12 21c7.34 0 11.35-6.08 11.35-11.35 0-.17 0-.34-.01-.51.78-.57 1.45-1.28 1.99-2.08z"/>
+                  </svg>
+                </Show>
+                Sign In with Twitter
               </Button>
             </div>
           </Show>

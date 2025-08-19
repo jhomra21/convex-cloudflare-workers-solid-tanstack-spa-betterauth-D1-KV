@@ -19,6 +19,9 @@ import { Route as DashboardFeedbackRouteImport } from './routes/dashboard/feedba
 import { Route as DashboardCanvasRouteImport } from './routes/dashboard/canvas'
 import { Route as DashboardAccountRouteImport } from './routes/dashboard/account'
 
+const ApiAuthCallbackTwitterLazyRouteImport = createFileRoute(
+  '/api/auth/callback/twitter',
+)()
 const ApiAuthCallbackGoogleLazyRouteImport = createFileRoute(
   '/api/auth/callback/google',
 )()
@@ -61,6 +64,14 @@ const DashboardAccountRoute = DashboardAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => DashboardRoute,
 } as any)
+const ApiAuthCallbackTwitterLazyRoute =
+  ApiAuthCallbackTwitterLazyRouteImport.update({
+    id: '/api/auth/callback/twitter',
+    path: '/api/auth/callback/twitter',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/api/auth/callback/twitter.lazy').then((d) => d.Route),
+  )
 const ApiAuthCallbackGoogleLazyRoute =
   ApiAuthCallbackGoogleLazyRouteImport.update({
     id: '/api/auth/callback/google',
@@ -88,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
+  '/api/auth/callback/twitter': typeof ApiAuthCallbackTwitterLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -98,6 +110,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
+  '/api/auth/callback/twitter': typeof ApiAuthCallbackTwitterLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -110,6 +123,7 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/callback/github': typeof ApiAuthCallbackGithubLazyRoute
   '/api/auth/callback/google': typeof ApiAuthCallbackGoogleLazyRoute
+  '/api/auth/callback/twitter': typeof ApiAuthCallbackTwitterLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -123,6 +137,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
+    | '/api/auth/callback/twitter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +148,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
+    | '/api/auth/callback/twitter'
   id:
     | '__root__'
     | '/'
@@ -144,6 +160,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/api/auth/callback/github'
     | '/api/auth/callback/google'
+    | '/api/auth/callback/twitter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -152,6 +169,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRouteWithChildren
   ApiAuthCallbackGithubLazyRoute: typeof ApiAuthCallbackGithubLazyRoute
   ApiAuthCallbackGoogleLazyRoute: typeof ApiAuthCallbackGoogleLazyRoute
+  ApiAuthCallbackTwitterLazyRoute: typeof ApiAuthCallbackTwitterLazyRoute
 }
 
 declare module '@tanstack/solid-router' {
@@ -205,6 +223,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof DashboardAccountRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/api/auth/callback/twitter': {
+      id: '/api/auth/callback/twitter'
+      path: '/api/auth/callback/twitter'
+      fullPath: '/api/auth/callback/twitter'
+      preLoaderRoute: typeof ApiAuthCallbackTwitterLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/callback/google': {
       id: '/api/auth/callback/google'
       path: '/api/auth/callback/google'
@@ -246,6 +271,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,
   ApiAuthCallbackGithubLazyRoute: ApiAuthCallbackGithubLazyRoute,
   ApiAuthCallbackGoogleLazyRoute: ApiAuthCallbackGoogleLazyRoute,
+  ApiAuthCallbackTwitterLazyRoute: ApiAuthCallbackTwitterLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
