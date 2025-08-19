@@ -86,7 +86,7 @@ export function DashboardIndex() {
   };
 
   return (
-    <div class="container flex flex-col min-h-screen p-2">
+    <div class="container flex flex-col min-h-svh p-2">
       <div class="flex-grow">
         <div class="mb-10">
           <h1 class="text-2xl font-semibold mb-2">Welcome, {user()?.name || 'User'}</h1>

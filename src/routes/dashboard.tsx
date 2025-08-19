@@ -53,7 +53,7 @@ function DashboardPage() {
   };
 
   return (
-    <div class="h-screen w-screen">
+    <div class="h-svh w-screen">
       <Show when={true}
       // fallback={
       //   <div class="h-screen w-screen flex items-center justify-center">
@@ -89,10 +89,10 @@ function DashboardPage() {
             }}
           > */}
         <SidebarProvider>
-          <div class="flex h-screen w-screen overflow-hidden bg-muted/40">
+          <div class="flex h-svh w-screen overflow-x-hidden bg-muted/40">
             <AppSidebar />
-            <SidebarInset class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col">
-              <header class={`flex h-16 shrink-0 items-center justify-between rounded-t-xl gap-2 bg-background/95 backdrop-blur-sm sticky top-0 z-20 md:relative md:z-10 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
+            <SidebarInset onScroll={handleScroll} class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col overflow-y-auto min-h-0">
+              <header class={`flex h-16 shrink-0 items-center justify-between rounded-t-xl gap-2 bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
                 <div class="flex items-center gap-2 px-4">
                   <Tooltip openDelay={500}>
                     <TooltipTrigger>
@@ -117,7 +117,7 @@ function DashboardPage() {
                   <FeedbackButton />
                 </div>
               </header>
-              <div onScroll={handleScroll} class="flex-grow overflow-y-auto px-2 pb-2 relative min-h-0">
+              <div class="flex-grow px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] relative min-h-0">
                 <Suspense fallback={
                   <div class="w-full h-full flex items-center justify-center">
                     <p>Loading dashboard content...</p>

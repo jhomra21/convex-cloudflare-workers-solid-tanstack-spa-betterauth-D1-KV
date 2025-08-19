@@ -42,7 +42,7 @@ function TwitterCallbackComponent() {
   });
 
   return (
-    <main class="flex min-h-screen flex-col items-center justify-center bg-background p-4 font-sans">
+    <main class="flex min-h-svh flex-col items-center justify-center bg-background p-4 font-sans">
       <div class="flex flex-col items-center justify-center space-y-4">
         <div class="h-10 w-10 animate-spin rounded-full border-4 border-solid border-blue-400 border-t-transparent" />
         <div class="text-center">

@@ -13,7 +13,7 @@ const HomePage: Component = () => {
   const loaderData = useLoaderData({ from: '/' });
 
   return (
-    <div class="p-4 min-h-screen flex flex-col bg-gradient-to-br from-stone-50 via-stone-100 to-stone-400/60 text-gray-900">
+    <div class="p-4 min-h-svh flex flex-col bg-gradient-to-br from-stone-50 via-stone-100 to-stone-400/60 text-gray-900">
       <div class="max-w-5xl mx-auto w-full flex flex-col flex-grow">
         <section class="text-center pb-8">
           <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight">

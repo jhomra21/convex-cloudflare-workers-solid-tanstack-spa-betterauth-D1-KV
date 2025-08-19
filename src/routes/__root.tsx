@@ -16,7 +16,7 @@ export interface RouterContext {
 // Custom error component
 function CustomErrorComponent({ error }: { error: Error }) {
   return (
-    <div class="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+    <div class="flex flex-col items-center justify-center min-h-svh p-4 bg-background">
       <div class="w-full max-w-md p-6 bg-card rounded-lg shadow-lg">
         <h1 class="text-2xl font-bold text-destructive mb-4">Something went wrong</h1>
         <div class="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
@@ -42,7 +42,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
 
   return (
-    <div class="h-screen w-screen">
+    <div class="min-h-svh w-screen">
       <Transition
         appear={true}
         mode="outin"

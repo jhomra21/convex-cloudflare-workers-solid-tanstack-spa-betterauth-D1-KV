@@ -102,7 +102,7 @@ function AuthPage() {
   });
 
   return (
-    <div class="p-8 min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-stone-50 via-stone-100 to-stone-400/60 text-gray-900">
+    <div class="p-8 min-h-svh flex flex-col items-center justify-center bg-gradient-to-br from-stone-50 via-stone-100 to-stone-400/60 text-gray-900">
       <Show when={(search as any)?.deleted === 'true'}>
         <Card class="w-full max-w-sm mb-4 bg-green-50 border-green-200">
           <CardContent class="p-4 text-center">
