@@ -83,10 +83,11 @@ const SheetContent = <T extends ValidComponent = "div">(
     <SheetPortal position={local.position}>
       <SheetOverlay />
       <SheetPrimitive.Content
+        onOpenAutoFocus={(e) => e.preventDefault()}
         class={cn(
           sheetVariants({ position: local.position }),
-          local.class,
-          "max-h-screen overflow-y-auto w-[50%]"
+          "max-h-screen overflow-y-auto !w-[60%]",
+          local.class
         )}
         {...others}
       >
