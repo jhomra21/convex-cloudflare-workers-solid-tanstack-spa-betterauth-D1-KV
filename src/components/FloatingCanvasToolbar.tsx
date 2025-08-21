@@ -68,15 +68,15 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
       }}
     >
       <div 
-        class="relative overflow-hidden"
+        class="relative overflow-hidden flex items-center"
         style={{
-          "max-height": isMinimized() ? "40px" : "300px",
-          "transition": "max-height 150ms cubic-bezier(0.4, 0, 0.2, 1)"
+          "height": isMinimized() ? "40px" : "80px",
+          "transition": "height 150ms cubic-bezier(0.4, 0, 0.2, 1)"
         }}
       >
         {/* Minimized view - compact horizontal layout */}
         <div 
-          class="flex items-center gap-3"
+          class="flex items-center gap-3 w-full"
           style={{
             "display": isMinimized() ? "flex" : "none"
           }}
@@ -208,9 +208,9 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
         
         {/* Expanded view - full toolbar */}
         <div 
-          class="space-y-3"
+          class="space-y-3 flex flex-col justify-center h-full"
           style={{
-            "display": isMinimized() ? "none" : "block",
+            "display": isMinimized() ? "none" : "flex",
             "animation": !isMinimized() ? "toolbar-fade-slide 300ms ease-out forwards" : "none"
           }}
         >
