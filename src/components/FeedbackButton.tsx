@@ -6,6 +6,7 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { Icon } from './ui/icon'
 import { useSubmitFeedbackMutation } from '~/lib/feedback-actions'
 
@@ -48,15 +49,22 @@ export function FeedbackButton() {
 
     return (
         <DropdownMenu open={isOpen()} onOpenChange={setIsOpen}>
-            <DropdownMenuTrigger
-                as={Button}
-                variant="ghost"
-                size="sm"
-                class="gap-2 !px-2"
-            >
-                <Icon class='size-4' name="message-circle" />
-                Feedback
-            </DropdownMenuTrigger>
+            <Tooltip openDelay={500}>
+                <TooltipTrigger>
+                    <DropdownMenuTrigger
+                        as={Button}
+                        variant="ghost"
+                        size="sm"
+                        class="gap-2 !px-2"
+                    >
+                        <Icon class='size-4' name="message-circle" />
+                        <span class="hidden lg:inline">Feedback</span>
+                    </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Send Feedback</p>
+                </TooltipContent>
+            </Tooltip>
             <DropdownMenuContent class="w-80 p-4">
                 <div class="space-y-4">
                     {/* Header with type selection */}

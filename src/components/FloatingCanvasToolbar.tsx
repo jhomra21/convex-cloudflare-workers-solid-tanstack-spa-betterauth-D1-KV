@@ -9,27 +9,27 @@ export interface FloatingCanvasToolbarProps {
   activeAgentType: 'none' | 'generate' | 'edit' | 'voice' | 'video';
   agentCount: number;
   userAgentCount?: number;
-  
+
   // Canvas state
   isSharedCanvas?: boolean;
   isOwnerSharingCanvas?: boolean;
   canvasId?: string;
   currentUserId?: string;
   isCanvasOwner?: boolean;
-  
+
   // Canvas info
   canvasName?: string;
-  
+
   // Handlers
   onAddGenerateAgent: () => void;
   onAddEditAgent: () => void;
   onAddVoiceAgent: () => void;
   onAddVideoAgent: () => void;
   onClearCanvas: () => void;
-  
+
   // Drag and drop handlers
   onStartDrag?: (type: 'image-generate' | 'image-edit' | 'voice-generate' | 'video-generate', e: MouseEvent) => void;
-  
+
   // Floating toolbar control
   isMinimized?: boolean;
   onToggleMinimize?: (value: boolean) => void;
@@ -37,14 +37,14 @@ export interface FloatingCanvasToolbarProps {
 
 export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (props) => {
   // Read initial state synchronously before render
-  const storedState = typeof window !== 'undefined' 
+  const storedState = typeof window !== 'undefined'
     ? localStorage.getItem('canvas-toolbar-minimized') === 'true'
     : false;
-  
+
   const [isMinimized, setIsMinimized] = createSignal(
     props.isMinimized !== undefined ? props.isMinimized : storedState
   );
-  
+
   const handleToggleMinimize = () => {
     const newState = !isMinimized();
     setIsMinimized(newState);
@@ -53,8 +53,28 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
     localStorage.setItem('canvas-toolbar-minimized', String(newState));
   };
 
+  // Calculate dynamic height based on content
+  const getExpandedHeight = () => {
+    const hasSharing = props.isSharedCanvas || props.isOwnerSharingCanvas;
+    const hasActiveUsers = props.canvasId && hasSharing;
+
+    // Base height for normal content
+    let height = 80;
+
+    // Add extra height when sharing features are active
+    if (hasSharing) {
+      height += 8; // Extra space for sharing badges
+    }
+
+    if (hasActiveUsers) {
+      height += 4; // Extra space for active users
+    }
+
+    return `${height}px`;
+  };
+
   return (
-    <div 
+    <div
       class={cn(
         "absolute top-4 left-1/2 -translate-x-1/2 z-50",
         "bg-background/95 supports-[backdrop-filter]:bg-background/95",
@@ -62,49 +82,50 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
         "transition-transform ease-[cubic-bezier(0.4,0,0.2,1)]",
         isMinimized() ? "p-2" : "p-3"
       )}
-      style={{ 
-        "max-width": "min(90vw, 800px)",
-        "overflow": "hidden"
+      style={{
+        "max-width": "min(95vw, 800px)",
+        "width": "max-content",
+        "overflow": "visible"
       }}
     >
-      <div 
+      <div
         class="relative overflow-hidden flex items-center"
         style={{
-          "height": isMinimized() ? "40px" : "80px",
+          "height": isMinimized() ? "40px" : getExpandedHeight(),
           "transition": "height 150ms cubic-bezier(0.4, 0, 0.2, 1)"
         }}
       >
         {/* Minimized view - compact horizontal layout */}
-        <div 
-          class="flex items-center gap-3 w-full"
+        <div
+          class="flex items-center gap-1 sm:gap-3 w-full"
           style={{
             "display": isMinimized() ? "flex" : "none"
           }}
         >
-          
-          <div class="flex items-center gap-2 text-sm">
-            <span class="font-semibold text-muted-foreground">
-              {props.agentCount} agent{props.agentCount !== 1 ? 's' : ''}
+
+          <div class="flex items-center gap-1 sm:gap-2 text-sm flex-shrink-0">
+            <span class="font-semibold text-muted-foreground text-xs sm:text-sm">
+              {props.agentCount} <span class="hidden sm:inline">agent{props.agentCount !== 1 ? 's' : ''}</span>
             </span>
-            
+
             <Show when={props.isSharedCanvas || props.isOwnerSharingCanvas}>
-              <span class="text-muted-foreground">•</span>
-              <div class="flex items-center gap-1">
-                <Icon 
-                  name={props.isSharedCanvas ? "users" : "share"} 
-                  class="h-3 w-3 text-blue-600" 
+              <span class="text-muted-foreground hidden sm:inline">•</span>
+              <div class="flex items-center gap-1 rounded-lg bg-green-50 p-1">
+                <Icon
+                  name={props.isSharedCanvas ? "users" : "share"}
+                  class="h-3 w-3 text-green-700"
                 />
-                <span class="text-xs text-blue-600">
+                <span class="text-xs text-green-700 hidden sm:inline">
                   {props.isSharedCanvas ? "Shared" : "Sharing"}
                 </span>
               </div>
             </Show>
           </div>
 
-          <div class="h-4 w-px bg-border" />
+          <div class="h-4 w-px bg-border hidden sm:block" />
 
           {/* Quick add buttons - now draggable */}
-          <div class="flex items-center gap-0.5">
+          <div class="flex items-center gap-0.5 flex-1 justify-center sm:justify-start">
             <Button
               size="sm"
               variant="ghost"
@@ -115,7 +136,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
                   props.onStartDrag('image-generate', e);
                 }
               }}
-              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              class="h-7 px-1 sm:px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
               title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
@@ -131,7 +152,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
                   props.onStartDrag('image-edit', e);
                 }
               }}
-              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              class="h-7 px-1 sm:px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
               title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
@@ -147,7 +168,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
                   props.onStartDrag('voice-generate', e);
                 }
               }}
-              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              class="h-7 px-1 sm:px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
               title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
@@ -163,7 +184,7 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
                   props.onStartDrag('video-generate', e);
                 }
               }}
-              class="h-7 px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
+              class="h-7 px-1 sm:px-1.5 flex items-center gap-0.5 cursor-grab active:cursor-grabbing"
               title="Click to add or drag to canvas"
             >
               <Icon name="plus" class="h-3 w-3 text-muted-foreground" />
@@ -171,14 +192,14 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
             </Button>
           </div>
 
-          <div class="h-4 w-px bg-border" />
+          <div class="h-4 w-px bg-border hidden sm:block" />
 
           {/* Clear button */}
           <Button
             size="sm"
             variant="ghost"
             onClick={props.onClearCanvas}
-            class="h-7 w-7 p-0 flex items-center gap-0.5"
+            class="h-7 w-6 sm:w-7 p-0 flex items-center gap-0.5 flex-shrink-0"
             disabled={
               props.isSharedCanvas && !props.isCanvasOwner
                 ? (props.userAgentCount || 0) === 0
@@ -188,16 +209,16 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
           >
             <Icon name="trash-2" class="h-4 w-4 text-destructive" />
           </Button>
-          
+
           <Button
             size="sm"
             variant="ghost"
             onClick={handleToggleMinimize}
-            class="h-7 w-7 p-0"
+            class="h-7 w-6 sm:w-7 p-0 flex-shrink-0"
             title="Expand toolbar"
           >
-            <Icon 
-              name="chevron-down" 
+            <Icon
+              name="chevron-down"
               class="h-4 w-4 transition-transform"
               style={{
                 "transform": isMinimized() ? "rotate(0deg)" : "rotate(180deg)"
@@ -205,9 +226,9 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
             />
           </Button>
         </div>
-        
+
         {/* Expanded view - full toolbar */}
-        <div 
+        <div
           class="space-y-3 flex flex-col justify-center h-full"
           style={{
             "display": isMinimized() ? "none" : "flex",
@@ -261,8 +282,8 @@ export const FloatingCanvasToolbar: Component<FloatingCanvasToolbarProps> = (pro
               class="h-7 w-7 p-0 flex-shrink-0"
               title="Minimize toolbar"
             >
-              <Icon 
-                name="chevron-down" 
+              <Icon
+                name="chevron-down"
                 class="h-4 w-4 transition-transform duration-150"
                 style={{
                   "transform": isMinimized() ? "rotate(0deg)" : "rotate(180deg)"

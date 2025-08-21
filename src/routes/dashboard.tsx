@@ -92,20 +92,22 @@ function DashboardPage() {
           <div class="flex h-svh w-screen overflow-x-hidden bg-muted/40">
             <AppSidebar />
             <SidebarInset onScroll={handleScroll} class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col overflow-y-auto min-h-0">
-              <header class={`flex h-16 shrink-0 items-center justify-between rounded-t-xl gap-2 bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
-                <div class="flex items-center gap-2 px-4">
+              <header class={`flex h-16 shrink-0 items-center rounded-t-xl bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
+                <div class="flex items-center gap-2 !pl-2 !pr-0 min-w-0 flex-1">
                   <Tooltip openDelay={500}>
                     <TooltipTrigger>
-                      <SidebarTrigger class="-ml-[7px]" />
+                      <SidebarTrigger class="-ml-[7px] flex-shrink-0" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Toggle Sidebar</p>
                     </TooltipContent>
                   </Tooltip>
-                  <Separator orientation="vertical" class="mr-2 h-4" />
-                  <Breadcrumbs />
+                  <Separator orientation="vertical" class="mr-2 h-4 flex-shrink-0" />
+                  <div class="min-w-0 overflow-hidden">
+                    <Breadcrumbs />
+                  </div>
                 </div>
-                <div class="flex items-center gap-2 px-2">
+                <div class="flex items-center gap-1 sm:gap-2 pr-2 flex-shrink-0">
                   <Show when={isCanvasPage()}>
                     <CanvasControls
                       activeCanvasId={activeCanvasId()}
