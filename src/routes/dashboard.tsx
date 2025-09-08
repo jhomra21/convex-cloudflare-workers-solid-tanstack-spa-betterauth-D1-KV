@@ -4,13 +4,14 @@ import {
   useLocation,
 }
   from '@tanstack/solid-router'
-import { Suspense, Show, createSignal, createMemo } from 'solid-js'
+import { Suspense, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js'
 import { Transition } from 'solid-transition-group'
 import { QueryClient } from '@tanstack/solid-query'
 import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
+  useIsMobile,
 } from '~/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
 import { Separator } from "~/components/ui/separator"
@@ -37,6 +38,7 @@ function DashboardPage() {
   const [isScrolled, setIsScrolled] = createSignal(false);
   const location = useLocation();
   const userId = useCurrentUserId();
+  const isMobile = useIsMobile();
 
   // Check if we're on the canvas page
   const isCanvasPage = createMemo(() => location().pathname === '/dashboard/canvas');
@@ -51,6 +53,25 @@ function DashboardPage() {
       scrollTimer = 0;
     });
   };
+
+  // Mobile: document scroll controls header shadow
+  createEffect(() => {
+    if (!isMobile()) return;
+
+    const handleWindowScroll = () => {
+      if (scrollTimer) return;
+      scrollTimer = requestAnimationFrame(() => {
+        const scrolled = (document.scrollingElement?.scrollTop ?? window.scrollY ?? 0) as number;
+        setIsScrolled(scrolled > 10);
+        scrollTimer = 0;
+      });
+    };
+
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    // Initialize on mount in case we're already scrolled
+    handleWindowScroll();
+    onCleanup(() => window.removeEventListener('scroll', handleWindowScroll));
+  });
 
   return (
     <div class="min-h-svh w-screen">
@@ -92,11 +113,11 @@ function DashboardPage() {
           <div class="flex min-h-svh w-screen md:overflow-x-hidden bg-muted/40">
             <AppSidebar />
             <SidebarInset onScroll={handleScroll} class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col md:overflow-y-auto min-h-0">
-              <header class={`flex h-16 shrink-0 items-center rounded-t-xl bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
+              <header class={`flex h-16 shrink-0 items-center rounded-xl bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
                 <div class="flex items-center gap-2 !pl-2 !pr-0 min-w-0 flex-1">
                   <Tooltip openDelay={500}>
                     <TooltipTrigger>
-                      <SidebarTrigger class="-ml-[7px] flex-shrink-0" />
+                      <SidebarTrigger class="flex-shrink-0" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Toggle Sidebar</p>

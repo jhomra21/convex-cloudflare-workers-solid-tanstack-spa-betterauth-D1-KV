@@ -219,7 +219,7 @@ const Sidebar: Component<SidebarProps> = (rawProps) => {
             }}
             position={local.side}
           >
-            <div class="flex size-full flex-col pb-[calc(env(safe-area-inset-bottom,0px))] bg-transparent">
+            <div class="flex size-full flex-col pb-[calc(env(safe-area-inset-bottom,0px))]">
               {local.children}
             </div>
           </SheetContent>
@@ -384,7 +384,7 @@ const SidebarHeader: Component<ComponentProps<"div">> = (props) => {
 const SidebarFooter: Component<ComponentProps<"div">> = (props) => {
   const [local, others] = splitProps(props, ["class"])
   return (
-    <div data-sidebar="footer" class={cn("flex flex-col gap-2 p-2", local.class)} {...others} />
+    <div data-sidebar="footer" class={cn("flex flex-col gap-2 p-2 !bg-transparent", local.class)} {...others} />
   )
 }
 
