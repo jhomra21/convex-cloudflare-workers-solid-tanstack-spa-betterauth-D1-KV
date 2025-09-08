@@ -116,7 +116,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter class="md:!pb-0 lg:!pb-0 sm:!pb-2 !px-2 !pt-2">
+      <SidebarFooter class="sticky bottom-[env(safe-area-inset-bottom,0px)] z-10 md:!pb-0 lg:!pb-0 sm:!pb-2 !px-2 !pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] bg-sidebar/98">
         <NavUser />
       </SidebarFooter>
     </Sidebar>

@@ -213,7 +213,7 @@ const Sidebar: Component<SidebarProps> = (rawProps) => {
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            class="h-lvh w-(--sidebar-width) bg-sidebar/98 rounded-r-xl p-0 text-sidebar-foreground"
+            class="h-dvh w-(--sidebar-width) bg-sidebar/98 rounded-r-xl p-0 text-sidebar-foreground"
             style={{
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE
             }}
