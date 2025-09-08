@@ -219,7 +219,9 @@ const Sidebar: Component<SidebarProps> = (rawProps) => {
             }}
             position={local.side}
           >
-            <div class="flex size-full flex-col">{local.children}</div>
+            <div class="flex size-full flex-col pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
+              {local.children}
+            </div>
           </SheetContent>
         </Sheet>
       </Match>

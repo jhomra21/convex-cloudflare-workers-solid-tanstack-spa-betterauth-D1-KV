@@ -86,7 +86,7 @@ const SheetContent = <T extends ValidComponent = "div">(
         onOpenAutoFocus={(e) => e.preventDefault()}
         class={cn(
           sheetVariants({ position: local.position }),
-          "max-h-lvh overflow-y-auto !w-[60%]",
+          "max-h-lvh overflow-y-auto !w-[60%] scroll-pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]",
           local.class
         )}
         {...others}
