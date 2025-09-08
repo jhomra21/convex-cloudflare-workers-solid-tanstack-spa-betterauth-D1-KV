@@ -165,7 +165,7 @@ const SidebarProvider: Component<SidebarProviderProps> = (rawProps) => {
           ...local.style
         }}
         class={cn(
-          "group/sidebar-wrapper flex h-svh w-full text-sidebar-foreground has-[[data-variant=inset]]:bg-sidebar",
+          "group/sidebar-wrapper flex min-h-svh w-full text-sidebar-foreground has-[[data-variant=inset]]:bg-sidebar",
           local.class
         )}
         {...others}
@@ -343,8 +343,8 @@ const SidebarInset: Component<ComponentProps<"main">> = (props) => {
   return (
     <main
       class={cn(
-        "relative flex h-svh flex-1 flex-col bg-background/80",
-        "peer-data-[variant=inset]:h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+        "relative flex flex-1 flex-col bg-background/80 md:h-svh",
+        "md:peer-data-[variant=inset]:h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         local.class
       )}
       {...others}

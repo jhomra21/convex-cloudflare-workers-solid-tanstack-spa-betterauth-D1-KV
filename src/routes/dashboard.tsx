@@ -53,7 +53,7 @@ function DashboardPage() {
   };
 
   return (
-    <div class="h-svh w-screen">
+    <div class="min-h-svh w-screen">
       <Show when={true}
       // fallback={
       //   <div class="h-screen w-screen flex items-center justify-center">
@@ -89,9 +89,9 @@ function DashboardPage() {
             }}
           > */}
         <SidebarProvider>
-          <div class="flex h-svh w-screen overflow-x-hidden bg-muted/40">
+          <div class="flex min-h-svh w-screen md:overflow-x-hidden bg-muted/40">
             <AppSidebar />
-            <SidebarInset onScroll={handleScroll} class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col overflow-y-auto min-h-0">
+            <SidebarInset onScroll={handleScroll} class="flex-grow min-w-0 bg-background rounded-xl shadow-md transition-transform ease-out flex flex-col md:overflow-y-auto min-h-0">
               <header class={`flex h-16 shrink-0 items-center rounded-t-xl bg-background sticky top-0 z-20 transition-shadow ${isScrolled() ? 'shadow-md' : ''}`}>
                 <div class="flex items-center gap-2 !pl-2 !pr-0 min-w-0 flex-1">
                   <Tooltip openDelay={500}>
