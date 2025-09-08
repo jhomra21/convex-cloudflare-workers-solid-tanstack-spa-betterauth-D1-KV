@@ -219,7 +219,7 @@ const Sidebar: Component<SidebarProps> = (rawProps) => {
             }}
             position={local.side}
           >
-            <div class="flex size-full flex-col pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
+            <div class="flex size-full flex-col pb-[calc(env(safe-area-inset-bottom,0px))] bg-transparent">
               {local.children}
             </div>
           </SheetContent>
