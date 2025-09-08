@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { lastLoginMethod } from "better-auth/plugins";
 import { D1Dialect } from "kysely-d1";
 import type { D1Database, KVNamespace } from "@cloudflare/workers-types";
 
@@ -82,7 +83,8 @@ export const getAuth = (env: Env): AuthInstance => {
                     ? 'http://localhost:3000/api/auth/callback/twitter'
                     : undefined
             }
-        }
+        },
+        plugins: [lastLoginMethod()],
     });
 
     // If the environment was valid, cache this new instance for subsequent requests.
