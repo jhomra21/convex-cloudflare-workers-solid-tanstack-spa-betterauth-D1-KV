@@ -51,7 +51,7 @@ export const NavUser: Component = () => {
       <SidebarMenuItem
         class="w-full"
         classList={{
-          "flex justify-center items-center": isSidebarCollapsed() && !isMobile(),
+          "flex justify-center items-center active:scale-97 transition-[transform] ease-out": isSidebarCollapsed() && !isMobile(),
         }}
       >
         <Show 
