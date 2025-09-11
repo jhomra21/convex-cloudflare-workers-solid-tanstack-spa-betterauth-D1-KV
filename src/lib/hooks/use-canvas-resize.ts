@@ -13,8 +13,9 @@ export function useCanvasResize(options: UseResizeOptions = {}) {
   const {
     onResizeStart,
     onResizeEnd,
-    minScale = 0.5,
-    maxScale = 3.0,
+    // Allow free resizing: very permissive defaults to avoid clamp-y feel
+    minScale = 0.1,
+    maxScale = 8.0,
     viewportGetter,
   } = options;
 

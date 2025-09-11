@@ -25,6 +25,7 @@ export interface ImageAgentProps {
   generatedImage?: string;
   isDragged?: boolean;
   isResizing?: boolean;
+  hasUserResized?: boolean; // transient flag from canvas after manual resize
   isRecentlyDragged?: boolean;
 
   onPromptChange?: (id: string, prompt: string) => void;
@@ -42,6 +43,13 @@ export interface ImageAgentProps {
 
 export function ImageAgent(props: ImageAgentProps) {
   const agentId = props.id || createUniqueId();
+
+  // Global suppression map (persists across component remounts during resize commits)
+  // Keyed by agentId; value is a timestamp (ms) until which auto-fit is suppressed
+  // This prevents snap-back after the parent re-mounts ImageAgent on size change
+  // while the <img> may re-fire onLoad.
+  const suppressUntilMap = (ImageAgent as any)._suppressUntilMap || new Map<string, number>();
+  (ImageAgent as any)._suppressUntilMap = suppressUntilMap;
 
   // Use persistent state hook for prompt
   const [localPrompt, setLocalPrompt] = useAgentPromptState(agentId, props.prompt || '');
@@ -155,8 +163,9 @@ export function ImageAgent(props: ImageAgentProps) {
 
 
 
-  // Ref for the native input element
+  // Refs
   let inlineEditInputRef: HTMLInputElement | undefined;
+  let headerEl: HTMLDivElement | undefined;
 
   // Initialize touch device detection
   const checkTouchDevice = () => {
@@ -381,9 +390,10 @@ export function ImageAgent(props: ImageAgentProps) {
     // Only auto-size if there's no existing size and we have image dimensions
     const imgDims = imageDimensions();
     if (imgDims && props.generatedImage) {
-      // Calculate size based on image aspect ratio with constraints
-      const maxWidth = 480;
-      const maxHeight = 480;
+      // Keep cards compact: never exceed default card size
+      // maxHeight here is for image area; overall card adds ~60px overlay below
+      const maxWidth = 320;
+      const maxHeight = 324; // ~384 total after +60 overlay
       const minWidth = 280;
       const minHeight = 200;
 
@@ -403,7 +413,7 @@ export function ImageAgent(props: ImageAgentProps) {
         height *= scale;
       }
 
-      // Add padding for UI elements
+      // Add padding for UI elements (prompt + controls overlay)
       return {
         width: Math.round(width),
         height: Math.round(height + 60) // Padding for drag handle + prompt overlay
@@ -419,6 +429,15 @@ export function ImageAgent(props: ImageAgentProps) {
 
   // Track previous image URL to detect changes
   const [prevImageUrl, setPrevImageUrl] = createSignal<string | null>(null);
+  // Track last image URL we auto-resized for, to avoid repeated resizing loops
+  const [lastAutoResizedFor, setLastAutoResizedFor] = createSignal<string | null>(null);
+
+  // When user has recently resized, suppress auto-fit for a short period even across remounts
+  createEffect(() => {
+    if (props.hasUserResized && agentId) {
+      suppressUntilMap.set(agentId, Date.now() + 4000); // 4s suppression window
+    }
+  });
 
   // Reset image dimensions when image changes
   createEffect(() => {
@@ -430,6 +449,8 @@ export function ImageAgent(props: ImageAgentProps) {
       if (currentImage && currentImage !== prevImage) {
         // Reset dimensions when image changes to trigger recalculation
         setImageDimensions(null);
+        // Also reset auto-resize guard so new image can be processed once
+        setLastAutoResizedFor(null);
       }
     }
 
@@ -438,17 +459,65 @@ export function ImageAgent(props: ImageAgentProps) {
     }
   });
 
-  // Update parent when agent size changes due to image dimensions (only for new agents)
+  // Auto-resize agent when a NEW image loads and we know its natural dimensions
+  // - Skips while user is manually resizing
+  // - Applies at most once per image URL to avoid loops
   createEffect(() => {
-    const currentSize = agentSize();
+    const imgUrl = props.generatedImage;
     const imgDims = imageDimensions();
 
-    // Don't auto-resize during manual resize operations
-    if (props.isResizing) return;
+    if (!imgUrl || !imgDims) return;
+    // If user is resizing when this effect runs, suppress auto-fit for this image
+    if (props.isResizing || props.hasUserResized) {
+      if (lastAutoResizedFor() !== imgUrl) setLastAutoResizedFor(imgUrl);
+      return;
+    }
+    // Also respect cross-remount suppression window
+    const suppressUntil = suppressUntilMap.get(agentId) ?? 0;
+    if (Date.now() < suppressUntil) {
+      if (lastAutoResizedFor() !== imgUrl) setLastAutoResizedFor(imgUrl);
+      return;
+    }
+    // Only run once per image URL: mark as processed immediately
+    if (lastAutoResizedFor() === imgUrl) return;
+    setLastAutoResizedFor(imgUrl);
+    // Fit image to current card width, allow proportional growth but never huge
+    const currentWidth = Math.round(props.size?.width ?? 320);
+    const currentHeight = Math.round(props.size?.height ?? 384);
 
-    // Only auto-resize when we have image dimensions, a generated image, and no existing size
-    if (imgDims && props.generatedImage && !props.size && props.onSizeChange) {
-      props.onSizeChange(agentId, currentSize);
+    // Option C: proportional growth with an absolute cap
+    const growthRatio = 0.3; // allow up to +30% height growth per image
+    const maxGrowth = Math.round(currentHeight * growthRatio);
+    const absMaxTotal = 480; // hard cap to keep card compact
+    const header = headerEl?.offsetHeight ?? 32; // include borders
+    const EPS = 1; // avoid rounding gaps
+    const maxAllowedTotal = Math.min(absMaxTotal, currentHeight + maxGrowth);
+
+    // Compute a width/height pair that avoids letterboxing by matching aspect ratio
+    const aspect = imgDims.height / imgDims.width;
+    const minWidth = 200; // allow narrower fit to eliminate letterboxing
+    const DEFAULT_W = 320;
+    const DEFAULT_H = 384;
+    const looksDefault = Math.abs(currentWidth - DEFAULT_W) <= 2 && Math.abs(currentHeight - DEFAULT_H) <= 2;
+
+    // If we can't grow height enough to fit at current width, shrink width to fit within height cap
+    const maxImageHeight = Math.max(100, maxAllowedTotal - header);
+    const widthFitByHeight = Math.floor(maxImageHeight / aspect);
+    // If user had manually resized before (not default size), do NOT shrink width
+    const targetWidth = looksDefault ? Math.max(minWidth, Math.min(currentWidth, widthFitByHeight)) : currentWidth;
+    const targetImageHeight = Math.ceil(targetWidth * aspect);
+    const targetTotal = Math.max(200, Math.min(header + targetImageHeight + EPS, maxAllowedTotal));
+
+    const target = {
+      width: targetWidth,
+      height: targetTotal,
+    };
+
+    const widthChanged = Math.abs(currentWidth - target.width) > 2;
+    const heightChanged = Math.abs(currentHeight - target.height) > 2;
+
+    if ((widthChanged || heightChanged) && props.onSizeChange) {
+      props.onSizeChange(agentId, target);
     }
   });
 
@@ -488,12 +557,16 @@ export function ImageAgent(props: ImageAgentProps) {
       >
         {/* Drag Handle - Larger clickable area */}
         <div
-          class="w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 border-b border-muted/40 flex-shrink-0 z-20"
+          class={cn(
+            "w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 flex-shrink-0 z-20",
+            hasImage() ? "border-b-0" : "border-b border-muted/40"
+          )}
           title="Drag to move this agent"
           onMouseDown={(e) => {
             setIsDragging(true);
             props.onMouseDown?.(e);
           }}
+          ref={(el) => (headerEl = el)}
         >
           <div class="flex items-center gap-2">
             <Icon
@@ -688,7 +761,7 @@ export function ImageAgent(props: ImageAgentProps) {
                         <img
                           src={getInputImage()!}
                           alt="Input image"
-                          class="w-full h-full object-contain"
+                          class="block w-full h-full object-contain"
                           loading='lazy'
                         />
                         {/* Show indicator for local files that haven't been uploaded */}
@@ -789,7 +862,7 @@ export function ImageAgent(props: ImageAgentProps) {
             <img
               src={props.generatedImage}
               alt="Generated image"
-              class="w-full h-full object-cover"
+              class="block w-full h-full object-contain"
               loading='lazy'
               style={{
                 opacity: isLoading() ? 0.3 : 1,

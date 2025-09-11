@@ -54,7 +54,7 @@ imagesApi.post('/edit', validateAgent({
   let agentId; // Declare agentId in outer scope
 
   try {
-    const { prompt, inputImageUrl, model = "fal-ai/flux-kontext/dev", steps = 28 } = data;
+    const { prompt, inputImageUrl, model = "fal-ai/nano-banana/edit", steps = 28 } = data;
     agentId = data.agentId; // Assign to outer scope variable
 
     if (!prompt) {
@@ -84,10 +84,10 @@ imagesApi.post('/edit', validateAgent({
 
     let imageBuffer;
     let base64Image;
+    // Use Nano Banana (Gemini) model for image editing via FAL
+    const editModel = 'fal-ai/nano-banana/edit';
 
     try {
-      // Use FLUX Kontext model for image editing - specialized for context-aware editing
-      const editModel = 'fal-ai/flux-kontext/dev';
 
       const falResponse = await fetch('https://fal.run/' + editModel, {
         method: 'POST',
@@ -97,15 +97,11 @@ imagesApi.post('/edit', validateAgent({
         },
         body: JSON.stringify({
           prompt,
-          image_url: inputImageUrl,
-          num_inference_steps: steps || 28,
-          guidance_scale: 2.5,
-          sync_mode: true,
+          image_urls: [inputImageUrl],
           num_images: 1,
-          enable_safety_checker: false,
           output_format: "png",
-          acceleration: "none",
-          resolution_mode: "match_input"
+          // Return data URIs when possible for immediate processing
+          sync_mode: true,
         }),
       });
 
@@ -193,7 +189,7 @@ imagesApi.post('/edit', validateAgent({
     await convex.mutation(api.images.addImage, {
       imageUrl,
       prompt,
-      model,
+      model: editModel,
       steps,
       userId: user.id,
     });
@@ -208,7 +204,7 @@ imagesApi.post('/edit', validateAgent({
       image: {
         url: imageUrl,
         prompt,
-        model,
+        model: editModel,
         steps,
         inputImageUrl,
         // Include base64 for immediate display
@@ -711,7 +707,7 @@ export async function editImageInternal(
   userId: string,
   prompt: string,
   inputImageUrl: string,
-  model: string = "fal-ai/flux-kontext/dev",
+  model: string = "fal-ai/nano-banana/edit",
   steps: number = 28,
   agentId?: string,
   baseUrl?: string
@@ -725,7 +721,7 @@ export async function editImageInternal(
 
     console.log('🔄 Making FAL AI request for image editing...');
     console.log('🔄 FAL AI URL:', 'https://fal.run/' + model);
-    console.log('🔄 Request params:', { prompt: prompt.substring(0, 50), inputImageUrl, steps });
+    console.log('🔄 Request params:', { prompt: prompt.substring(0, 50), inputImageUrl });
 
     let falResponse;
     try {
@@ -738,15 +734,10 @@ export async function editImageInternal(
         },
         body: JSON.stringify({
           prompt,
-          image_url: inputImageUrl,
-          num_inference_steps: steps || 28,
-          guidance_scale: 2.5,
-          sync_mode: true,
+          image_urls: [inputImageUrl],
           num_images: 1,
-          enable_safety_checker: false,
           output_format: "png",
-          acceleration: "none",
-          resolution_mode: "match_input"
+          sync_mode: true,
         })
       });
 

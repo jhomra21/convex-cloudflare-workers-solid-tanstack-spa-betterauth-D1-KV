@@ -15,6 +15,7 @@ interface MemoizedImageAgentProps {
   zIndex: number;
   isExiting?: boolean;
   isRecentlyDragged?: boolean;
+  hasUserResized?: boolean;
   availableAgents: AvailableAgent[];
   onRemove: (id: string) => void;
   onMouseDown: (e: MouseEvent) => void;
@@ -50,6 +51,7 @@ export function MemoizedImageAgent(props: MemoizedImageAgentProps) {
         generatedImage={props.agent.generatedImage}
         isDragged={props.isDragged}
         isResizing={props.isResizing}
+        hasUserResized={props.hasUserResized}
         isRecentlyDragged={props.isRecentlyDragged}
         onPromptChange={props.onPromptChange}
         status={props.agent.status}

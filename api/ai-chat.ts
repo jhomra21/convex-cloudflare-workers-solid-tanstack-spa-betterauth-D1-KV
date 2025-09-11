@@ -727,8 +727,8 @@ aiChatApi.post('/process', async (c) => {
                 user.id,
                 operation.prompt,
                 inputImageUrl,
-                'fal-ai/flux-kontext/dev',
-                28, // steps
+                'fal-ai/nano-banana/edit',
+                28, // steps (not used by nano-banana, kept for compatibility)
                 agentId
               ).then(() => {
                 console.log('✅ Successfully completed image edit for agent:', agentId);

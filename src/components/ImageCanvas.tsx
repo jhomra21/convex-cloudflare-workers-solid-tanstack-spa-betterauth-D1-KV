@@ -233,6 +233,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   // Track recently dragged agents to prevent hover flashing
   const [recentlyDraggedAgents, setRecentlyDraggedAgents] = createSignal<Set<string>>(new Set());
+  // Track recently resized agents so children can suppress auto-fit after manual resize
+  const [recentlyResizedAgents, setRecentlyResizedAgents] = createSignal<Set<string>>(new Set());
 
   // Use custom hooks for drag and resize
   const dragHook = useCanvasDrag({
@@ -266,6 +268,21 @@ export function ImageCanvas(props: ImageCanvasProps) {
         // Use size-only update for bottom-right handle
         updateAgentSize(agentId, finalSize);
       }
+
+      // Mark agent as recently resized to prevent child auto-fit snap-back
+      setRecentlyResizedAgents(prev => {
+        const next = new Set(prev);
+        next.add(agentId);
+        return next;
+      });
+      // Clear the flag shortly after to re-allow auto-fit on future new images
+      setTimeout(() => {
+        setRecentlyResizedAgents(prev => {
+          const next = new Set(prev);
+          next.delete(agentId);
+          return next;
+        });
+      }, 1200);
     },
     viewportGetter: () => viewport.viewport(),
   });
@@ -378,7 +395,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         formData.append('canvasId', canvas()!._id);
         formData.append('referencedAgents', JSON.stringify(referencedAgentIds));
 
-        uploadedFiles.forEach((file, index) => {
+        uploadedFiles.forEach((file) => {
           formData.append(`uploadedFiles`, file);
         });
 
@@ -412,7 +429,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
         let enhancedResponse = result.response;
 
         if (result.createdAgents?.length > 0) {
-          const agentStatusText = result.createdAgents.map((agentId: string, index: number) => {
+          const agentStatusText = result.createdAgents.map((_id: string, index: number) => {
             const operation = result.operations?.[index];
             if (operation) {
               return `🔄 ${operation.type.replace('-', ' ')} agent: "${operation.prompt.substring(0, 50)}${operation.prompt.length > 50 ? '...' : ''}"`;
@@ -577,6 +594,7 @@ export function ImageCanvas(props: ImageCanvasProps) {
                     zIndex={zIndex()}
                     isExiting={isExiting()}
                     isRecentlyDragged={recentlyDraggedAgents().has(agent.id)}
+                    hasUserResized={recentlyResizedAgents().has(agent.id)}
                     availableAgents={availableAgents()}
                     onRemove={removeAgent}
                     onMouseDown={(e) => handleMouseDown(e, agent.id)}
