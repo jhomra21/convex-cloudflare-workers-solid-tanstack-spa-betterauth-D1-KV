@@ -542,7 +542,7 @@ export function ImageAgent(props: ImageAgentProps) {
     <ErrorBoundary>
       <Card
         class={cn(
-          "flex flex-col relative transition-all !border-0 duration-300 cursor-move overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50",
+          "flex flex-col relative transition-all !border-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50",
           props.class
         )}
         style={{
@@ -558,7 +558,7 @@ export function ImageAgent(props: ImageAgentProps) {
         {/* Drag Handle - Larger clickable area */}
         <div
           class={cn(
-            "w-full h-8 bg-muted/30 cursor-move active:cursor-move rounded-t-lg hover:bg-muted/60 hover:border-primary/20 transition-all duration-200 flex items-center justify-between px-3 flex-shrink-0 z-20",
+            "w-full h-8 bg-muted/30 cursor-grab active:cursor-grabbing rounded-t-lg flex items-center justify-between px-3 flex-shrink-0 z-20",
             hasImage() ? "border-b-0" : "border-b border-muted/40"
           )}
           title="Drag to move this agent"
