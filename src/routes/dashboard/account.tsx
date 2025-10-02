@@ -30,7 +30,7 @@ function getInitials(name: string) {
 }
 
 function AccountPage() {
-	const sessionQuery = useQuery(() => sessionQueryOptions());
+    const sessionQuery = useQuery(sessionQueryOptions);
 	const user = createMemo(() => sessionQuery.data?.user);
 	const [name, setName] = createSignal('');
 

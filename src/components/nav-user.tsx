@@ -59,7 +59,7 @@ export const NavUser: Component = () => {
           fallback={
             <SidebarMenuButton
               as={Link}
-              to="/sign-in"
+              to="/auth"
               onClick={() => isMobile() && setOpenMobile(false)}
               class="w-full flex items-center justify-start gap-2 transition-[padding,width] duration-200 ease-in-out"
             >

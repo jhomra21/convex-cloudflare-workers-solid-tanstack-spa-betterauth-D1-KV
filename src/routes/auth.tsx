@@ -34,7 +34,7 @@ type AuthAction = 'signIn' | 'signUp' | 'google' | 'github' | 'twitter' | null;
 type AuthTab = 'signIn' | 'signUp';
 
 function AuthPage() {
-  const sessionQuery = useQuery(() => sessionQueryOptions()) as QueryObserverResult<SessionQueryResult, Error>;
+  const sessionQuery = useQuery(sessionQueryOptions) as QueryObserverResult<SessionQueryResult, Error>;
 
   const search = useSearch({ from: '/auth' });
   const navigate = useNavigate();
@@ -52,12 +52,11 @@ function AuthPage() {
   const twitterSignInMutation = useTwitterSignInMutation();
 
   createEffect(() => {
-    if (sessionQuery.isPending || sessionQuery.data) {
+    if (sessionQuery.data) {
       // Don't navigate if we're currently in an OAuth callback flow
-      if (window.location.pathname.includes('/auth/callback')) {
-        return;
-      }
-      navigate({ to: '/dashboard', replace: true });
+      if (window.location.pathname.includes('/auth/callback')) return;
+      const redirectTo = (search as any)?.redirect as string | undefined;
+      navigate({ to: redirectTo || '/dashboard', replace: true });
     }
   });
 
